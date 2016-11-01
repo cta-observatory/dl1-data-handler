@@ -1,0 +1,11 @@
+imageExtractor.C
+Author: Daniel Nieto (nieto@nevis.columbia.edu)
+
+Read simulated CTA data in DST format and generates events' images in eps and png formats.
+
+* Dependencies:
+- OpenCV
+- ROOT
+
+* Compilation instructions:
+- Run "make"
