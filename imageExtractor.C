@@ -26,7 +26,7 @@
 #include <TMath.h>
 #include <cmath> 
 #include <TError.h>
-#include "/a/home/tehanu/bsk2133/opencv-2.4.13/modules/highgui/include/opencv2/highgui/highgui.hpp"
+#include "/data/bsk2133/Software_local/include/opencv2/highgui/highgui.hpp"
 
 using namespace cv;
 using namespace std;
