@@ -258,17 +258,61 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
       //datatree->SetBranchAddress("ped", ped);
       datatree->GetEntry(i);
       if (debug) cout <<i<<" "<<ntel<<" "<<ntel_data<<" "<<tel_data[0]<<" "<<energy<<" "<<xcore<<" "<<ycore<<" "<<eventNumber<<endl;
-      for (int l = 0; l < int(ntrig); l++){
+        
+for (int l = 0; l < int(ntrig); l++){
 	//cout << i << " "<< l <<" "<<ltrig_list[l]<<" "<<telmap[ltrig_list[l]]<<endl;
-	for (int j = 0; j < channels; j++) {
-	  for (int k = 0; k < numSamples[0]; k++){
-	    charge += trace[telmap[ltrig_list[l]]][k][j]-pedrm;
+
+	for (int j = 0 ; j < channels; j++) 
+        {
+            //Trace Integration
+            //Iterate three times:
+            //First to find bin with maximum charge
+            //Second to find first bin reaching half-max
+            //Third to output to hcamera 6 bins from that bin
+          int maxCharge = 0;
+          int firstHMbin = 0;
+
+          //find max charge
+	  for (int k = 0; k < numSamples[0]; k++)
+          {
+	    charge = trace[telmap[ltrig_list[l]]][k][j]-pedrm;
+
+            if (charge > maxCharge)
+            {
+                maxCharge=charge;
+            }
+
+            charge = 0;
 	  }
+
+          //find first bin with charge > maxcharge/2
+         for (int k = 0; k < numSamples[0]; k++)
+          {
+	    charge = trace[telmap[ltrig_list[l]]][k][j]-pedrm;
+
+            if (charge >(maxCharge/2))
+            {
+                firstHMbin = k;
+                charge = 0;
+                break;
+            }
+            charge = 0;
+	  }
+
+         //only sum over bins from firstHMbin to firstHMbin + 6
+         //note: we test to see if each bin after firstHMbin  is  outside bounds
+        for (int k = firstHMbin; k < (firstHMbin+6) && k < numSamples[0]; k++)
+          {
+	    charge += trace[telmap[ltrig_list[l]]][k][j]-pedrm; 
+	  }
+
+
 	  hcamera->SetBinContent(hcamera->FindBin(v_xcoord[j],v_ycoord[j]),charge);
 	  //	  if (debug) cout <<"Channel = "<< j <<" charge = "<<charge<<endl;
 	  //  if (telmap[ltrig_list[l]]==2) cout <<"Channel = "<< j <<" charge = "<<charge<<endl;
 	  charge = 0;
 	}
+
 	impact = sqrt((xcore-posmapx[ltrig_list[l]])*(xcore-posmapx[ltrig_list[l]])+(ycore-posmapy[ltrig_list[l]])*(ycore-posmapy[ltrig_list[l]]));
 	//cout <<"Impact: "<<impact<<endl;
 	hcamera->Draw("colz");
