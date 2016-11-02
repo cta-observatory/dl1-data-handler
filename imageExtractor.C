@@ -26,7 +26,15 @@
 #include <TMath.h>
 #include <cmath> 
 #include <TError.h>
-#include "/data/bsk2133/Software_local/include/opencv2/highgui/highgui.hpp"
+
+#include "/data/bsk2133/local/include/opencv2/highgui/highgui.hpp"
+
+#include <exiv2.hpp>
+#include <iomanip>
+#include <cassert>
+#include <xmp.hpp>
+#include <image.hpp>
+#include <properties.hpp>
 
 using namespace cv;
 using namespace std;
@@ -36,7 +44,7 @@ void readconfig(string mypath, vector<int>& chan, vector<double>& xpos, vector<d
 int loopSimEvents(string datafile, string configfile, string outputdir, bool printeps);
 
 //bool createimage(TH2F *hcam, ULong64_t evid, bool debugbit);
-bool createimage(TH2F *hcam, char *evid, bool debugbit);
+bool createimage(TH2F *hcam, char *imageName, string eventType, float energy, float impact, unsigned int eventID, unsigned int telNum,bool debugbit);
 
 int main(int argc, char* argv[]){
   gErrorIgnoreLevel = 5000;
@@ -279,8 +287,10 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
 	ccamera->Update();
 	ccamera->cd();
 	ccamera->WaitPrimitive();
+
 	sprintf(buffertxt,"%s/%u_%.3fTeV_%.0fm_T%u",outputdir.c_str(),eventNumber,energy,impact,ltrig_list[l]);
-	if (!createimage(hcamera,buffertxt,debug)) return -1;
+
+	if (!createimage(hcamera,buffertxt,ptype.data(),energy,impact,eventNumber,ltrig_list[l],debug)) return -1;
 	if (printeps){
 	  sprintf(buffertxt,"%s.eps",buffertxt);
 	  ccamera->SaveAs(buffertxt);
@@ -320,7 +330,7 @@ void readconfig(string mypath, vector<int>& chan, vector<double>& xpos, vector<d
 }
 
 //bool createimage(TH2F *hcam, ULong64_t evid, bool debugbit){
-bool createimage(TH2F *hcam, char *evid, bool debugbit){
+bool createimage(TH2F *hcam, char* imageName, string eventType, float energy, float impact, unsigned int eventID, unsigned int telNum,bool debugbit){
   //To do: add dynamical datatype definition to change color depth on-the-fly
   int scale = 1;
   int depth = 16;
@@ -341,7 +351,7 @@ bool createimage(TH2F *hcam, char *evid, bool debugbit){
     for (int j = 0; j < yimpx; j++){
       int val = scale*abs(hcam->GetBinContent(i+1,j+1));
       if (val > pow(2,depth)){
-	if(debugbit) cout <<"Event "<<evid<<": pixel intensity "<< int(val) <<" truncated to "<< int(pow(2,depth))<<endl;
+	if(debugbit) cout <<"Event "<<imageName<<": pixel intensity "<< int(val) <<" truncated to "<< int(pow(2,depth))<<endl;
 	val = pow(2,depth)-1;
       }
       img.at<ushort>(i,j)=val;
@@ -350,8 +360,33 @@ bool createimage(TH2F *hcam, char *evid, bool debugbit){
   vector<int> compression_params;
   compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
   compression_params.push_back(9);
-  sprintf(buffer,"%s.png",evid);
+  sprintf(buffer,"%s.png",imageName);
   imwrite(buffer, img, compression_params);
+
+  /////////////////////////
+  //adding image metadata//
+  /////////////////////////
+
+  Exiv2::XmpData metadata;
+
+  //register new namespace for properties
+  Exiv2::XmpProperties::registerNs("eventProperties/", "ep");
+
+  //set properties to desired values
+  metadata["Xmp.ep.eventType"] = eventType;
+  metadata["Xmp.ep.eventID"] = eventID;
+  metadata["Xmp.ep.energy"] = energy;
+  metadata["Xmp.ep.impactParameter"] = impact;
+  metadata["Xmp.ep.telescopeNumber"] = telNum;
+
+  //open image file object
+  Exiv2::Image::AutoPtr image = Exiv2::ImageFactory::open(buffer);
+
+  //write to file
+  image->setXmpData(metadata);
+  image->writeMetadata();
+
   if(debugbit) cout<<"Image saved"<<endl;
   return true;
 }
+
