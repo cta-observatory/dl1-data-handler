@@ -299,13 +299,24 @@ for (int l = 0; l < int(ntrig); l++){
             charge = 0;
 	  }
 
-         //only sum over bins from firstHMbin to firstHMbin + 6
-         //note: we test to see if each bin after firstHMbin  is  outside bounds
-        for (int k = firstHMbin; k < (firstHMbin+6) && k < numSamples[0]; k++)
+         //check if the range of integration goes out of bounds
+         //if so, sum over last 6 bins
+         if(firstHMbin + 5 >= numSamples[0])
+         {
+          for (int k = (numSamples[0]-6); k < (numSamples[0]); k++)
           {
 	    charge += trace[telmap[ltrig_list[l]]][k][j]-pedrm; 
 	  }
+         }
 
+         //else sum over 6 bins from firstHMbin to firstHMbin + 5
+         else
+         {
+          for (int k = firstHMbin; k < (firstHMbin+6); k++)
+          {
+	    charge += trace[telmap[ltrig_list[l]]][k][j]-pedrm; 
+	  }
+         }
 
 	  hcamera->SetBinContent(hcamera->FindBin(v_xcoord[j],v_ycoord[j]),charge);
 	  //	  if (debug) cout <<"Channel = "<< j <<" charge = "<<charge<<endl;
