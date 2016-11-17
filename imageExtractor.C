@@ -26,6 +26,8 @@
 #include <TMath.h>
 #include <cmath> 
 #include <TError.h>
+#include <TSystem.h>
+#include <TUnixSystem.h>
 
 #include "/data/bsk2133/local/include/opencv2/highgui/highgui.hpp"
 
@@ -240,10 +242,18 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
     UShort_t numSamples[ntel];
     datatree->SetBranchAddress("numSamples", &numSamples);
     datatree->GetEntry(0);
+    string strace = datatree->GetBranch("Trace")->GetTitle();
+    int rSamples = std::atoi(strace.substr(strace.find("][")+2,strace.find_last_of("[")-strace.find("][")-3).c_str());
+    if (rSamples > cSamples){
+      cout << "FADC samples in data " << rSamples << " exceeds maximum of " << cSamples << endl;
+      cout << "Quiting..." << endl;
+      return 1;
+    }
     unsigned short int trace[cTel][cSamples][cChannels] = {0,0,0};
     UInt_t ltrig_list[cTel];
     UInt_t ntrig = 0;
     if (debug) cout<<"NTel = "<<ntel<<" Samples = "<<numSamples[0]<<" #pixels = "<<channels<<endl;
+    
     for (int i = start_entry; i < stop_entry+1; i++){
       datatree->SetBranchAddress("MCe0", &energy);
       datatree->SetBranchAddress("MCxcore", &xcore);
