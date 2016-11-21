@@ -10,3 +10,6 @@ imageExtractor:
 .PHONY: clean
 clean:
 	rm -f imageExtractor
+
+.PHONY: all
+all: clean imageExtractor
