@@ -83,9 +83,19 @@ int main(int argc, char* argv[]){
 }
 
 int loopSimEvents(string datafile, string configfile, string outputdir, bool printeps){
-  bool debug = false;
-  //bool debug = true;
-  string ptype = "gamma";
+  //bool debug = false;
+  bool debug = true;
+
+  string ptype;
+  if(datafile.find("gamma"))
+  {
+  ptype = "gamma";
+  }
+  else
+  {
+  ptype = "proton";
+  }
+
   string myconfigpath = configfile;
   string myfilepath = datafile;
   TFile *myfile = TFile::Open(datafile.data());
@@ -147,8 +157,8 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
   const int cTel = 8;
   const int cSamples = 64;
   const int cChannels = 11400;
-  //  int pedrm = 0; //overall pedestal substraction in FADC counts
-  int pedrm = 21; //overall pedestal substraction in FADC counts
+  int pedrm = 0; //overall pedestal substraction in FADC counts
+  //int pedrm = 21; //overall pedestal substraction in FADC counts
   int charge = 0;
   float energy, xcore, ycore;
   UInt_t ntel;
@@ -224,6 +234,7 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
     UInt_t eventNumber = 0;
     datatree->SetBranchAddress("ntel", &ntel);
     datatree->GetEntry(0);
+
     TTree* teltree = (TTree*) myfile->Get("telconfig");
     float telx, tely, impact;
     int telid;
@@ -233,8 +244,14 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
     teltree->SetBranchAddress("TelX",&telx);
     teltree->SetBranchAddress("TelY",&tely);
     teltree->SetBranchAddress("TelID",&telid);
+
     for (int i = 0; i < teltree->GetEntries(); i++){
       teltree->GetEntry(i);
+
+      if (debug)
+      {
+          cout << "(telid =" << telid << ",telx =" << telx << ",tely =" << tely << ")" << endl;
+
       telmap[telid]=i;
       posmapx[telid]=telx;
       posmapy[telid]=tely;
@@ -242,6 +259,7 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
     UShort_t numSamples[ntel];
     datatree->SetBranchAddress("numSamples", &numSamples);
     datatree->GetEntry(0);
+
     string strace = datatree->GetBranch("Trace")->GetTitle();
     int rSamples = std::atoi(strace.substr(strace.find("][")+2,strace.find_last_of("[")-strace.find("][")-3).c_str());
     if (rSamples > cSamples){
@@ -253,8 +271,23 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
     UInt_t ltrig_list[cTel];
     UInt_t ntrig = 0;
     if (debug) cout<<"NTel = "<<ntel<<" Samples = "<<numSamples[0]<<" #pixels = "<<channels<<endl;
-    
-    for (int i = start_entry; i < stop_entry+1; i++){
+
+    if (debug)
+    {
+        cout << "Samples" << endl;
+        for (UInt_t  i = 0; i < ntel; i++)
+        {   
+                cout << numSamples[i] << endl;
+        }
+    }
+      
+    //limit to run on only first 2 entries 
+    if (debug)
+    {
+        stop_entry = start_entry + 1;
+    }
+
+      for (int i = start_entry; i < stop_entry; i++){
       datatree->SetBranchAddress("MCe0", &energy);
       datatree->SetBranchAddress("MCxcore", &xcore);
       datatree->SetBranchAddress("MCycore", &ycore);
@@ -268,9 +301,35 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
       //datatree->SetBranchAddress("ped", ped);
       datatree->GetEntry(i);
       if (debug) cout <<i<<" "<<ntel<<" "<<ntel_data<<" "<<tel_data[0]<<" "<<energy<<" "<<xcore<<" "<<ycore<<" "<<eventNumber<<endl;
+
+      if (debug){
+
+      cout <<"pedrm =" << pedrm << endl;
+
+      cout << "ntrig =" << ntrig << endl;
+
+      cout << "ltrig_list" << endl;
+
+    for (UInt_t  j = 0; j < cTel;j++)
+    {
+        cout << ltrig_list[j] << endl;
+    }
+
+    cout << "telmap" << endl;
+
+        for (map<int,int>::iterator it=telmap.begin(); it!=telmap.end(); ++it)
+            std::cout << it->first << " => " << it->second << '\n';
+
+    }
         
 for (int l = 0; l < int(ntrig); l++){
-	//cout << i << " "<< l <<" "<<ltrig_list[l]<<" "<<telmap[ltrig_list[l]]<<endl;
+
+    if(debug)
+    {
+	cout << "i="<< i << " l=" << l << " ltrig_list[l]= " <<ltrig_list[l]<< "telmap[ltrig_list[l]]=" <<telmap[ltrig_list[l]]<<endl;
+
+        cout << "numSamples[l] =" << numSamples[l] << endl;
+    }
 
 	for (int j = 0 ; j < channels; j++) 
         {
@@ -292,8 +351,11 @@ for (int l = 0; l < int(ntrig); l++){
                 maxCharge=charge;
             }
 
-            charge = 0;
 	  }
+
+          charge = 0;
+
+          //cout << "\nmaxCharge =" << maxCharge <<endl;
 
           //find first bin with charge > maxcharge/2
          for (int k = 0; k < numSamples[0]; k++)
@@ -303,11 +365,13 @@ for (int l = 0; l < int(ntrig); l++){
             if (charge >(maxCharge/2))
             {
                 firstHMbin = k;
-                charge = 0;
                 break;
             }
-            charge = 0;
 	  }
+
+         charge = 0;
+
+         //cout << "firstHMbin =" << firstHMbin <<" out of " << numSamples[0] << endl;
 
          //check if the range of integration goes out of bounds
          //if so, sum over last 6 bins
@@ -327,6 +391,8 @@ for (int l = 0; l < int(ntrig); l++){
 	    charge += trace[telmap[ltrig_list[l]]][k][j]-pedrm; 
 	  }
          }
+
+         //cout << "charge =" << charge << endl;
 
 	  hcamera->SetBinContent(hcamera->FindBin(v_xcoord[j],v_ycoord[j]),charge);
 	  //	  if (debug) cout <<"Channel = "<< j <<" charge = "<<charge<<endl;
