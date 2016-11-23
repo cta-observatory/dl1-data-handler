@@ -7,7 +7,7 @@
 #NOTE: Be sure to run in directory containing imageExtractor, littlecam.cfg,
 #and normalizeImages.sh
 #
-#Description: Runs imageExtractor on desired imagefile, creates (if
+#Description: Recompiles imageExtractor, runs imageExtractor on desired imagefile, creates (if
 #necessary), directory structure to store images, uses normalizeImages.sh
 #script to create normalized copies and stores in appropriate directory for
 #viewing. 
@@ -78,6 +78,10 @@ if [ ! -d "$outputdir""/imagesNormalized/$eventtype/$run" ]
 then
     mkdir -p "$outputdir""/imagesNormalized/$eventtype/$run"
 fi
+
+echo "Recompiling imageExtractor..."
+
+make all 
 
 echo "Running imageExtractor..."
 
