@@ -250,7 +250,8 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
 
       if (debug)
       {
-          cout << "(telid =" << telid << ",telx =" << telx << ",tely =" << tely << ")" << endl;
+          //cout << "(telid =" << telid << ",telx =" << telx << ",tely =" << tely << ")" << endl;
+      }
 
       telmap[telid]=i;
       posmapx[telid]=telx;
@@ -329,6 +330,7 @@ for (int l = 0; l < int(ntrig); l++){
 	cout << "i="<< i << " l=" << l << " ltrig_list[l]= " <<ltrig_list[l]<< "telmap[ltrig_list[l]]=" <<telmap[ltrig_list[l]]<<endl;
 
         cout << "numSamples[l] =" << numSamples[l] << endl;
+        cout << trace[telmap[ltrig_list[l]]][30][5000] << endl;
     }
 
 	for (int j = 0 ; j < channels; j++) 
@@ -355,7 +357,10 @@ for (int l = 0; l < int(ntrig); l++){
 
           charge = 0;
 
-          //cout << "\nmaxCharge =" << maxCharge <<endl;
+          if (debug)
+          {
+              //cout << "\nmaxCharge =" << maxCharge <<endl;
+          }
 
           //find first bin with charge > maxcharge/2
          for (int k = 0; k < numSamples[0]; k++)
@@ -371,7 +376,10 @@ for (int l = 0; l < int(ntrig); l++){
 
          charge = 0;
 
-         //cout << "firstHMbin =" << firstHMbin <<" out of " << numSamples[0] << endl;
+         if (debug)
+         {
+              //cout << "firstHMbin =" << firstHMbin <<" out of " << numSamples[0] << endl;
+         }
 
          //check if the range of integration goes out of bounds
          //if so, sum over last 6 bins
@@ -392,7 +400,10 @@ for (int l = 0; l < int(ntrig); l++){
 	  }
          }
 
-         //cout << "charge =" << charge << endl;
+         if(debug)
+         {
+             //cout << "charge =" << charge << endl;
+         }
 
 	  hcamera->SetBinContent(hcamera->FindBin(v_xcoord[j],v_ycoord[j]),charge);
 	  //	  if (debug) cout <<"Channel = "<< j <<" charge = "<<charge<<endl;
