@@ -16,10 +16,12 @@
 #between imageExtractor directory and image directories:
 #
 #In all newly created subdirectories containing images, creates "back"
-#symbolic link to the imageExtractor directory.
+#symbolic link to the imageExtractor directory. Use "cd -P back" to return
+#to imageExtractor directory
 #
 #In imageExtractor directory, creates/updates link "goto" which points to
-#most recently generated normalized image directory
+#most recently generated normalized image directory. Use "cd -P goto" to
+#move to directory containing most recently generated normalized images.
 #
 ##################################################################################
 #
