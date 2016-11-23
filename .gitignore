@@ -1,0 +1,12 @@
+#Ignore files
+#############
+
+#object files
+*.o
+
+#goto link from output.sh
+goto
+
+#compiled executables
+imageExtractor
+
