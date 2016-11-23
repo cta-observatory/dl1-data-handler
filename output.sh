@@ -47,7 +47,7 @@
 
 datafilepath=$1
 outputdir=${2:-"~"}
-dir=$(pwd)
+dir=$(pwd -P)
 
 echo "Data file path="$1
 echo "Output directory="$outputdir
