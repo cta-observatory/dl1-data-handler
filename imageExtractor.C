@@ -285,7 +285,8 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
     //limit to run on only first 2 entries 
     if (debug)
     {
-        stop_entry = start_entry + 1;
+        //start_entry+=3;
+        stop_entry = start_entry + 4;
     }
 
       for (int i = start_entry; i < stop_entry; i++){
@@ -321,6 +322,24 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
         for (map<int,int>::iterator it=telmap.begin(); it!=telmap.end(); ++it)
             std::cout << it->first << " => " << it->second << '\n';
 
+        /*
+
+       for(int channel = 0; channel < cChannels; channel++)
+       {
+           for(int tel =0; tel < cTel; tel++)
+           {
+               int charge = 0;
+               for (int sample = 0; sample < cSamples; sample++)
+               {
+               charge += trace[tel][sample][channel]-pedrm;
+               }
+               cout << setw(5) << charge << "  ";
+               
+           }
+           cout << endl;
+       }
+
+       */
     }
         
 for (int l = 0; l < int(ntrig); l++){
@@ -329,8 +348,9 @@ for (int l = 0; l < int(ntrig); l++){
     {
 	cout << "i="<< i << " l=" << l << " ltrig_list[l]= " <<ltrig_list[l]<< "telmap[ltrig_list[l]]=" <<telmap[ltrig_list[l]]<<endl;
 
-        cout << "numSamples[l] =" << numSamples[l] << endl;
-        cout << trace[telmap[ltrig_list[l]]][30][5000] << endl;
+        //cout << "numSamples[l] =" << numSamples[l] << endl;
+        
+        //cout << trace[telmap[ltrig_list[l]]][30][5000] << endl;
     }
 
 	for (int j = 0 ; j < channels; j++) 
@@ -346,7 +366,7 @@ for (int l = 0; l < int(ntrig); l++){
           //find max charge
 	  for (int k = 0; k < numSamples[0]; k++)
           {
-	    charge = trace[telmap[ltrig_list[l]]][k][j]-pedrm;
+	    charge = trace[l][k][j]-pedrm;
 
             if (charge > maxCharge)
             {
@@ -365,7 +385,7 @@ for (int l = 0; l < int(ntrig); l++){
           //find first bin with charge > maxcharge/2
          for (int k = 0; k < numSamples[0]; k++)
           {
-	    charge = trace[telmap[ltrig_list[l]]][k][j]-pedrm;
+	    charge = trace[l][k][j]-pedrm;
 
             if (charge >(maxCharge/2))
             {
@@ -387,7 +407,7 @@ for (int l = 0; l < int(ntrig); l++){
          {
           for (int k = (numSamples[0]-6); k < (numSamples[0]); k++)
           {
-	    charge += trace[telmap[ltrig_list[l]]][k][j]-pedrm; 
+	    charge += trace[l][k][j]-pedrm; 
 	  }
          }
 
@@ -396,11 +416,11 @@ for (int l = 0; l < int(ntrig); l++){
          {
           for (int k = firstHMbin; k < (firstHMbin+6); k++)
           {
-	    charge += trace[telmap[ltrig_list[l]]][k][j]-pedrm; 
+	    charge += trace[l][k][j]-pedrm; 
 	  }
          }
 
-         if(debug)
+         if(debug && ((j%100)==0))
          {
              //cout << "charge =" << charge << endl;
          }
