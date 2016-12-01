@@ -156,7 +156,7 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
   int telnumber = 0;
   const int cTel = 8;
   const int cSamples = 64;
-  const int cChannels = 11400;
+  const int cChannels = 12000;
   int pedrm = 0; //overall pedestal substraction in FADC counts
   //int pedrm = 21; //overall pedestal substraction in FADC counts
   int charge = 0;
@@ -268,7 +268,13 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
       cout << "Quiting..." << endl;
       return 1;
     }
-    unsigned short int trace[cTel][cSamples][cChannels] = {0,0,0};
+    int rChannels = std::atoi(strace.substr(strace.find_last_of("[")+1,strace.find_last_of("]")-strace.find_last_of("[")-1).c_str());
+    if (rChannels > cChannels){
+      cout << "Channels in data " << rChannels << " exceeds maximum of " << cChannels << endl;
+      cout << "Quiting..." << endl;
+      return 1;
+    }
+    unsigned short int trace[cTel][rSamples][rChannels] = {0,0,0};
     UInt_t ltrig_list[cTel];
     UInt_t ntrig = 0;
     if (debug) cout<<"NTel = "<<ntel<<" Samples = "<<numSamples[0]<<" #pixels = "<<channels<<endl;
