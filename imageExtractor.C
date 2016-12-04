@@ -28,9 +28,7 @@
 #include <TError.h>
 #include <TSystem.h>
 #include <TUnixSystem.h>
-
-#include "/data/bsk2133/local/include/opencv2/highgui/highgui.hpp"
-
+#include <highgui.hpp>
 #include <exiv2.hpp>
 #include <iomanip>
 #include <cassert>
@@ -102,15 +100,15 @@ int main(int argc, char* argv[]){
 }
 
 int loopSimEvents(string datafile, string configfile, string outputdir, bool printeps){
+
+  //use to print debug information
   bool debug = false;
-  //bool debug = true;
   
-  string eventType;
   string myconfigpath = configfile;
   string myfilepath = datafile;
   TFile *myfile = TFile::Open(datafile.data());
   
-  if (myfile == 0) {
+  if (myfile == NULL) {
     printf("Error: cannot open data file %s\n",myfilepath.data());
     return 1;
   }
@@ -122,7 +120,6 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
   }
   
   //Read configuration file and fill pixel and coordinates vectors
-  
   vector<int> v_channels;
   vector<double> v_xcoord;
   vector<double> v_ycoord;
@@ -140,12 +137,15 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
   double pwidthpx = (abs(ymaxcam)+pxpitch/2)/pxpitch;
   double mwidthpx = (abs(ymincam)+pxpitch/2)/pxpitch;
 
-  if (debug){
+  if (debug)
+  {
     cout << "Number of channels read: "<<channels<<endl;
     cout << "Pixel pitch: "<<pxpitch<<" mm"<<endl;
     cout << "Camera max. lenght (X): ("<<xmincam<<" mm, "<<xmaxcam<<" mm) ("<<mlenghtpx<<" px, "<<plenghtpx<<" px)"<<endl; 
     cout << "Camera max. width (Y): ("<<ymincam<<" mm, "<<ymaxcam<<" mm) ("<<mwidthpx<<" px, "<<pwidthpx<<" px)"<<endl; 
   }
+
+  //construct and format 2D histogram
   double auxpxpitch = 54/8.;
   TH2F *hcamera = new TH2F("hcamera","",15*8,-auxpxpitch*8*15/2,auxpxpitch*8*15/2,15*8,-auxpxpitch*8*15/2,auxpxpitch*8*15/2);
   hcamera->GetXaxis()->SetTitle("X [mm]");
@@ -155,11 +155,13 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
   pt->SetFillStyle(0);
   pt->SetBorderSize(0);
 
+  //format and construct canvas
   TCanvas *ccamera = new TCanvas("ccamera","SCT Camera",500,500);
   string format = "ed";
   gStyle->SetPalette(51);//kDarkBodyRadiator (53)
   gStyle->SetNumberContours(999);
 
+  //define data fields
   float minenergy = 0; //energy cutoff in TeV
   int start_entry = 0;
   int stop_entry = 0; 
@@ -168,9 +170,9 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
   const int cSamples = 64;
   const int cChannels = 12000;
   int pedrm = 0; //overall pedestal substraction in FADC counts
-  //int pedrm = 21; //overall pedestal substraction in FADC counts
   int charge = 0;
-  UShort_t prim;
+  UShort_t prim = 0;
+  string eventType;
   float energy, xcore, ycore, xoff, yoff, az, ze;
   UInt_t ntel;
   UInt_t ntel_data;
@@ -178,6 +180,7 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
   char buffer[16];
   char buffertxt[300];
 
+  //process data in CARE format
   if ( format.compare("care") == 0 ){
     cout << "Processing CARE data\n";
     TTree* datatree = (TTree*) myfile->Get("Events/T0;19");
@@ -246,6 +249,8 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
       cout << "\r" << i << "/" << stop_entry << " ("<<float(i)/float(stop_entry)*100<<"%)" << flush;
     }
   }
+
+  //process data in evndisp format
   else if ( format.compare("ed") == 0 ){
     cout << "Processing Eventdisplay data\n";
     TTree* datatree = (TTree*) myfile->Get("dst");
@@ -254,9 +259,17 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
     pedrm = hped->GetMean()-2*hped->GetRMS();
     stop_entry = datatree->GetEntries();
     UInt_t eventNumber = 0;
+
+    //set number of telescopes
     datatree->SetBranchAddress("ntel", &ntel);
     datatree->GetEntry(0);
 
+    //set number of samples (hardcoded to first entry, first element)
+    UShort_t numSamples[ntel];
+    datatree->SetBranchAddress("numSamples", &numSamples);
+    datatree->GetEntry(0);
+
+    //use telconfig file to generate telescope ID map and position map
     TTree* teltree = (TTree*) myfile->Get("telconfig");
     float telx, tely, impact;
     int telid;
@@ -279,10 +292,8 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
       posmapx[telid]=telx;
       posmapy[telid]=tely;
     }
-    UShort_t numSamples[ntel];
-    datatree->SetBranchAddress("numSamples", &numSamples);
-    datatree->GetEntry(0);
 
+    //set size of trace array variable to match data
     string strace = datatree->GetBranch("Trace")->GetTitle();
     int rSamples = std::atoi(strace.substr(strace.find("][")+2,strace.find_last_of("[")-strace.find("][")-3).c_str());
     if (rSamples > cSamples){
@@ -297,13 +308,15 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
       return 1;
     }
     unsigned short int trace[cTel][rSamples][rChannels] = {0,0,0};
+
     struct metadata md;
     UInt_t ltrig_list[cTel];
     UInt_t ntrig = 0;
-    if (debug) cout<<"NTel = "<<ntel<<" Samples = "<<numSamples[0]<<" #pixels = "<<channels<<endl;
 
     if (debug)
     {
+        cout<<"NTel = "<<ntel<<" Samples = "<<numSamples[0]<<" #pixels = "<<channels<<endl;
+
         cout << "Samples" << endl;
         for (UInt_t  i = 0; i < ntel; i++)
         {   
@@ -311,12 +324,14 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
         }
     }
       
-    //limit to run on only first 2 entries 
+    /*
+    //limit to run on only first 2 entries
     if (debug)
     {
-        //start_entry+=3;
+        start_entry+=3;
         stop_entry = start_entry + 1;
     }
+    */
 
       for (int i = start_entry; i < stop_entry; i++){
       datatree->SetBranchAddress("MCe0", &energy);
@@ -338,44 +353,39 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
       datatree->GetEntry(i);
       if (debug) cout <<i<<" "<<ntel<<" "<<ntel_data<<" "<<tel_data[0]<<" "<<energy<<" "<<xcore<<" "<<ycore<<" "<<eventNumber<<endl;
 
-      if (debug){
+      if (debug)
+      {
+          cout <<"pedrm =" << pedrm << endl;
+          cout << "MCprim =" << prim << endl;
+          cout << "ntrig =" << ntrig << endl;
 
-      cout <<"pedrm =" << pedrm << endl;
+          cout << "ltrig_list" << endl;
+          for (UInt_t  j = 0; j < cTel;j++)
+          {
+              cout << ltrig_list[j] << endl;
+          }
 
-      cout << "MCprim =" << prim << endl;
+          cout << "telmap" << endl;
+          for (map<int,int>::iterator it=telmap.begin(); it!=telmap.end(); ++it)
+              std::cout << it->first << " => " << it->second << '\n';
 
-      cout << "ntrig =" << ntrig << endl;
+           /*
 
-      cout << "ltrig_list" << endl;
-
-    for (UInt_t  j = 0; j < cTel;j++)
-    {
-        cout << ltrig_list[j] << endl;
-    }
-
-    cout << "telmap" << endl;
-
-        for (map<int,int>::iterator it=telmap.begin(); it!=telmap.end(); ++it)
-            std::cout << it->first << " => " << it->second << '\n';
-
-        /*
-
-       for(int channel = 0; channel < cChannels; channel++)
-       {
-           for(int tel =0; tel < cTel; tel++)
+           for(int channel = 0; channel < cChannels; channel++)
            {
-               int charge = 0;
-               for (int sample = 0; sample < cSamples; sample++)
+               for(int tel =0; tel < cTel; tel++)
                {
-               charge += trace[tel][sample][channel]-pedrm;
+                   int charge = 0;
+                   for (int sample = 0; sample < cSamples; sample++)
+                   {
+                   charge += trace[tel][sample][channel]-pedrm;
+                   }
+                   cout << setw(5) << charge << "  ";
+                   
                }
-               cout << setw(5) << charge << "  ";
-               
+               cout << endl;
            }
-           cout << endl;
-       }
-
-       */
+           */
     }
         
 for (int l = 0; l < int(ntrig); l++){
@@ -389,11 +399,11 @@ for (int l = 0; l < int(ntrig); l++){
 
 	for (int j = 0 ; j < channels; j++) 
         {
-            //Trace Integration
-            //Iterate three times:
-            //First to find bin with maximum charge
-            //Second to find first bin reaching half-max
-            //Third to output to hcamera 6 bins from that bin
+          //Trace Integration
+          //Iterate three times:
+          //First to find bin with maximum charge
+          //Second to find first bin reaching half-max
+          //Third to output to hcamera 6 bins from that bin
           int maxCharge = 0;
           int firstHMbin = 0;
 
@@ -401,14 +411,11 @@ for (int l = 0; l < int(ntrig); l++){
 	  for (int k = 0; k < numSamples[0]; k++)
           {
 	    charge = trace[l][k][j]-pedrm;
-
             if (charge > maxCharge)
             {
                 maxCharge=charge;
             }
-
 	  }
-
           charge = 0;
 
           if (debug)
@@ -420,14 +427,12 @@ for (int l = 0; l < int(ntrig); l++){
          for (int k = 0; k < numSamples[0]; k++)
           {
 	    charge = trace[l][k][j]-pedrm;
-
             if (charge >(maxCharge/2))
             {
                 firstHMbin = k;
                 break;
             }
 	  }
-
          charge = 0;
 
          if (debug)
@@ -444,7 +449,6 @@ for (int l = 0; l < int(ntrig); l++){
 	    charge += trace[l][k][j]-pedrm; 
 	  }
          }
-
          //else sum over 6 bins from firstHMbin to firstHMbin + 5
          else
          {
@@ -467,7 +471,7 @@ for (int l = 0; l < int(ntrig); l++){
 
 	impact = sqrt((xcore-posmapx[ltrig_list[l]])*(xcore-posmapx[ltrig_list[l]])+(ycore-posmapy[ltrig_list[l]])*(ycore-posmapy[ltrig_list[l]]));
 
-//determine particle type based on MCprim value 
+        //determine particle type based on MCprim value 
         switch(prim)
         {
             case 0 :
@@ -499,7 +503,6 @@ for (int l = 0; l < int(ntrig); l++){
 	sprintf(buffertxt,"%s/%u_%.3fTeV_%.0fm_T%u",outputdir.c_str(),eventNumber,energy,impact,ltrig_list[l]);
 
         //collect and set metadata values
-
         md.eventType = eventType.data();
         md.impactParameter = impact;
         md.eventID = eventNumber;
