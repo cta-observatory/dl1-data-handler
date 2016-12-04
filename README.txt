@@ -8,7 +8,6 @@ Description:
  Read simulated CTA data in DST format and generates events' images in eps
 and png formats.Uses exiv2 to mark images with relevant metadata.
 
-
 Dependencies:
 - OpenCV 2.4.13
 - ROOT
@@ -22,22 +21,11 @@ Compilation instructions:
 Additional Scripts:
 - normalizeImages.sh
 - output.sh
+- prepDataset.sh
+- findDuplicates.sh
 
+To Do:
 
-TO DO LIST:
-
-* Blank image issue:
-  - check telescope selection?
-  - blank sections of trace matrix?
-
-* Blurs/streaks:
-  - data issue - only present in new data files
-  - channel encoding issue? (offset)
-
-* Image duplication issue
-  - check getEntry behavior?
-
-* Add additional metadata
-
-* Prepare scripts to sort images based on metadata
+-Refactor code, comment, clean
+-Add cases to eventtype switch statement for other particle types
 
