@@ -41,12 +41,31 @@
 using namespace cv;
 using namespace std;
 
+struct metadata
+{
+    string eventType;
+    float impactParameter;
+    unsigned int eventID;
+    unsigned int telNum;
+    UShort_t MCprim;
+    float MCe0;
+    float MCxcore;
+    float MCycore;
+    float telx;
+    float tely;
+    float MCze;
+    float MCaz;
+    float MCxoff;
+    float MCyoff;
+    int pedrms;
+};
+
 void readconfig(string mypath, vector<int>& chan, vector<double>& xpos, vector<double>& ypos, bool debugbit);
 
 int loopSimEvents(string datafile, string configfile, string outputdir, bool printeps);
 
 //bool createimage(TH2F *hcam, ULong64_t evid, bool debugbit);
-bool createimage(TH2F *hcam, char *imageName, string eventType, float energy, float impact, unsigned int eventID, unsigned int telNum,bool debugbit);
+bool createimage(TH2F *hcam, char* imageName,struct metadata md,bool debugbit);
 
 int main(int argc, char* argv[]){
   gErrorIgnoreLevel = 5000;
@@ -83,19 +102,10 @@ int main(int argc, char* argv[]){
 }
 
 int loopSimEvents(string datafile, string configfile, string outputdir, bool printeps){
-  //bool debug = false;
-  bool debug = true;
-
-  string ptype;
-  if(datafile.find("gamma"))
-  {
-  ptype = "gamma";
-  }
-  else
-  {
-  ptype = "proton";
-  }
-
+  bool debug = false;
+  //bool debug = true;
+  
+  string eventType;
   string myconfigpath = configfile;
   string myfilepath = datafile;
   TFile *myfile = TFile::Open(datafile.data());
@@ -160,7 +170,8 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
   int pedrm = 0; //overall pedestal substraction in FADC counts
   //int pedrm = 21; //overall pedestal substraction in FADC counts
   int charge = 0;
-  float energy, xcore, ycore;
+  UShort_t prim;
+  float energy, xcore, ycore, xoff, yoff, az, ze;
   UInt_t ntel;
   UInt_t ntel_data;
   UInt_t tel_data[cTel];
@@ -185,6 +196,7 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
       infotree->SetBranchAddress("xcore", &xcore);
       infotree->SetBranchAddress("ycore", &ycore);
       infotree->SetBranchAddress("eventNumber", &eventNumber);
+      infotree->SetBranchAddress("MCprim", &prim);
       infotree->GetEntry(i);
       if (debug) cout << "Trigger bit: "<< triggerbits->at(telnumber)<<endl;
       if (triggerbits->at(telnumber) && energy > minenergy){
@@ -200,9 +212,19 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
 	  hcamera->SetBinContent(hcamera->FindBin(v_xcoord[j],v_ycoord[j]),charge);
 	  if (debug) cout <<"Total charge: "<<charge<<endl;
 	}
+
+        //determine particle type based on MCprim value 
+        switch(prim)
+        {
+            case 0 :
+                eventType = "gamma";
+            case 101 :
+                eventType = "proton";
+        }
+
 	hcamera->Draw("colz");
 	pt->Clear();
-	sprintf(buffertxt,"Event: %s",ptype.data());
+	sprintf(buffertxt,"Event: %s",eventType.data());
 	pt->AddText(buffertxt);
 	sprintf(buffertxt,"Energy: %.3f TeV",energy);
 	pt->AddText(buffertxt);
@@ -275,6 +297,7 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
       return 1;
     }
     unsigned short int trace[cTel][rSamples][rChannels] = {0,0,0};
+    struct metadata md;
     UInt_t ltrig_list[cTel];
     UInt_t ntrig = 0;
     if (debug) cout<<"NTel = "<<ntel<<" Samples = "<<numSamples[0]<<" #pixels = "<<channels<<endl;
@@ -292,7 +315,7 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
     if (debug)
     {
         //start_entry+=3;
-        stop_entry = start_entry + 4;
+        stop_entry = start_entry + 1;
     }
 
       for (int i = start_entry; i < stop_entry; i++){
@@ -306,6 +329,11 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
       datatree->SetBranchAddress("Trace", trace);
       datatree->SetBranchAddress("ntrig", &ntrig);
       datatree->SetBranchAddress("ltrig_list",ltrig_list);
+      datatree->SetBranchAddress("MCprim", &prim);
+      datatree->SetBranchAddress("MCxoff", &xoff);
+      datatree->SetBranchAddress("MCyoff", &yoff);
+      datatree->SetBranchAddress("MCze", &ze);
+      datatree->SetBranchAddress("MCaz", &az);
       //datatree->SetBranchAddress("ped", ped);
       datatree->GetEntry(i);
       if (debug) cout <<i<<" "<<ntel<<" "<<ntel_data<<" "<<tel_data[0]<<" "<<energy<<" "<<xcore<<" "<<ycore<<" "<<eventNumber<<endl;
@@ -313,6 +341,8 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
       if (debug){
 
       cout <<"pedrm =" << pedrm << endl;
+
+      cout << "MCprim =" << prim << endl;
 
       cout << "ntrig =" << ntrig << endl;
 
@@ -354,9 +384,7 @@ for (int l = 0; l < int(ntrig); l++){
     {
 	cout << "i="<< i << " l=" << l << " ltrig_list[l]= " <<ltrig_list[l]<< "telmap[ltrig_list[l]]=" <<telmap[ltrig_list[l]]<<endl;
 
-        //cout << "numSamples[l] =" << numSamples[l] << endl;
-        
-        //cout << trace[telmap[ltrig_list[l]]][30][5000] << endl;
+        cout << "numSamples[l] =" << numSamples[l] << endl;
     }
 
 	for (int j = 0 ; j < channels; j++) 
@@ -411,7 +439,7 @@ for (int l = 0; l < int(ntrig); l++){
          //if so, sum over last 6 bins
          if(firstHMbin + 5 >= numSamples[0])
          {
-          for (int k = (numSamples[0]-6); k < (numSamples[0]); k++)
+          for (int k = (numSamples[1]-6); k < (numSamples[0]); k++)
           {
 	    charge += trace[l][k][j]-pedrm; 
 	  }
@@ -426,7 +454,7 @@ for (int l = 0; l < int(ntrig); l++){
 	  }
          }
 
-         if(debug && ((j%100)==0))
+         if(debug)
          {
              //cout << "charge =" << charge << endl;
          }
@@ -438,10 +466,22 @@ for (int l = 0; l < int(ntrig); l++){
 	}
 
 	impact = sqrt((xcore-posmapx[ltrig_list[l]])*(xcore-posmapx[ltrig_list[l]])+(ycore-posmapy[ltrig_list[l]])*(ycore-posmapy[ltrig_list[l]]));
-	//cout <<"Impact: "<<impact<<endl;
+
+//determine particle type based on MCprim value 
+        switch(prim)
+        {
+            case 0 :
+                eventType = "gamma";
+                break;
+            case 101 :
+                eventType = "proton";
+                break;
+        }
+	//cout <<"Impact: "<<impact<<endl; 
+
 	hcamera->Draw("colz");
 	pt->Clear();
-	sprintf(buffertxt,"Event: %s",ptype.data());
+	sprintf(buffertxt,"Event: %s",eventType.data());
 	pt->AddText(buffertxt);
 	sprintf(buffertxt,"Energy: %.3f TeV",energy);
 	pt->AddText(buffertxt);
@@ -458,7 +498,25 @@ for (int l = 0; l < int(ntrig); l++){
 
 	sprintf(buffertxt,"%s/%u_%.3fTeV_%.0fm_T%u",outputdir.c_str(),eventNumber,energy,impact,ltrig_list[l]);
 
-	if (!createimage(hcamera,buffertxt,ptype.data(),energy,impact,eventNumber,ltrig_list[l],debug)) return -1;
+        //collect and set metadata values
+
+        md.eventType = eventType.data();
+        md.impactParameter = impact;
+        md.eventID = eventNumber;
+        md.telNum = ltrig_list[l];
+        md.MCprim = prim;
+        md.MCe0 = energy;
+        md.MCxcore = xcore;
+        md.MCycore = ycore;
+        md.telx = posmapx[ltrig_list[l]];
+        md.tely = posmapy[ltrig_list[l]];
+        md.MCze = ze;
+        md.MCaz = az;
+        md.MCxoff = xoff;
+        md.MCyoff = yoff;
+        md.pedrms = pedrm;
+
+	if (!createimage(hcamera,buffertxt,md,debug)) return -1;
 	if (printeps){
 	  sprintf(buffertxt,"%s.eps",buffertxt);
 	  ccamera->SaveAs(buffertxt);
@@ -497,8 +555,8 @@ void readconfig(string mypath, vector<int>& chan, vector<double>& xpos, vector<d
   if (debugbit) cout << "Done" << endl;
 }
 
-//bool createimage(TH2F *hcam, ULong64_t evid, bool debugbit){
-bool createimage(TH2F *hcam, char* imageName, string eventType, float energy, float impact, unsigned int eventID, unsigned int telNum,bool debugbit){
+bool createimage(TH2F *hcam, char* imageName,struct metadata md,bool debugbit)
+{
   //To do: add dynamical datatype definition to change color depth on-the-fly
   int scale = 1;
   int depth = 16;
@@ -541,11 +599,21 @@ bool createimage(TH2F *hcam, char* imageName, string eventType, float energy, fl
   Exiv2::XmpProperties::registerNs("eventProperties/", "ep");
 
   //set properties to desired values
-  metadata["Xmp.ep.eventType"] = eventType;
-  metadata["Xmp.ep.eventID"] = eventID;
-  metadata["Xmp.ep.energy"] = energy;
-  metadata["Xmp.ep.impactParameter"] = impact;
-  metadata["Xmp.ep.telescopeNumber"] = telNum;
+  metadata["Xmp.ep.eventType"] = md.eventType;
+  metadata["Xmp.ep.eventID"] = md.eventID;
+  metadata["Xmp.ep.impactParameter"] = md.impactParameter;
+  metadata["Xmp.ep.telescopeNumber"] = md.telNum;
+  metadata["Xmp.ep.telx"] = md.telx;
+  metadata["Xmp.ep.tely"] = md.tely;
+  metadata["Xmp.ep.MCprim"] = md.MCprim;
+  metadata["Xmp.ep.MCe0"] = md.MCe0;
+  metadata["Xmp.ep.MCxcore"] = md.MCxcore;
+  metadata["Xmp.ep.MCycore"] = md.MCycore;
+  metadata["Xmp.ep.MCze"] = md.MCze;
+  metadata["Xmp.ep.MCaz"] = md.MCaz;
+  metadata["Xmp.ep.MCxoff"] = md.MCxoff;
+  metadata["Xmp.ep.MCyoff"] = md.MCyoff;
+  metadata["Xmp.ep.pedrms"] = md.pedrms;
 
   //open image file object
   Exiv2::Image::AutoPtr image = Exiv2::ImageFactory::open(buffer);
@@ -557,4 +625,5 @@ bool createimage(TH2F *hcam, char* imageName, string eventType, float energy, fl
   if(debugbit) cout<<"Image saved"<<endl;
   return true;
 }
+
 
