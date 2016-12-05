@@ -1,7 +1,13 @@
 #!/bin/bash
 
+optype=${1:-"cp"}
+
+traindir=${2:-""}
+valdir=${3:-""}
+testdir=${4:-""}
+
 valpercent=20
-testpercent=20
+testpercent=0
 
 images=( *.png )
 numImages=${#images[@]}
@@ -16,41 +22,84 @@ echo
 
 valnum=$((valpercent * numImages / 100))
 testnum=$((testpercent * numImages / 100))
+trainnum=$((numImages - valnum - testnum))
 
-echo "Training Set # =$((numImages - valnum - testnum))"
+echo "Training Set # ="$trainnum
 echo "Validation Set # = "$valnum
 echo "Test Set # = "$testnum 
 echo
 
-echo "Creating directories..."
+#echo "Creating directories..."
+#
+#if [ (! -d "./train")  ]
+#then
+#    mkdir "./train"
+#fi
+#
+#if [ ! -d  "./val"-a ($valpercent -gt "0") ]
+#then
+#    mkdir "./val"
+#fi
+#
+#if [ ! -d  "./test" -a ($testpercent -gt "0") ]
+#then
+#    mkdir "./test"
+#fi
 
-if [ ! -d "./train" ]
+if [ $optype = "mv" ]
 then
-    mkdir "./train"
-fi
-
-if [ ! -d  "./val" ]
-then
-    mkdir "./val"
-fi
-
-if [ ! -d  "./test" ]
-then
-    mkdir "./test"
-fi
 
 echo "Moving images..."
 
-ls *.png |sort -R |tail -$valnum |while read file; do
-        mv $file ./val  
+if [ $valpercent -gt "0" ]
+then
+-type f -name '*.png'
+find -type f -name '*.png' |sort -R |tail -$valnum |while read file; do
+        mv $file $valdir
+     done
+fi
+
+if [ $testpercent -gt "0" ]
+then
+
+find -type f -name '*.png' |sort -R |tail -$testnum |while read file; do
+        mv $file $testdir 
+     done
+fi
+
+find -type f -name '*.png' |while read file; do
+        mv $file $traindir 
      done
 
-ls *.png |sort -R |tail -$testnum |while read file; do
-        mv $file ./test  
+elif [ $optype = "cp" ]
+then
+
+echo "Copying images..."
+
+find -type f -name '*.png' |while read file; do
+        cp $file $traindir
      done
 
-ls *.png |while read file; do
-        mv $file ./train  
+cd $traindir
+
+if [ $valpercent -gt "0" ]
+then
+
+find -type f -name '*.png' |sort -R |tail -$valnum |while read file; do
+        mv $file $valdir
      done
+fi
+
+if [ $testpercent -gt "0" ]
+then
+
+find -type f -name '*.png' |sort -R |tail -$testnum |while read file; do
+        mv $file $testdir
+     done
+fi
+
+fi
 
 echo "Done!"
+
+
