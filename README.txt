@@ -18,14 +18,16 @@ Compilation instructions:
 - Run "make clean" to remove imageExtractor
 - Run "make all" to recompile imageExtractor
 
-Additional Scripts:
+Additional Scripts (see /scripts):
 - normalizeImages.sh
 - output.sh
 - prepDataset.sh
 - findDuplicates.sh
+- generate_all.sh
 
 To Do:
 
 -Refactor code, comment, clean
 -Add cases to eventtype switch statement for other particle types
+
 
