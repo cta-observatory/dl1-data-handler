@@ -13,9 +13,14 @@
 #include <sstream>
 #include <iostream>
 #include <fstream>
+#include <cmath> 
+#include <algorithm> 
+#include <iomanip>
+#include <cassert>
+
 #include <sys/stat.h>
 #include <unistd.h>
-#include <algorithm> 
+
 #include <TH2.h>
 #include <TFile.h>
 #include <TTree.h>
@@ -24,88 +29,146 @@
 #include <TPaveText.h>
 #include <TStyle.h>
 #include <TMath.h>
-#include <cmath> 
 #include <TError.h>
 #include <TSystem.h>
 #include <TUnixSystem.h>
+
 #include <highgui.hpp>
 #include <exiv2.hpp>
-#include <iomanip>
-#include <cassert>
 #include <xmp.hpp>
 #include <image.hpp>
 #include <properties.hpp>
 
-using namespace cv;
-using namespace std;
+#include "imageExtractor.h"
 
-struct metadata
+bool printeps = false;
+bool debug = false;
+
+int main(int argc, char** argv)
 {
-    string eventType;
-    float impactParameter;
-    unsigned int eventID;
-    unsigned int telNum;
-    UShort_t MCprim;
-    float MCe0;
-    float MCxcore;
-    float MCycore;
-    float telx;
-    float tely;
-    float MCze;
-    float MCaz;
-    float MCxoff;
-    float MCyoff;
-    int pedrms;
-};
+    /*
+     * Argument and option parsing
+     */
 
-void readconfig(string mypath, vector<int>& chan, vector<double>& xpos, vector<double>& ypos, bool debugbit);
+    //gErrorIgnoreLevel = 5000;
+    string datafile;
+    string configfile;
+    string outputdir = "./";
+    string format = "ed";
 
-int loopSimEvents(string datafile, string configfile, string outputdir, bool printeps);
+    string help =  "Usage is -i <input file> -c <camera file> -f <data format> -o <output directory> -e -d\n"
+    "-i and -c fields are mandatory\n"
+    "-o flag and field are optional, defaults to $pwd\n"
+    "-f flag and field are optional, defaults to \"ed\". Use ed for eventdisplay, care for CARE format\n"
+    "-e flag is optional, generates eps files in addition to png images\n"
+    "-d flag is optional, prints debug output during execution\n"
+    "-h option for help\n";
 
-//bool createimage(TH2F *hcam, ULong64_t evid, bool debugbit);
-bool createimage(TH2F *hcam, char* imageName,struct metadata md,bool debugbit);
-
-int main(int argc, char* argv[]){
-  gErrorIgnoreLevel = 5000;
-  string datafile;
-  string configfile;
-  string outputdir = "./";
-  bool printeps = false;
-    if (argc < 5) {
-    std::cout << "Usage is -i <input file> -c <camera file> -o <output directory> -eps\n";
-    std::cout << "-i and -c fields are mandatory\n";
-    std::cout << "-o field is optional, defaults to $pwd\n";
-    std::cout << "-eps field is optional, generates eps files in addition to png images\n";
-    return 1;
-  } 
-  else {
-    for (int i = 1; i < argc; i++) { 
-      if (string(argv[i]) == "-i") {
-	datafile = string(argv[i+1]);
-      }
-      else if (string(argv[i]) == "-c") {
-        configfile = string(argv[i+1]);
-      }
-      else if (string(argv[i]) == "-o") {
-        outputdir = string(argv[i+1]);
-      }
-      else if (string(argv[i]) == "-eps") {
-        printeps = true;
-      }
+    int opt;
+    while((opt = getopt(argc,argv,"i:c:o:eh")) != -1)
+    {
+        switch(opt)
+        {
+            case 'i':
+                datafile = optarg;
+                break;
+            case 'o':
+                outputdir = optarg;
+                break;
+            case 'c':
+                configfile = optarg;
+                break;
+            case 'f':
+                format = optarg;
+            case 'e':
+                printeps = true;
+                break;
+            case 'd':
+                debug = true;
+                break;
+            case 'h':
+                std::cout << help;
+                return 0;
+            case '?':
+                if (optopt == 'o')
+                {
+                    outputdir = "./";
+                }
+                else if (optopt == 'f')
+                {
+                    format = "ed";
+                }
+                else
+                {
+                    std::cout << "Error: invalid arguments.\n\n"
+                    std::cout << help;
+                    return 1;
+                }
+                break;
+        }
     }
-  }
-  std::cout << "Data file: " << datafile << "\n";
-  std::cout << "Camera file: " << configfile << "\n";
-  return loopSimEvents(datafile,configfile,outputdir,printeps);
+    
+    std::cout << "Data file: " << datafile << "\n";
+    std::cout << "Camera file: " << configfile << "\n";
+    std::cout << "Output directory: " << (outputdir == "./" ? "Default (\"./\")" : outputdir) << "\n";
+    std::cout << "Generate eps files: " << (printeps ? "Yes" : "No") << "\n";
+    std::cout << "Debug mode: " <<  (debug ? "Yes" : "No") << "\n";
+    //return loopSimEvents(datafile,configfile,outputdir,printeps);
+    
+    /* 
+     * Open data and config files
+     */
+    
+    TFile::TFile *f = TFile::Open(datafile.data());
+    if (!)) 
+    {
+        std::cout << "Error: cannot open data file " << datafile.data() << "\n";
+        return 1;
+    }
+    
+    if ((struct stat s = stat(configfile.c_str(), &s)) != 0) 
+    {
+    printf("Error: cannot open configuration file %s\n",configfile.data());
+    return 1;
+    }
+  
+    /*
+     * Read configuration file and fill pixel (channel) number and corresponding coordinate vectors
+     */
+
+    vector<int> v_channels;
+    vector<double> v_xcoord;
+    vector<double> v_ycoord;
+
+    readconfig(configfile,v_channels,v_xcoord,v_ycoord);
+
+    //Square pixels assumed
+    int numChannels = v_channels.size();
+    double pxpitch = max(abs(v_xcoord.at(0)-v_xcoord.at(1)),abs(v_ycoord.at(0)-v_ycoord.at(1))); 
+    double xmin = *min_element(v_xcoord.begin(),v_xcoord.end());
+    double xmax = *max_element(v_xcoord.begin(),v_xcoord.end());
+    double ymin = *min_element(v_ycoord.begin(),v_ycoord.end());
+    double ymax = *max_element(v_ycoord.begin(),v_ycoord.end());
+    double xmaxpx = (xmax+pxpitch/2)/pxpitch;
+    double xminpx = (xmin-pxpitch/2)/pxpitch;
+    double ymaxpx = (ymax+pxpitch/2)/pxpitch;
+    double yminpx = (ymin-pxpitch/2)/pxpitch;
+
+    if (debug)
+    {
+        cout << "Number of channels read: " << numChannels << endl;
+        cout << "Pixel pitch: "<< pxpitch << " mm" << endl;
+        cout << "Camera max/min length (x): (" << xmin << " mm, " << xmax << " mm) (" << xminpx << " px,  " << xmaxpx << " px)" <<endl; 
+        cout << "Camera max/min width (y): (" << ymin << " mm, " << ymax << " mm) (" << yminpx << " px, " << ymaxpx << " px)" <<endl; 
+    }
+
 }
 
-int loopSimEvents(string datafile, string configfile, string outputdir, bool printeps){
-
-  //use to print debug information
-  bool debug = false;
-  
-  string myconfigpath = configfile;
-  string myfilepath = datafile;
+int loopSimEvents(string datafile, string configfile, string outputdir, bool printeps)
+{
+   /* 
+    string myconfigpath = configfile;
+    string myfilepath = datafile;
   TFile *myfile = TFile::Open(datafile.data());
   
   if (myfile == NULL) {
@@ -126,6 +189,7 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
 
   readconfig(myconfigpath,v_channels,v_xcoord,v_ycoord,debug);
 
+
   int channels = v_channels.size();
   double pxpitch = max(fabs(v_xcoord.at(0)-v_xcoord.at(1)),fabs(v_ycoord.at(0)-v_ycoord.at(1))); // Squared pixels are assumed
   double xmincam = *min_element(v_xcoord.begin(),v_xcoord.end());
@@ -145,20 +209,24 @@ int loopSimEvents(string datafile, string configfile, string outputdir, bool pri
     cout << "Camera max. width (Y): ("<<ymincam<<" mm, "<<ymaxcam<<" mm) ("<<mwidthpx<<" px, "<<pwidthpx<<" px)"<<endl; 
   }
 
-  //construct and format 2D histogram
-  double auxpxpitch = 54/8.;
-  TH2F *hcamera = new TH2F("hcamera","",15*8,-auxpxpitch*8*15/2,auxpxpitch*8*15/2,15*8,-auxpxpitch*8*15/2,auxpxpitch*8*15/2);
-  hcamera->GetXaxis()->SetTitle("X [mm]");
-  hcamera->GetYaxis()->SetTitle("Y [mm]");
-  hcamera->SetStats(0);
-  TPaveText *pt = new TPaveText(0,0.9,1,0.99,"NDC");
-  pt->SetFillStyle(0);
-  pt->SetBorderSize(0);
+*/
+
+  
+    //construct and format 2D histogram
+    double auxpxpitch = 54/8.;
+    int xnumpx = 15*8;
+    int ynumpx = 15*8;
+    TH2F *hcamera = new TH2F("hcamera","",xnumpx,-auxpxpitch*xnumpx/2,auxpxpitch*xnumpx/2,ynumpx,-auxpxpitch*ynumpx/2,auxpxpitch*ynumpx/2);
+    hcamera->GetXaxis()->SetTitle("X [mm]");
+    hcamera->GetYaxis()->SetTitle("Y [mm]");
+    hcamera->SetStats(0);
+    TPaveText *pt = new TPaveText(0,0.9,1,0.99,"NDC");
+    pt->SetFillStyle(0);
+    pt->SetBorderSize(0);
 
   //format and construct canvas
-  TCanvas *ccamera = new TCanvas("ccamera","SCT Camera",500,500);
-  string format = "ed";
-  gStyle->SetPalette(51);//kDarkBodyRadiator (53)
+  TCanvas *ccamera = new TCanvas("ccamera","SCT Camera",500,500); 
+  gStyle->SetPalette(51);
   gStyle->SetNumberContours(999);
 
   //define data fields
@@ -538,95 +606,96 @@ for (int l = 0; l < int(ntrig); l++){
   return 0;
 }
 
-void readconfig(string mypath, vector<int>& chan, vector<double>& xpos, vector<double>& ypos, bool debugbit){
-  if (debugbit) cout << "Reading configuration file..."<<endl;
-  ifstream infile(mypath.data());
+void readconfig(string filepath, vector<int>& channels, vector<double>& xvec, vector<double>& yvec)
+{
+  if (debug) 
+      cout << "Reading configuration file..."<<endl;
+  ifstream cfile(filepath.data());
   string line;
-  string c1, c2;
-  int telno, teltype, pixno;
-  double xpix, ypix;
+  string c;  //use to ignore fields
+  int telno, teltype, numpx;
+  double xcoord, ycoord;
   while (getline(infile, line))
     {
-      if (!line.find("* PMPIX")){
+      if (line.find("* PMPIX")==0){
         istringstream iss(line);
-        iss >> c1 >> c2 >> telno >> teltype >> pixno >> xpix >> ypix;
-        chan.push_back(pixno);
-	xpos.push_back(xpix);
-	ypos.push_back(ypix);
+        iss >> c >> c >> telno >> teltype >> numpx >> xcoord >> ycoord;
+        channels.push_back(pixno);
+	xvec.push_back(xpix);
+	yvec.push_back(ypix);
       }
     }
-  if (debugbit) cout << "Done" << endl;
+  if (debug) 
+      cout << "Done" << endl;
 }
 
-bool createimage(TH2F *hcam, char* imageName,struct metadata md,bool debugbit)
+void createimage(TH2F *hcam, char* imageName,struct metadata md)
 {
-  //To do: add dynamical datatype definition to change color depth on-the-fly
-  int scale = 1;
-  int depth = 16;
-  int ximpx = hcam->GetXaxis()->GetNbins();
-  int yimpx = hcam->GetYaxis()->GetNbins();
-  Mat img(ximpx, yimpx,CV_16UC1, Scalar(0));//CV_16UC1: 16-bit depth, uint, one channel
-  char buffer[100];
-  if(debugbit){
+    //To do: add dynamical datatype definition to change color depth on-the-fly
+    int scale = 1;
+    int depth = 16;
+    int ximpx = hcam->GetXaxis()->GetNbins();
+    int yimpx = hcam->GetYaxis()->GetNbins();
     cout<<"Creating PNG image..."<<endl;
     cout<<"X: "<<ximpx<<endl;
     cout<<"Y: "<<yimpx<<endl;
     cout<<"Max: "<<hcam->GetMaximum()<<endl;
     cout<<"Max. depth: "<<ceil(TMath::Log2(hcam->GetMaximum()))<<endl;
-    if (depth < ceil(TMath::Log2(hcam->GetMaximum()))) 
-      cerr<<"Image is being truncated: increase color depth"<<endl;
-  }  
-  for (int i = 0; i < ximpx; i++){
-    for (int j = 0; j < yimpx; j++){
-      int val = scale*abs(hcam->GetBinContent(i+1,j+1));
-      if (val > pow(2,depth)){
-	if(debugbit) cout <<"Event "<<imageName<<": pixel intensity "<< int(val) <<" truncated to "<< int(pow(2,depth))<<endl;
-	val = pow(2,depth)-1;
-      }
-      img.at<ushort>(i,j)=val;
+    if (depth < ceil(TMath::Log2(hcam->GetMaximum())))
+    { 
+        std::cerr << "Image is being truncated: increase color depth" << endl;
+    }  
+    for (int i = 0; i < ximpx; i++)
+    {
+        for (int j = 0; j < yimpx; j++)
+        {
+                int val = scale*abs(hcam->GetBinContent(i+1,j+1));
+                if (val > pow(2,depth))
+                {
+	                if(debug) 
+                            std::cout <<"Event "<<imageName<<": pixel intensity "<< int(val) <<" truncated to "<< int(pow(2,depth))<<endl;
+	                val = pow(2,depth)-1;
+                }
+                img.at<ushort>(i,j)=val;
+        }
     }
-  }
-  vector<int> compression_params;
-  compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
-  compression_params.push_back(9);
-  sprintf(buffer,"%s.png",imageName);
-  imwrite(buffer, img, compression_params);
 
-  /////////////////////////
-  //adding image metadata//
-  /////////////////////////
+    std::vector<int> compression_params;
+    compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
+    compression_params.push_back(9);
+    sprintf(buffer,"%s.png",imageName);
+    cv::imwrite(buffer, img, compression_params);
 
-  Exiv2::XmpData metadata;
+    /*
+    * write image metadata fields
+    */
 
-  //register new namespace for properties
-  Exiv2::XmpProperties::registerNs("eventProperties/", "ep");
+    Exiv2::XmpData metadata;
+    Exiv2::XmpProperties::registerNs("eventProperties/", "ep");
 
-  //set properties to desired values
-  metadata["Xmp.ep.eventType"] = md.eventType;
-  metadata["Xmp.ep.eventID"] = md.eventID;
-  metadata["Xmp.ep.impactParameter"] = md.impactParameter;
-  metadata["Xmp.ep.telescopeNumber"] = md.telNum;
-  metadata["Xmp.ep.telx"] = md.telx;
-  metadata["Xmp.ep.tely"] = md.tely;
-  metadata["Xmp.ep.MCprim"] = md.MCprim;
-  metadata["Xmp.ep.MCe0"] = md.MCe0;
-  metadata["Xmp.ep.MCxcore"] = md.MCxcore;
-  metadata["Xmp.ep.MCycore"] = md.MCycore;
-  metadata["Xmp.ep.MCze"] = md.MCze;
-  metadata["Xmp.ep.MCaz"] = md.MCaz;
-  metadata["Xmp.ep.MCxoff"] = md.MCxoff;
-  metadata["Xmp.ep.MCyoff"] = md.MCyoff;
-  metadata["Xmp.ep.pedrms"] = md.pedrms;
+    //set properties to desired values
+    metadata["Xmp.ep.eventType"] = md.eventType;
+    metadata["Xmp.ep.eventID"] = md.eventID;
+    metadata["Xmp.ep.impactParameter"] = md.impactParameter;
+    metadata["Xmp.ep.telescopeNumber"] = md.telNum;
+    metadata["Xmp.ep.telx"] = md.telx;
+    metadata["Xmp.ep.tely"] = md.tely;
+    metadata["Xmp.ep.MCprim"] = md.MCprim;
+    metadata["Xmp.ep.MCe0"] = md.MCe0;
+    metadata["Xmp.ep.MCxcore"] = md.MCxcore;
+    metadata["Xmp.ep.MCycore"] = md.MCycore;
+    metadata["Xmp.ep.MCze"] = md.MCze;
+    metadata["Xmp.ep.MCaz"] = md.MCaz;
+    metadata["Xmp.ep.MCxoff"] = md.MCxoff;
+    metadata["Xmp.ep.MCyoff"] = md.MCyoff;
+    metadata["Xmp.ep.pedrms"] = md.pedrms;
 
-  //open image file object
-  Exiv2::Image::AutoPtr image = Exiv2::ImageFactory::open(buffer);
+    Exiv2::Image::AutoPtr image = Exiv2::ImageFactory::open(buffer);
+    image->setXmpData(metadata);
+    image->writeMetadata();
 
-  //write to file
-  image->setXmpData(metadata);
-  image->writeMetadata();
-
-  if(debugbit) cout<<"Image saved"<<endl;
-  return true;
+    if(debugbit) cout<<"Image saved"<<endl;
+    return true;
 }
 
 
