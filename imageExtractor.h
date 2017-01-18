@@ -1,6 +1,7 @@
 #ifndef __IMAGEEXTRACTOR_H__  
 #define __IMAGEEXTRACTOR_H__  
 
+#include <vector>
 #include <string>
 #include <sstream>
 #include <iostream>
@@ -33,7 +34,7 @@
 
 struct metadata
 {
-    string eventType;
+    std::string eventType;
     float impactParameter;
     unsigned int eventID;
     unsigned int telNum;
@@ -50,14 +51,14 @@ struct metadata
     int pedrms;
 };
 
-int processCAREdata(TFile::TFile *file, TPaveText::TPaveText *pt, TH2F::TH2F *hcamera, TCanvas::TCanvas *ccamera, std::vector<double> v_xcoord, std::vector<double> v_ycoord, int num_channels, std::string output_dir);
+int processCAREdata(TFile *file, TPaveText *pt, TH2F *hcamera, TCanvas *ccamera, std::vector<double> v_xcoord, std::vector<double> v_ycoord, int num_channels, std::string output_dir);
 
-int processEDdata(TFile::TFile *file, TPaveText::TPaveText *pt, TH2F::TH2F *hcamera, TCanvas::TCanvas *ccamera, std::vector<double> v_xcoord, std::vector<double> v_ycoord, int num_channels, std::string output_dir);
-    
-int getFirstBin(unsigned short int trace[][][], int tel, int channel, int num_samples, int ped_rm);
+int processEDdata(TFile *file, TPaveText *pt, TH2F *hcamera, TCanvas *ccamera, std::vector<double> v_xcoord, std::vector<double> v_ycoord, int num_channels, std::string output_dir);
+
+int getFirstBin(unsigned short int ***trace, int tel, int channel, int num_samples,int ped_rm);
 
 void readConfig(std::string filepath, std::vector<int>& channels, std::vector<double>& x_coord, std::vector<double>& y_coord);
 
-void createImage(TH2F::TH2F *hcam, std::string img_name,struct metadata md);
+int createImage(TH2F *hcam, std::string img_name,struct metadata md);
 
 #endif 
