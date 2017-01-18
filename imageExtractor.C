@@ -190,13 +190,13 @@ int main(int argc, char** argv)
     //process data in CARE format 
     if (format.compare("care") == 0)
     {
-        return processCAREdata(file, pt, hcamera, ccamera, num_channels, output_dir);
+        return processCAREdata(file, pt, hcamera, ccamera, v_xcoord, v_ycoord, num_channels, output_dir);
     }
 
     //process data in evndisp format
     else if (format.compare("ed") == 0)
     {
-        return processEDdata();               
+        return processEDdata(file, pt, hcamera, ccamera, v_xcoord, v_ycoord, num_channels, output_dir);
     }
   
     else
@@ -206,7 +206,7 @@ int main(int argc, char** argv)
     }
 }
 
-int processCAREdata(TFile *file, TPaveText *pt, TH2F *hcamera, TCanvas *ccamera, vector<double> v_xcoord, vector<double> v_ycoord, int num_channels, string output_dir)
+int processCAREdata(TFile::TFile *file, TPaveText::TPaveText *pt, TH2F::TH2F *hcamera, TCanvas::TCanvas *ccamera, std::vector<double> v_xcoord, std::vector<double> v_ycoord, int num_channels, std::string output_dir)
 {
     std::cout << "Processing CARE data" << endl;
 
@@ -329,7 +329,7 @@ int processCAREdata(TFile *file, TPaveText *pt, TH2F *hcamera, TCanvas *ccamera,
     return 0;
 }
 
-int processEDdata(TFile *file, TPaveText *pt, TH2F *hcamera, TCanvas *ccamera, vector<double> v_xcoord, vector<double> v_ycoord, int num_channels, string output_dir)
+int processEDdata(TFile::TFile *file, TPaveText::TPaveText *pt, TH2F::TH2F *hcamera, TCanvas::TCanvas *ccamera, std::vector<double> v_xcoord, std::vector<double> v_ycoord, int num_channels, std::string output_dir)
 {
     std::cout << "Processing Eventdisplay data" << endl;
 
@@ -588,7 +588,7 @@ int getFirstBin(unsigned short int trace[][][], int tel, int channel, int num_sa
     return first_bin;
 }
 
-void readConfig(string filepath, vector<int>& channels, vector<double>& x_coord, vector<double>& y_coord)
+void readConfig(std::string filepath, std::vector<int>& channels, std::vector<double>& x_coord, std::vector<double>& y_coord)
 {
     if (debug) std::cout << "Reading configuration file..." << endl;
 
@@ -613,7 +613,7 @@ void readConfig(string filepath, vector<int>& channels, vector<double>& x_coord,
 }
 
 
-void createImage(TH2F *hcam, string img_name,struct metadata md)
+void createImage(TH2F::TH2F *hcam, std::string img_name,struct metadata md)
 {
     const int IMAGE_SCALE = 1;
     const int IMAGE_DEPTH = 16;
