@@ -43,7 +43,10 @@
 
 #include "imageExtractor.h"
 
+///Generate eps images. Default is false.
 bool print_eps = false;
+
+///Generate debug output. Default is false.
 bool debug = false;
 
 int main(int argc, char** argv)
