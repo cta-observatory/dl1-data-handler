@@ -129,7 +129,7 @@ int main(int argc, char** argv)
     }
 
     struct stat s;
-    if (stat(configfile.c_str(), &s) != 0) 
+    if (stat(config_file.c_str(), &s) != 0) 
     {
 	std::cerr << "Error: cannot open configuration file " << config_file.data() << endl;
     	return 1;
@@ -143,7 +143,7 @@ int main(int argc, char** argv)
     std::vector<double> v_xcoord;
     std::vector<double> v_ycoord;
 
-    readconfig(configfile,v_channels,v_xcoord,v_ycoord);
+    readconfig(config_file,v_channels,v_xcoord,v_ycoord);
 
     //Square pixels assumed
     int num_channels = v_channels.size();
