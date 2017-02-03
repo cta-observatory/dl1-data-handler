@@ -6,7 +6,7 @@ LDFLAGS=`pkg-config opencv exiv2 --libs`
 LDFLAGS+=`root-config --libs`
 
 imageExtractor:
-	 ${CC} imageExtractor.C imageExtractor.h -o imageExtractor ${CFLAGS} ${LDFLAGS}
+	 ${CC} imageExtractor.C -o imageExtractor ${CFLAGS} ${LDFLAGS}
 
 
 
