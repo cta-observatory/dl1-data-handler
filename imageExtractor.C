@@ -1,3 +1,8 @@
+/** 
+ * @file imageExtractor.C
+ * @brief Source file for imageExtractor.
+ * */ 
+
 ///////////////////////////////////////////////////////////////////////////////
 //                                                                           //
 // imageExtractor.C                                                          //
