@@ -64,8 +64,8 @@ int main(int argc, char** argv)
     //gErrorIgnoreLevel = 5000;
     std::string data_file;
     std::string config_file;
-    std::string output_dir = "./";
-    std::string format = "ed";
+    std::string output_dir;
+    std::string format;
 
     std::string help =  "Usage is -i <input file> -c <camera file> -f <data format> -o <output directory> -e -d\n"
     "-i and -c fields are mandatory\n"
@@ -165,6 +165,8 @@ int main(int argc, char** argv)
     double x_min_px = (x_min-px_pitch/2)/px_pitch;
     double y_max_px = (y_max+px_pitch/2)/px_pitch;
     double y_min_px = (y_min-px_pitch/2)/px_pitch;//are these variables necessary? they are only used for debug output
+    int x_num_px = (x_max-x_min)/px_pitch; 
+    int y_num_px = (y_max-y_min)/px_pitch;
 
     if (debug)
     {
@@ -178,12 +180,15 @@ int main(int argc, char** argv)
      * Generate camera histogram, canvas, and text box
      */
 
-    //should change to use calculated values, not constants
+    //backup constant values 
+
+    /**
     const double AUX_PX_PITCH = 54/8;
     const int X_NUM_PX = 15*8;
     const int Y_NUM_PX = 15*8;
+    */
 
-    TH2F *hcamera = new TH2F("hcamera","",X_NUM_PX,-(AUX_PX_PITCH*X_NUM_PX)/2,(AUX_PX_PITCH*X_NUM_PX)/2,Y_NUM_PX,-(AUX_PX_PITCH*Y_NUM_PX)/2,(AUX_PX_PITCH*Y_NUM_PX)/2);
+    TH2F *hcamera = new TH2F("hcamera","",x_num_px,-(px_pitch*x_num_px)/2,(px_pitch*x_num_px)/2,y_num_px,-(px_pitch*y_num_px)/2,(px_pitch*y_num_px)/2);
     hcamera->GetXaxis()->SetTitle("X [mm]");
     hcamera->GetYaxis()->SetTitle("Y [mm]");
     hcamera->SetStats(0);
@@ -257,9 +262,9 @@ int processCAREdata(TFile *file, TPaveText *pt, TH2F *hcamera, TCanvas *ccamera,
 
         char buffer[1000];
 
-        if (debug) std::cout << "Trigger bit: " << trigger_bit->at(TEL_NUM) << std::endl; //tel_num == 0?
+        if (debug) std::cout << "Trigger bit: " << trigger_bit->at(i) << std::endl; // ->at(TEL_NUM)
 
-        if (trigger_bit->at(TEL_NUM) && (energy > MIN_ENERGY))
+        if (trigger_bit->at(i) && (energy > MIN_ENERGY))
         {
             for (int j = 0; j < num_channels; j++) 
             {
