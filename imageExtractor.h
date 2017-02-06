@@ -1,8 +1,7 @@
-/**
+/** 
  * @file imageExtractor.h
- *
- * Header file for imageExtractor.
- */
+ * @brief Header file for imageExtractor.
+ * */ 
 
 #ifndef __IMAGEEXTRACTOR_H__  
 #define __IMAGEEXTRACTOR_H__  
