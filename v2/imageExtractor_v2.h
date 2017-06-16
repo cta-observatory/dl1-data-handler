@@ -46,6 +46,10 @@ const int IMAGE_CHANNELS = 3;
 const int IMAGE_WIDTH = 240;
 const int IMAGE_LENGTH = 240;
 
+const int CHANNELS = 11328;
+const int SAMPLES = 64;
+const int TELS = 8;
+
 /**
  * @fn int processCAREdata(TFile *file, TPaveText *pt, TH2F *hcamera, TCanvas *ccamera, std::vector<double> v_xcoord, std::vector<double> v_ycoord, int num_channels, std::string output_dir)
  *
@@ -99,7 +103,7 @@ int processEDdata(TChain *data_chain, TChain *tel_chain, TChain *mscw_chain,TPav
  *
  * @return returns number of starting sample for trace integration
  */
-int getFirstBin(unsigned short int ***trace, int tel, int channel, int num_samples,int ped_rm);
+int getFirstBin(unsigned short int Trace[TELS][SAMPLES][CHANNELS], int tel, int channel, int num_samples,int ped_rm);
 
 /**
  * @fn void readConfig(std::string filepath, std::vector<int>& channels, std::vector<double>& x_coord, std::vector<double>& y_coord)
