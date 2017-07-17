@@ -456,8 +456,8 @@ int processEDdata(TChain *data_chain, TChain *tel_chain, TChain *mscw_chain,TPav
 
     if(debug){std::cout << "Scanning data file" << std::endl;}
 
-    //for (int i = 0; i < num_entries; i++)
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < num_entries; i++)
+    //for (int i = 0; i < 100; i++)
     {
         data_chain->GetEntry(i);
 
@@ -586,7 +586,7 @@ int processEDdata(TChain *data_chain, TChain *tel_chain, TChain *mscw_chain,TPav
     //process for each bin
     for (int j = 0; j < N_BINS; j++)
     {
-        std::cout << "Bin " << j+1 << " out of " << N_BINS << std::endl;
+        std::cout << "\nBin " << j+1 << " out of " << N_BINS << std::endl;
 
         //for all indices (events) in a given bin
         for(std::vector<int>::size_type i = 0; i < bin_indices[j].size(); i++) 
@@ -604,10 +604,12 @@ int processEDdata(TChain *data_chain, TChain *tel_chain, TChain *mscw_chain,TPav
                 {
                     //std::cout << "i="<< i << " l=" << l << " ltrig_list[l]= " << ltrig_list[l] << "tel_map[ltrig_list[l]]=" << (*tel_map)[l] << std::endl;
                     //std::cout << "num_samples[l] =" << num_samples[l] << std::endl;
+                    std::cout << "TEL #" << l << std::endl; 
                 }
 
                 for (int c = 0 ; c < num_channels; c++) 
                 {
+                    if (debug) std::cout << c << std::endl;
 
                     //calculate half-max bin for start of Trace integration
                     int first_bin = getFirstBin(Trace, l, c, samples, ped_rm);
@@ -894,7 +896,7 @@ int createImageTensor(TH2F *hcam, UInt_t (&img_arr)[1][IMAGE_CHANNELS][IMAGE_WID
         }
     }
 
-    if(debug) //std::cout << "Image tensor created" << std::endl;
+    //if(debug) std::cout << "Image tensor created" << std::endl;
     return 0;
 }
 
