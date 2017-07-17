@@ -11,37 +11,28 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Load mscw files to get event-level parameters and apply desired bins/cuts. Then writes dictionary mapping (runNumber,eventNumber) to (energy bin, reconstructed energy).')
     parser.add_argument('mscw_files',help='path of mscw files containing event-level reconstructed parameters for applying cuts/bins')
+    #parser.add_argument('config_file',help='configuration file')
+    parser.add_argument('output_filename',help='name of output .pkl dictionary file')
     args = parser.parse_args()
 
     #energy bins
-    ENERGY_BINS = [(0.1,0.31),(0.31,1),(1,10)]
-    NUM_ENERGY_BINS = len(ENERGY_BINS)
+    #ENERGY_BINS = [(0.1,0.31),(0.31,1),(1,10)]
+    ENERGY_BINS = [(0.1,10)]
 
     #cuts
+    MAX_FLOAT = float('inf')
+    MAX_INT = sys.maxsize
 
-    NO_MAX_FLOAT = float('inf')
-    NO_MAX_INT = sys.maxsize
-
-    MSCW_CUT = (-2.0,2.0)
-    MSCL_CUT = (-2.0,5.0)
-    EChi2S_CUT = (0.0,NO_MAX_FLOAT)
-    ErecS_CUT = (0.0,NO_MAX_FLOAT)
-    EmissionHeight_CUT = (0.0,50.0)
-    Offset_CUT = (0.0,3.0)
-    NImages_CUT = (3,NO_MAX_INT)
-    dES_CUT = (0.0,NO_MAX_FLOAT)
-
-    CUT_VALUES = [MSCW_CUT,MSCL_CUT,EChi2S_CUT,ErecS_CUT,EmissionHeight_CUT,Offset_CUT,NImages_CUT,dES_CUT]
+    CUT_PARAMETERS = [('MSCW',(-2.0,2.0)),('MSCL',(-2.0,5.0)),('EChi2S',(0.0,MAX_FLOAT)),('ErecS',(0.0,MAX_FLOAT)),('EmissionHeight',(0.0,50.0)),(('MCxoff','MCyoff'),(0.0,3.0)),('NImages',(3,MAX_INT)),('dES',(0.0,MAX_FLOAT))]
 
     #create TChain and add all relevant files
     chain = TChain('data')
-
     files = glob(args.mscw_files)
-    
     for i in files:
         chain.AddFile(i)
 
     entries = chain.GetEntriesFast()
+    passed_cuts_count = 0
 
     print('Applying bins/cuts')
 
@@ -49,21 +40,28 @@ if __name__ == '__main__':
     event_bin_Erec_dict = { }
 
     for entry in chain:
-        CUT_VARIABLES = [entry.MSCW, entry.MSCL, entry.EChi2S, entry.ErecS, entry.EmissionHeight, math.sqrt(entry.MCxoff**2 + entry.MCyoff**2), entry.NImages, entry.dES]
-        assert len(CUT_VALUES) == len(CUT_VARIABLES)
         CUTS= []
-        for i in range(len(CUT_VALUES)):
-            CUTS.append(CUT_VARIABLES[i]>= CUT_VALUES[i][0] and CUT_VARIABLES[i] < CUT_VALUES[i][1])
+        for i in CUT_PARAMETERS:
+            if not isinstance(i[0], tuple):
+                CUTS.append(getattr(entry,i[0])>= i[1][0] and getattr(entry,i[0])< i[1][1]) 
+            else:
+                CUTS.append(math.sqrt(getattr(entry,i[0][0])**2 + getattr(entry,i[0][1])**2)>= i[1][0] and math.sqrt(getattr(entry,i[0][0])**2 + getattr(entry,i[0][1])**2)< i[1][1])
+        
+        #print(CUTS)
 
         if all(CUTS):
-            for j in range(NUM_ENERGY_BINS):
+            for j in range(len(ENERGY_BINS)):
                 if entry.ErecS>=ENERGY_BINS[j][0] and entry.ErecS<ENERGY_BINS[j][1]:
                     event_bin_Erec_dict[(entry.runNumber,entry.eventNumber)] = (j,entry.ErecS)
+                    passed_cuts_count += 1
                     break
 
-    print('Writing to .pkl file')
+    print('Total number of events: ',entries)
+    print('Events passing cuts: ',passed_cuts_count)
 
-    pkl.dump(event_bin_Erec_dict, open( "bins_cuts_dict.pkl", "wb" ) )
+    print('Writing to .pkl file...')
+
+    pkl.dump(event_bin_Erec_dict, open(args.output_filename, "wb" ) )
 
     print('Done!')
 

@@ -40,7 +40,7 @@
 #include <TSystem.h>
 #include <TUnixSystem.h>
 
-#include <highgui.hpp>
+#include <opencv2/highgui.hpp>
 #include <exiv2.hpp>
 #include <xmp.hpp>
 #include <image.hpp>
@@ -63,8 +63,8 @@ int main(int argc, char** argv)
     //gErrorIgnoreLevel = 5000;
     std::string data_file;
     std::string config_file;
-    std::string output_dir;
-    std::string format;
+    std::string output_dir = "./";
+    std::string format = "ed";
 
     std::string help =  "Usage is -i <input file> -c <camera file> -f <data format> -o <output directory> -e -d\n"
     "-i and -c fields are mandatory\n"
@@ -75,21 +75,21 @@ int main(int argc, char** argv)
     "-h option for help\n";
 
     int opt;
-    while((opt = getopt(argc,argv,"i:c:o:f:ehd")) != -1)
+    while((opt = getopt(argc,argv,"i:c:o:f:e:hd:")) != -1)
     {
         switch(opt)
         {
             case 'i':
-                data_file = optarg;
+                data_file.assign(optarg);
                 break;
             case 'o':
-                output_dir = optarg;
+                output_dir.assign(optarg);
                 break;
             case 'c':
-                config_file = optarg;
+                config_file.assign(optarg);
                 break;
             case 'f':
-                format = optarg;
+                format.assign(optarg);
                 break;
             case 'e':
                 print_eps = true;
@@ -100,14 +100,12 @@ int main(int argc, char** argv)
             case 'h':
                 std::cout << help;
                 return 0;
-            case '?':
-                if (optopt == 'o')
+            case '?': 
+                if (optopt == 'i' || optopt == 'c')
                 {
-                    output_dir = "./";
-                }
-                else if (optopt == 'f')
-                {
-                    format = "ed";
+                    fprintf(stderr, "Error: argument -%c is required.\n",optopt);
+                    std::cerr << help;
+                    return 1;
                 }
                 else
                 {
@@ -120,6 +118,7 @@ int main(int argc, char** argv)
     }
     
     std::cout << "Data file: " << data_file << std::endl;
+    std::cout << "Data file format: " << (format == "ed" ? "EventDisplay (ed)" : "CARE (care)")  << std::endl;
     std::cout << "Camera file: " << config_file << std::endl;
     std::cout << "Output directory: " << (output_dir == "./" ? "Default (\"./\")" : output_dir) << std::endl;
     std::cout << "Generate eps files: " << (print_eps ? "Yes" : "No") << std::endl;
@@ -255,6 +254,8 @@ int processCAREdata(TFile *file, TPaveText *pt, TH2F *hcamera, TCanvas *ccamera,
         {
             case 0 :
                 event_type = "gamma";
+            case 1 :
+                event_type = "electron";
             case 101 :
                 event_type = "proton";
         }
@@ -482,10 +483,13 @@ int processEDdata(TFile *file, TPaveText *pt, TH2F *hcamera, TCanvas *ccamera, s
 
             for (int j = 0 ; j < channels; j++) 
             {
+                //calculate half-max bin for start of trace integration
                 int first_bin = getFirstBin((unsigned short int ***)trace, l, j, samples, ped_rm);
 
+                int trace_integ_window = 6;
                 int charge = 0;
-                for (int k = first_bin; k < (first_bin + 6); k++)
+                //trace integration over 6 bins from half-max
+                for (int k = first_bin; k < (first_bin + trace_integ_window); k++)
                 {
                     charge += trace[l][k][j]-ped_rm; 
                 }
@@ -504,6 +508,9 @@ int processEDdata(TFile *file, TPaveText *pt, TH2F *hcamera, TCanvas *ccamera, s
                     break;
                 case 101 : 
                     event_type = "proton";
+                    break;
+                case 1 :
+                    event_type = "electron";
                     break;
             }
 
@@ -567,6 +574,7 @@ int getFirstBin(unsigned short int ***trace, int tel, int channel, int num_sampl
     int charge = 0;    
     int max_charge = 0;      
     int first_HM_bin = 0;
+    int trace_integ_window = 6;
 
     //find max charge
     for (int i = 0; i < num_samples; i++)
@@ -593,9 +601,9 @@ int getFirstBin(unsigned short int ***trace, int tel, int channel, int num_sampl
     //if so, sum over last 6 bins
 
     int first_bin;
-    if(first_HM_bin + 5 >= num_samples)
+    if(first_HM_bin + trace_integ_window > num_samples)
     {
-        first_bin = num_samples - 6;
+        first_bin = num_samples - (trace_integ_window);
     }
     else
     {

@@ -8,8 +8,6 @@ LDFLAGS+=`root-config --libs`
 imageExtractor:
 	 ${CC} imageExtractor.C -o imageExtractor ${CFLAGS} ${LDFLAGS}
 
-
-
 .PHONY: clean
 clean:
 	rm -f imageExtractor

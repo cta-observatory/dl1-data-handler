@@ -43,7 +43,7 @@
  */
 struct metadata
 {
-    std::string even_type;///< Primary particle type (currently supported: gamma, proton)
+    std::string eventType;///< Primary particle type (currently supported: gamma, proton)
     float impactParameter;///< Impact parameter (horizontal distance from event position to telescope position)
     unsigned int eventID;///< Event ID (unique)
     unsigned int telNum; ///< Telescope number
