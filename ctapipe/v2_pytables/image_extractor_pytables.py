@@ -66,6 +66,12 @@ class Event(IsDescription):
     MC_energy = Float64Col()
     reconstructed_energy = Float32Col()
 
+class Tel(IsDescription):
+    tel_id = UInt8Col()
+    tel_x = Float32Col()
+    tel_y = Float32Col()
+    tel_type = StringCol(16)
+
 def makeSCTImageArray(pixels_vector,peaks_vector,image_mode,scale_factor,img_dtype,dim_order,channels):
 
     #hardcoded to correct SCT values
@@ -153,12 +159,17 @@ def imageExtractor():
 
     print("Getting telescope types...")
 
-    #collect telescope lists
+    #collect telescope lists 
     source_temp = hessio_event_source(args.data_file,max_events=1)
 
     LST_list = []
     SCT_list = []
     SST_list = []
+
+    #create table for telescope positions
+    tel_pos_table = tf.create_table("/",'Tel_table',Tel,"Table of telescope ids, positions, and types")
+    tel_row = tel_pos_table.row
+
     for event in source_temp: 
         for i in event.inst.telescope_ids:
             if event.inst.num_pixels[i] == SCT_NUM_PIXELS:
@@ -169,37 +180,49 @@ def imageExtractor():
                 SST_list.append(i)
             #elif event.inst.num_pixels[i] == 
 
-    all_tels = {'SST' : SST_list, 'SCT' : SCT_list, 'LST' : LST_list}
+        all_tels = {'SST' : SST_list, 'SCT' : SCT_list, 'LST' : LST_list}
 
-    #select telescopes by type
-    selected = {}
-    TEL_MODE = config['telescope']['type_mode'] 
-    if TEL_MODE == 'SST':
-        selected['SST'] = SST_list
-    elif TEL_MODE == 'SCT':
-        selected['SCT'] = SCT_list
-    elif TEL_MODE == 'LST':
-        selected['LST'] = LST_list
-    elif TEL_MODE == 'SCT+LST':
-        selected['LST'] = LST_list
-        selected['SCT'] = SCT_list
-    elif TEL_MODE == 'SST+SCT':
-        selected['SST'] = SST_list
-        selected['SCT'] = SCT_list
-    elif TEL_MODE == 'SST+LST':
-        selected['LST'] = LST_list
-        selected['SST'] = SST_list
-    elif TEL_MODE == 'ALL':
-        selected['LST'] = LST_list
-        selected['SCT'] = SCT_list 
-        selected['SST'] = SST_list
-    else:
-        raise ValueError('Telescope selection mode not recognized.') 
+        #select telescopes by type
+        selected = {}
+        TEL_MODE = config['telescope']['type_mode'] 
+        if TEL_MODE == 'SST':
+            selected['SST'] = SST_list
+        elif TEL_MODE == 'SCT':
+            selected['SCT'] = SCT_list
+        elif TEL_MODE == 'LST':
+            selected['LST'] = LST_list
+        elif TEL_MODE == 'SCT+LST':
+            selected['LST'] = LST_list
+            selected['SCT'] = SCT_list
+        elif TEL_MODE == 'SST+SCT':
+            selected['SST'] = SST_list
+            selected['SCT'] = SCT_list
+        elif TEL_MODE == 'SST+LST':
+            selected['LST'] = LST_list
+            selected['SST'] = SST_list
+        elif TEL_MODE == 'ALL':
+            selected['LST'] = LST_list
+            selected['SCT'] = SCT_list 
+            selected['SST'] = SST_list
+        else:
+            raise ValueError('Telescope selection mode not recognized.') 
 
-    print("Telescope Mode: ",TEL_MODE)
-    
-    for i in selected.keys():
-        print(i + ": " + str(len(selected[i])) + " out of " + str(len(all_tels[i])) + " telescopes selected.")
+        print("Telescope Mode: ",TEL_MODE)
+
+        NUM_TELS = 0
+
+        for i in selected.keys():
+            print(i + ": " + str(len(selected[i])) + " out of " + str(len(all_tels[i])) + " telescopes selected.")
+            NUM_TELS += len(selected[i])
+
+        for i in selected.keys():
+            for j in selected[i]:
+                tel_row["tel_id"] = j
+                tel_row["tel_x"] = event.inst.tel_pos[j].value[0] 
+                tel_row["tel_y"] = event.inst.tel_pos[j].value[1]
+                tel_row["tel_type"] = i
+
+                tel_row.append()
 
     print("Loading additional configuration settings...")
 
@@ -256,6 +279,7 @@ def imageExtractor():
 
     dataset_tables = []
 
+    #create table for events
     for d in datasets:
         if not d.__contains__('Events'):
             table = f.create_table(d, 'Events', Event, "Table of event records") 
@@ -282,6 +306,9 @@ def imageExtractor():
 
                 for tel_id in selected[tel_type]:
                     descr2["T" + str(tel_id)] = UInt16Col(shape=(IMAGE_WIDTH,IMAGE_LENGTH,IMAGE_CHANNELS))
+
+            #dynamically add column for trig_list
+            descr2["trig_list"] = UInt8Col(shape=(NUM_TEL))
      
             table2 = f.create_table(d, 'temp', descr2, "Table of event records")
             table.attrs._f_copy(table2)
@@ -385,6 +412,17 @@ def imageExtractor():
         event_row['gamma_hadron_label'] = gamma_hadron_label
         event_row['MC_energy'] = event.mc.energy.value
         event_row['reconstructed_energy'] = reconstructed_energy
+
+        #create and append trig_list
+        trig_list = []
+        for i in selected.keys():
+            for j in selected[i]:
+                if j in event.dl1.tels_with_data:
+                    trig_list.append(1)
+                else:
+                    trig_list.append(0)
+
+        event_row['trig_list'] = trig_list
         
         if MODE == 'energy_recon':
             event_row['energy_reconstruction_bin_label'] = erec_bin_label
