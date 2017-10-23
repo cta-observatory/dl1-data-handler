@@ -13,7 +13,7 @@ for f in $1
 do
     #echo "python /home/gemini/code/imageExtractor/ctapipe/image_extractor.py $f ./output_temp.h5 $3" 
     echo "$f"
-    python "/home/gemini/code/imageExtractor/ctapipe/pytables/image_extractor_pytables.py" "$f" "./output_temp.h5" "$3" "$4"
+    python "/home/shevek/bsk2133/image-extractor/ctapipe/v2_pytables/image_extractor_pytables.py" "$f" "./output_temp.h5" "$3" "$4"
 done
 
 echo "Done!"
@@ -22,7 +22,7 @@ echo "Done!"
 
 echo "Shuffling and splitting dataset..."
 
-python "/home/gemini/code/imageExtractor/ctapipe/pytables/shuffle_split_events.py" "./output_temp.h5" "$2"
+python "/home/shevek/bsk2133/image-extractor/ctapipe/v2_pytables/scripts/shuffle_split_events.py" "./output_temp.h5" "$2"
 #rm "./output_temp.h5"
     
 echo "Done!"
