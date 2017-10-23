@@ -4,7 +4,6 @@ from random import shuffle
 
 from configobj import ConfigObj
 import pickle as pkl
-from ROOT import TChain,TFile
 from glob import glob
 import numpy as np
 from tables import *
@@ -41,6 +40,11 @@ if __name__ == '__main__':
     new_tables = []
 
     data_splits = ['Training','Validation','Test']
+
+    #copy tel_table
+    if f_in.__contains__('/Tel_Table'): 
+        tel_table = f_in.root.Tel_Table
+        new_tel_table = tel_table.copy(f_shuffled.root, 'Tel_Table')
 
     if MODE == 'gh_class':
         for group in f_in.walk_groups("/"):
