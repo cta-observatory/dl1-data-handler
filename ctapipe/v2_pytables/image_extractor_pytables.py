@@ -70,7 +70,8 @@ class Tel(IsDescription):
     tel_id = UInt8Col()
     tel_x = Float32Col()
     tel_y = Float32Col()
-    tel_type = StringCol(16)
+    tel_z = Float32Col()
+    tel_type = StringCol(8)
 
 def makeSCTImageArray(pixels_vector,peaks_vector,include_timing,scale_factor,img_dtype,dim_order,channels):
 
@@ -282,6 +283,7 @@ def imageExtractor():
                     tel_row["tel_id"] = j
                     tel_row["tel_x"] = event.inst.tel_pos[j].value[0] 
                     tel_row["tel_y"] = event.inst.tel_pos[j].value[1]
+                    tel_row["tel_z"] = event.inst.tel_pos[j].value[2]
                     tel_row["tel_type"] = i
 
                     tel_row.append()
