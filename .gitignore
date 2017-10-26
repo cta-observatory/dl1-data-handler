@@ -1,12 +1,9 @@
 #Ignore files
 #############
 
-#object files
 *.o
+*.png
+*.h5
+*.simtel.gz
 
-#goto link from output.sh
-goto
-
-#compiled executables
-imageExtractor
 
