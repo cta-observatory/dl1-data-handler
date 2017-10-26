@@ -1,6 +1,7 @@
 import argparse
 import math
 from random import shuffle
+import re
 
 from configobj import ConfigObj
 import pickle as pkl
@@ -28,7 +29,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Takes existing HDF5 file formatted for Tensorflow/pytables and shuffles the events in each bin independently. Then splits dataset into training, validation, test sets and writes to new file.')
     parser.add_argument('hdf5_path', help='path to HDF5 file to be shuffled')
     parser.add_argument('output_file',help='path to output HDF5 file (shuffled). Must not already exist.')
+    parser.add_argument('-shuffle', action = 'store_true')
     args = parser.parse_args()
+
+    shuffle = args.shuffle
 
     #open input hdf5 file
     f_in = open_file(args.hdf5_path, mode = "r", title = "Input file") 
@@ -45,14 +49,21 @@ if __name__ == '__main__':
     if f_in.__contains__('/Tel_Table'): 
         tel_table = f_in.root.Tel_Table
         new_tel_table = tel_table.copy(f_shuffled.root, 'Tel_Table')
-
+        
     if MODE == 'gh_class':
         for group in f_in.walk_groups("/"):
+
             if not group == f_in.root:
                 table = group.Events
                 tables.append(table)
                 descr = table.description
                 group_new = f_shuffled.create_group("/", group._v_name, group._v_attrs.TITLE)
+
+                #copy tel arrays
+                for child in group._v_children:
+                    if re.match("T[0-9]+",child):
+                        new_array = group._f_get_child(child).copy(group_new,child)
+
                 new_datasets = []
                 for i in data_splits:
                     table_new = f_shuffled.create_table(group_new, 'Events_' + i, descr, "Table of " + i + " Inputs")
@@ -73,8 +84,9 @@ if __name__ == '__main__':
         num_events = table.shape[0]
  
         #create list of indices per group and shuffle them
-        shuffled_indices = [i for i in range(num_events)]
-        shuffle(shuffled_indices)
+        new_indices = [i for i in range(num_events)]
+        if shuffle:
+            shuffle(new_indices)
 
         train_start = 0
         train_end = train_start + int(num_events*TRAINING_SPLIT)
@@ -85,11 +97,11 @@ if __name__ == '__main__':
 
         for i in range(num_events):
             if i >= train_start and i <= train_end:
-                new_datasets[0].append([tuple(table[shuffled_indices[i]])]) 
+                new_datasets[0].append([tuple(table[new_indices[i]])]) 
             elif i >= val_start and i <= val_end:
-                new_datasets[1].append([tuple(table[shuffled_indices[i]])]) 
+                new_datasets[1].append([tuple(table[new_indices[i]])]) 
             elif i >= test_start and i < test_end:
-                new_datasets[2].append([tuple(table[shuffled_indices[i]])]) 
+                new_datasets[2].append([tuple(table[new_indices[i]])]) 
             else:
                 print("Index error")
                 quit()
