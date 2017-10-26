@@ -263,7 +263,7 @@ def imageExtractor():
             where = eval(row_str)
             datasets.append(where)
     elif MODE == 'energy_recon':
-        datasets = [f]
+        datasets = [f.root]
 
     dataset_tables = []
 
@@ -301,20 +301,24 @@ def imageExtractor():
                 descr2['energy_reconstruction_bin_label'] = UInt8Col()
 
             #dynamically add columns for telescopes
-            for tel_type in selected.keys():
+            if STORAGE_MODE == 'all':
+                for tel_type in selected.keys():
 
-                if tel_type == 'SST':
-                    IMAGE_WIDTH = SST_IMAGE_WIDTH*IMG_SCALE_FACTOR
-                    IMAGE_LENGTH = SST_IMAGE_LENGTH*IMG_SCALE_FACTOR
-                elif tel_type == 'SCT':
-                    IMAGE_WIDTH = SCT_IMAGE_WIDTH*IMG_SCALE_FACTOR
-                    IMAGE_LENGTH = SCT_IMAGE_LENGTH*IMG_SCALE_FACTOR
-                elif tel_type == 'LST':
-                    IMAGE_WIDTH = LST_IMAGE_WIDTH*IMG_SCALE_FACTOR
-                    IMAGE_LENGTH = LST_IMAGE_LENGTH*IMG_SCALE_FACTOR
+                    if tel_type == 'SST':
+                        IMAGE_WIDTH = SST_IMAGE_WIDTH*IMG_SCALE_FACTOR
+                        IMAGE_LENGTH = SST_IMAGE_LENGTH*IMG_SCALE_FACTOR
+                    elif tel_type == 'SCT':
+                        IMAGE_WIDTH = SCT_IMAGE_WIDTH*IMG_SCALE_FACTOR
+                        IMAGE_LENGTH = SCT_IMAGE_LENGTH*IMG_SCALE_FACTOR
+                    elif tel_type == 'LST':
+                        IMAGE_WIDTH = LST_IMAGE_WIDTH*IMG_SCALE_FACTOR
+                        IMAGE_LENGTH = LST_IMAGE_LENGTH*IMG_SCALE_FACTOR
 
-                for tel_id in selected[tel_type]:
-                    descr2["T" + str(tel_id)] = UInt16Col(shape=(IMAGE_WIDTH,IMAGE_LENGTH,IMAGE_CHANNELS))
+                    for tel_id in selected[tel_type]:
+                        descr2["T" + str(tel_id)] = UInt16Col(shape=(IMAGE_WIDTH,IMAGE_LENGTH,IMAGE_CHANNELS))
+
+            elif STORAGE_MODE == 'mapped':
+                descr2["tel_map"] = Int16Col(shape=(NUM_TEL))
 
             #dynamically add column for trig_list
             descr2["trig_list"] = UInt8Col(shape=(NUM_TEL))
@@ -325,6 +329,33 @@ def imageExtractor():
             table2.move(d, 'Events')
         
         dataset_tables.append(d.Events)
+
+    #for mapped storage, create 1 Array per telescope
+    #telescope_arrays = []
+    if STORAGE_MODE == 'mapped':
+        for d in datasets:
+            print(type(d))
+            print(d._v_name)
+            for tel_type in selected.keys():
+                if tel_type == 'SST':
+                    IMAGE_WIDTH = SST_IMAGE_WIDTH*IMG_SCALE_FACTOR
+                    IMAGE_LENGTH = SST_IMAGE_LENGTH*IMG_SCALE_FACTOR
+                elif tel_type == 'SCT':
+                    IMAGE_WIDTH = SCT_IMAGE_WIDTH*IMG_SCALE_FACTOR
+                    IMAGE_LENGTH = SCT_IMAGE_LENGTH*IMG_SCALE_FACTOR
+                elif tel_type == 'LST':
+                    IMAGE_WIDTH = LST_IMAGE_WIDTH*IMG_SCALE_FACTOR
+                    IMAGE_LENGTH = LST_IMAGE_LENGTH*IMG_SCALE_FACTOR
+    
+                #img_atom = Atom.from_dtype(np.dtype((np.int16, (IMAGE_WIDTH, IMAGE_LENGTH,IMAGE_CHANNELS))))
+                #img_atom = Atom.from_type('int16', shape=(IMAGE_WIDTH,IMAGE_LENGTH,IMAGE_CHANNELS)) 
+                img_atom = Int16Atom()
+
+                for tel_id in selected[tel_type]:
+                    if not d.__contains__('T'+str(tel_id)):
+                        #print("creating T{}".format(tel_id))
+                        array = f.create_earray(d, 'T'+str(tel_id), img_atom, (0,IMAGE_WIDTH,IMAGE_LENGTH,IMAGE_CHANNELS))
+                        #telescope_arrays.append(array)
 
     #load bins/cuts file
     if config['use_pkl_dict']:
@@ -394,26 +425,46 @@ def imageExtractor():
         elif MODE == 'gh_class':
             event_row = dataset_tables[bin_number].row
 
-        #collect telescope data
-        for tel_id in event.r0.tels_with_data:
-            image = event.dl1.tel[tel_id].image
-            #truncate at 0
-            image[image < 0] = 0
-            #round float values to hundredths + save as int
-            image = [round(i*100) for i in image[0]]
-            #compute peak position
-            if INCLUDE_TIMING:
-                peaks = event.dl1.tel[tel_id].peakpos[0]
-            else:
-                peaks = None 
+        #collect telescope data and create trig_list and tel_map
+        trig_list = []
+        if STORAGE_MODE == 'mapped':
+            tel_map = []
+        for tel_type in selected.keys():
+            for tel_id in selected[tel_type]:
+                if tel_id in event.r0.tels_with_data:
+                    trig_list.append(1)
+                    image = event.dl1.tel[tel_id].image
+                    #truncate at 0
+                    image[image < 0] = 0
+                    #round float values to hundredths + save as int
+                    image = [round(i*100) for i in image[0]]
+                    #compute peak position
+                    if INCLUDE_TIMING:
+                        peaks = event.dl1.tel[tel_id].peakpos[0]
+                    else:
+                        peaks = None 
 
-            #append new image to each telescope dataset, or a blank image if no data from telescope 
-            if tel_id in [j for i in selected.keys() for j in selected[i]]:
-                image_array = makeSCTImageArray(image,peaks,INCLUDE_TIMING,IMG_SCALE_FACTOR,IMG_DTYPE,IMG_DIM_ORDERING,IMAGE_CHANNELS)
-            else:
-                image_array = makeSCTImageArray(None,peaks,INCLUDE_TIMING,IMG_SCALE_FACTOR,IMG_DTYPE,IMG_DIM_ORDERING,IMAGE_CHANNELS)
-            
-            event_row["T" + str(tel_id)] = image_array
+                    image_array = makeSCTImageArray(image,peaks,INCLUDE_TIMING,IMG_SCALE_FACTOR,IMG_DTYPE,IMG_DIM_ORDERING,IMAGE_CHANNELS)
+ 
+                    if STORAGE_MODE == 'all':
+                        event_row["T" + str(tel_id)] = image_array          
+                    elif STORAGE_MODE == 'mapped':
+                        array_str = 'f.root.E{}.T{}'.format(bin_number,tel_id)
+                        array = eval(array_str)
+                        next_index = array.nrows
+                        array.append(np.expand_dims(image_array,axis=0))
+                        tel_map.append(next_index)
+
+                else:
+                    trig_list.append(0)
+                    if STORAGE_MODE == 'all':
+                        event_row["T" + str(tel_id)] = makeSCTImageArray(None,peaks,INCLUDE_TIMING,IMG_SCALE_FACTOR,IMG_DTYPE,IMG_DIM_ORDERING,IMAGE_CHANNELS)
+                    elif STORAGE_MODE == 'mapped':
+                        tel_map.append(-1)
+                        
+        event_row['trig_list'] = trig_list 
+        if STORAGE_MODE == 'mapped':
+            event_row['tel_map'] = tel_map
 
         #other parameter data
         event_row['event_number'] = event.r0.event_id
@@ -422,17 +473,6 @@ def imageExtractor():
         event_row['MC_energy'] = event.mc.energy.value
         event_row['reconstructed_energy'] = reconstructed_energy
 
-        #create and append trig_list
-        trig_list = []
-        for i in selected.keys():
-            for j in selected[i]:
-                if j in event.r0.tels_with_data:
-                    trig_list.append(1)
-                else:
-                    trig_list.append(0)
-
-        event_row['trig_list'] = trig_list
-        
         if MODE == 'energy_recon':
             event_row['energy_reconstruction_bin_label'] = erec_bin_label
 
