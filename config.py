@@ -1,10 +1,10 @@
-from configobj import ConfigObj
-from validate import Validator
-#from configobj.validate import Validator
 import argparse
 import os
 
-s = """
+from configobj import ConfigObj
+from validate import Validator
+
+config_spec = """
 mode = option('gh_class','energy_recon', default='gh_class')
 storage_mode = option('all','mapped', default='all')
 use_pkl_dict = boolean(default=True)
@@ -39,7 +39,6 @@ dES = tuple(default=list(0.0,None))
     max = float(default=2.0)
     bin_size = float(default=0.05)
 """
-    #angular_direction
 
 if __name__ == '__main__':
 
