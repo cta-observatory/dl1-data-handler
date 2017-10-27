@@ -117,10 +117,9 @@ def make_sct_image_array(pixels_vector,peaks_vector,scale_factor,img_dtype,dim_o
     return im_array
 
 def image_extractor(data_file_path,output_file_path,bins_cuts_dict,config):
-"""
-Function to read and write data from ctapipe containers to HDF5 
-"""
-
+    """
+    Function to read and write data from ctapipe containers to HDF5 
+    """
     MODE = config['mode']
     IMG_MODE = config['image']['mode']
     STORAGE_MODE = config['storage_mode']
