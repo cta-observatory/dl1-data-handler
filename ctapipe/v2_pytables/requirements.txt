@@ -1,0 +1,9 @@
+tables==3.4.2
+numpy==1.13.3
+Pillow==4.3.0
+ROOT==0.0.1
+astropy==2.0.2
+configobj==5.0.6
+ctapipe==0.0
+h5py==2.7.1
+matplotlib==2.1.0
