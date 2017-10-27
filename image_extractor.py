@@ -1,58 +1,31 @@
+"""
+image_extractor for writing processed data from ctapipe containers to HDF5 files. Also various helper functions.
+"""
+
 import argparse
 import math
 import pickle as pkl
+import logging
 
 from configobj import ConfigObj
 from validate import Validator
 import numpy as np
+from astropy import units as u
 from tables import *
 from ctapipe.io.hessio import hessio_event_source
-#from ctapipe.visualization import CameraDisplay
-from ctapipe.instrument import CameraGeometry
-from ctapipe.image.charge_extractors import NeighbourPeakIntegrator
-#from ctapipe.reco import EnergyRegressor
 from ctapipe.calib import pedestals,CameraCalibrator
-from astropy import units as u
-from PIL import Image
 
-#spec/template for configuration file validation
-config_spec = """
-mode = option('gh_class','energy_recon', default='gh_class')
-storage_mode = option('all','mapped', default='all')
-use_pkl_dict = boolean(default=True)
-[image]
-mode = option('PIXELS_3C','PIXELS_1C','PIXELS_TIMING_2C',PIXELS_TIMING_3C',default='PIXELS_3C')
-scale_factor = integer(min=1,default=2)
-dtype = option('uint32', 'int16', 'int32', 'uint16',default='uint16')
-dim_order = option('channels_first','channels_last',default='channels_last')
-[telescope]
-type_mode = option('SST', 'SCT', 'LST', 'SST+SCT','SST+LST','SCT+LST','ALL', default='SCT')
-[energy_bins]
-units = option('eV','MeV','GeV','TeV',default='TeV')
-scale = option('linear','log10',default='log10')
-min = float(default=-1.0)
-max = float(default=1.0)
-bin_size = float(default=0.5)
-[preselection_cuts]
-MSCW = tuple(default=list(-2.0,2.0))
-MSCL = tuple(default=list(-2.0,5.0))
-EChi2S = tuple(default=list(0.0,None))
-ErecS = tuple(default=list(0.0,None))
-EmissionHeight = tuple(default=list(0.0,50.0))
-MC_Offset = mixed_list(string,string,float,float,default=list('MCxoff','MCyoff',0.0,3.0))
-NImages = tuple(default=list(3,None))
-dES = tuple(default=list(0.0,None))
-[energy_recon]
-    gamma_only = boolean(default=True)
-    [[bins]]
-    units = option('eV','MeV','GeV','TeV',default='TeV')
-    scale = option('linear','log10',default='log10')
-    min = float(default=-2.0)
-    max = float(default=2.0)
-    bin_size = float(default=0.05)
-"""
+import config
 
-#telescope constants
+__all__ = ['make_sct_image_array',
+            'image_extractor']
+
+logger = logging.getLogger(__name__)
+
+config_spec = config.config_spec
+
+#harcoded telescope constants
+#TODO: find more natural way of handling this?
 SCT_IMAGE_WIDTH = 120
 SCT_IMAGE_LENGTH = 120
 LST_NUM_PIXELS = 1855
@@ -60,6 +33,9 @@ SCT_NUM_PIXELS = 11328
 SST_NUM_PIXELS = 0 #update
 
 class Event(IsDescription):
+    """
+    Row descriptor class for Pytables event table.
+    """
     event_number = UInt32Col()   
     run_number = UInt32Col() 
     gamma_hadron_label = UInt8Col()
@@ -67,15 +43,21 @@ class Event(IsDescription):
     reconstructed_energy = Float32Col()
 
 class Tel(IsDescription):
+    """
+    Row descriptor class for Pytables telescope data table.
+    """ 
     tel_id = UInt8Col()
     tel_x = Float32Col()
     tel_y = Float32Col()
     tel_z = Float32Col()
     tel_type = StringCol(8)
 
-def makeSCTImageArray(pixels_vector,peaks_vector,include_timing,scale_factor,img_dtype,dim_order,channels):
-
+def make_sct_image_array(pixels_vector,peaks_vector,scale_factor,img_dtype,dim_order,channels):
+    """
+    Converter from ctapipe image pixel vector, peak position vector to numpy array format.
+    """ 
     #hardcoded to correct SCT values
+    #TODO: find more natural way to handle these?
     NUM_PIXELS = 11328
     CAMERA_DIM = (120,120)
     ROWS = 15
@@ -83,7 +65,8 @@ def makeSCTImageArray(pixels_vector,peaks_vector,include_timing,scale_factor,img
     MODULE_SIZE = MODULE_DIM[0]*MODULE_DIM[1]
     MODULES_PER_ROW = [5,9,11,13,13,15,15,15,15,15,13,13,11,9,5]
 
-    MODULE_START_POSITIONS = [(((CAMERA_DIM[0]-MODULES_PER_ROW[j]*MODULE_DIM[0])/2)+(MODULE_DIM[0]*i),j*MODULE_DIM[1]) for j in range(ROWS) for i in range(MODULES_PER_ROW[j])] #counting from the bottom row, left to right
+    #counting from the bottom row, left to right
+    MODULE_START_POSITIONS = [(((CAMERA_DIM[0]-MODULES_PER_ROW[j]*MODULE_DIM[0])/2)+(MODULE_DIM[0]*i),j*MODULE_DIM[1]) for j in range(ROWS) for i in range(MODULES_PER_ROW[j])]
 
     if dim_order == 'channels_first':
         im_array = np.zeros([channels,CAMERA_DIM[0]*scale_factor,CAMERA_DIM[1]*scale_factor], dtype=img_dtype)
@@ -91,12 +74,27 @@ def makeSCTImageArray(pixels_vector,peaks_vector,include_timing,scale_factor,img
         im_array = np.zeros([CAMERA_DIM[0]*scale_factor,CAMERA_DIM[1]*scale_factor,channels], dtype=img_dtype)
 
     if pixels_vector is not None:
-        pixel_num = 0
+        try:
+            assert len(pixels_vector) == NUM_PIXELS
+        except AssertionError as err:
+            logger.exception("Length of pixel vector does not match SCT num pixels.")
+            raise err
+        image_exists = True
+    else:
+        image_exists = False
 
-        assert len(pixels_vector) == NUM_PIXELS
-        if include_timing:
+    if peaks_vector is not None:
+        try:
             assert len(peaks_vector) == NUM_PIXELS
+        except AssertionError as err:
+            logger.exception("Length of peaks vector does not match SCT num pixels.")
+            raise err
+        include_timing = True
+    else:
+        include_timing = False
 
+    if image_exists:
+        pixel_index = 0
         for (x_start,y_start) in MODULE_START_POSITIONS:
             for i in range(MODULE_SIZE):
                 x = (int(x_start + int(i/MODULE_DIM[0])))*scale_factor
@@ -106,42 +104,22 @@ def makeSCTImageArray(pixels_vector,peaks_vector,include_timing,scale_factor,img
 
                 for (x_coord,y_coord) in scaled_region:
                     if dim_order == 'channels_first':
-                        im_array[0,x_coord,y_coord] = pixels_vector[pixel_num]
+                        im_array[0,x_coord,y_coord] = pixels_vector[pixel_index]
                         if include_timing:
-                            im_array[1,x_coord,y_coord] = peaks_vector[pixel_num]
+                            im_array[1,x_coord,y_coord] = peaks_vector[pixel_index]
                     elif dim_order == 'channels_last':
-                        im_array[x_coord,y_coord,0] = pixels_vector[pixel_num]
+                        im_array[x_coord,y_coord,0] = pixels_vector[pixel_index]
                         if include_timing:
-                            im_array[x_coord,y_coord,1] = peaks_vector[pixel_num]
+                            im_array[x_coord,y_coord,1] = peaks_vector[pixel_index]
 
-                pixel_num += 1
-
-    #image = Image.fromarray(im_array[:,:,0],'I')
-    #image.save("test.png")
+                pixel_index += 1
 
     return im_array
 
-#@profile
-def imageExtractor():
-
-    parser = argparse.ArgumentParser(description='Load image data and event parameters from a simtel file into a formatted HDF5 file.')
-    parser.add_argument('data_file', help='path to input .simtel file')
-    parser.add_argument('hdf5_path', help='path of output HDF5 file, or currently existing file to append to')
-    parser.add_argument('bins_cuts_dict',help='dictionary containing bins/cuts in .pkl format')
-    parser.add_argument('config_file',help='configuration file specifying the selected telescope ids from simtel file, the desired energy bins, the correst image output dimensions/dtype, ')
-    parser.add_argument("--debug", help="print debug/logger messages",action="store_true")
-    args = parser.parse_args()
-
-    #Configuration file, load + validate
-    spc = config_spec.split('\n')
-    config = ConfigObj(args.config_file,configspec=spc)
-    validator = Validator()
-    val_result = config.validate(validator)
-
-    if val_result:
-        print("Config file validated.")
-    else:
-        raise ValueError('Invalid config file.')
+def image_extractor(data_file_path,output_file_path,bins_cuts_dict,config):
+"""
+Function to read and write data from ctapipe containers to HDF5 
+"""
 
     MODE = config['mode']
     IMG_MODE = config['image']['mode']
@@ -150,18 +128,18 @@ def imageExtractor():
     IMG_DTYPE = config['image']['dtype']
     IMG_DIM_ORDERING = config['image']['dim_ordering']
     ENERGY_BIN_UNITS = config['energy_bins']['units']
+    
+    logger.info("Mode: ",MODE)
+    logger.info("Image mode: ",IMG_MODE)
+    logger.info("File storage mode: ",STORAGE_MODE)
+    logger.info("Image scale factor: ",IMG_SCALE_FACTOR)
+    logger.info("Image array type: ",IMG_DTYPE)
+    logger.info("Image dim order: ",IMG_DIM_ORDERING)
 
-    print("Mode: ",MODE)
-    print("Image mode: ",IMG_MODE)
-    print("File storage mode: ",STORAGE_MODE)
-    print("Image scale factor: ",IMG_SCALE_FACTOR)
-    print("Image array type: ",IMG_DTYPE)
-    print("Image dim order: ",IMG_DIM_ORDERING)
-
-    print("Getting telescope types...")
+    logger.info("Getting telescope types...")
 
     #collect telescope lists 
-    source_temp = hessio_event_source(args.data_file,max_events=1)
+    source_temp = hessio_event_source(data_file_path,max_events=1)
 
     LST_list = []
     SCT_list = []
@@ -202,17 +180,18 @@ def imageExtractor():
         selected['SCT'] = SCT_list 
         selected['SST'] = SST_list
     else:
+        logger.error("Telescope selection mode invalid.")
         raise ValueError('Telescope selection mode not recognized.') 
 
-    print("Telescope Mode: ",TEL_MODE)
+    logger.info("Telescope Mode: ",TEL_MODE)
 
     NUM_TEL = 0
 
     for i in selected.keys():
-        print(i + ": " + str(len(selected[i])) + " out of " + str(len(all_tels[i])) + " telescopes selected.")
+        logger.info(i + ": " + str(len(selected[i])) + " out of " + str(len(all_tels[i])) + " telescopes selected.")
         NUM_TEL += len(selected[i])
 
-    print("Loading additional configuration settings...")
+    logger.info("Loading additional configuration settings...")
 
     if MODE == 'gh_class':
 
@@ -243,11 +222,12 @@ def imageExtractor():
         IMAGE_CHANNELS = 3 
         INCLUDE_TIMING = True
     else:
+        logger.error("Invalid image format (IMG_MODE).")
         raise ValueError('Image processing mode not recognized.')
 
-    print("Preparing HDF5 file structure...")
+    logger.info("Preparing HDF5 file structure...")
 
-    f = open_file(args.hdf5_path, mode = "a", title = "Data File") 
+    f = open_file(output_file_path, mode = "a", title = "Data File") 
 
     #prep data into bins based on mode (by energy bin for g/h classification, 1 group for energy reconstruction)
     if MODE == 'gh_class':
@@ -274,7 +254,7 @@ def imageExtractor():
         tel_pos_table = f.create_table("/",'Tel_Table',Tel,"Table of telescope ids, positions, and types")
         tel_row = tel_pos_table.row
 
-        source_temp = hessio_event_source(args.data_file,max_events=1)
+        source_temp = hessio_event_source(data_file_path,max_events=1)
 
         for event in source_temp: 
 
@@ -317,12 +297,11 @@ def imageExtractor():
                     for tel_id in selected[tel_type]:
                         descr2["T" + str(tel_id)] = UInt16Col(shape=(IMAGE_WIDTH,IMAGE_LENGTH,IMAGE_CHANNELS))
 
+                    descr2["trig_list"] = UInt8Col(shape=(NUM_TEL))
+ 
             elif STORAGE_MODE == 'mapped':
                 descr2["tel_map"] = Int16Col(shape=(NUM_TEL))
-
-            #dynamically add column for trig_list
-            descr2["trig_list"] = UInt8Col(shape=(NUM_TEL))
-     
+    
             table2 = f.create_table(d, 'temp', descr2, "Table of event records")
             table.attrs._f_copy(table2)
             table.remove()
@@ -334,8 +313,6 @@ def imageExtractor():
     #telescope_arrays = []
     if STORAGE_MODE == 'mapped':
         for d in datasets:
-            print(type(d))
-            print(d._v_name)
             for tel_type in selected.keys():
                 if tel_type == 'SST':
                     IMAGE_WIDTH = SST_IMAGE_WIDTH*IMG_SCALE_FACTOR
@@ -357,47 +334,24 @@ def imageExtractor():
                         array = f.create_earray(d, 'T'+str(tel_id), img_atom, (0,IMAGE_WIDTH,IMAGE_LENGTH,IMAGE_CHANNELS))
                         #telescope_arrays.append(array)
 
-    #load bins/cuts file
-    if config['use_pkl_dict']:
-        print("Loading bins/cuts dictionary...")
-        bins_dict = pkl.load(open(args.bins_cuts_dict, "rb" ))
-
-    #TEMPORARY FIX - determine gamma hadron label from simtel file name
-    if 'gamma' in args.data_file:
-        gamma_hadron_label = 1
-    elif 'proton' in args.data_file:
-        gamma_hadron_label = 0
-        if MODE == 'energy_recon' and config['energy_recon']['gamma_only'] == "True":
-            raise ValueError('Proton simtel file: {} skipped'.format(args.data_file))
-            quit()
-    else:
-        raise ValueError('Unable to determine gamma_hadron label from filename')
-        quit()
-
-    #select calibration and other tools
+    #define/specify calibration and other processing
     cal = CameraCalibrator(None,None)
-    #geom = CameraGeometry.from_name('SCTCam')
-    #integ = NeighbourPeakIntegrator(None,None)
-    #integ.neighbours = geom.neighbors
-    #energy_reco = EnergyRegressor(cam_id_list=map(str,SCT_list))
-    #hillas_reco = 
-    #impact reconstructor = 
 
-    print("Processing events...")
+    logger.info("Processing events...")
 
     event_count = 0
     passing_count = 0
 
     #load all SCT data from simtel file
-    source = hessio_event_source(args.data_file,allowed_tels=[j for i in selected.keys() for j in selected[i]])
+    source = hessio_event_source(data_file_path,allowed_tels=[j for i in selected.keys() for j in selected[i]])
 
     for event in source:
         event_count += 1
 
         #get energy bin and reconstructed energy
         if config['use_pkl_dict']:
-            if (event.r0.run_id,event.r0.event_id) in bins_dict:
-                bin_number, reconstructed_energy = bins_dict[(event.r0.run_id,event.r0.event_id)]
+            if (event.r0.run_id,event.r0.event_id) in bins_cuts_dict:
+                bin_number, reconstructed_energy = bins_cuts_dict[(event.r0.run_id,event.r0.event_id)]
                 passing_count +=1
             else:
                 continue
@@ -426,13 +380,13 @@ def imageExtractor():
             event_row = dataset_tables[bin_number].row
 
         #collect telescope data and create trig_list and tel_map
-        trig_list = []
+        if STORAGE_MODE == 'all':
+            trig_list = []
         if STORAGE_MODE == 'mapped':
             tel_map = []
         for tel_type in selected.keys():
             for tel_id in selected[tel_type]:
                 if tel_id in event.r0.tels_with_data:
-                    trig_list.append(1)
                     image = event.dl1.tel[tel_id].image
                     #truncate at 0
                     image[image < 0] = 0
@@ -444,9 +398,10 @@ def imageExtractor():
                     else:
                         peaks = None 
 
-                    image_array = makeSCTImageArray(image,peaks,INCLUDE_TIMING,IMG_SCALE_FACTOR,IMG_DTYPE,IMG_DIM_ORDERING,IMAGE_CHANNELS)
+                    image_array = make_sct_image_array(image,peaks,IMG_SCALE_FACTOR,IMG_DTYPE,IMG_DIM_ORDERING,IMAGE_CHANNELS)
  
                     if STORAGE_MODE == 'all':
+                        trig_list.append(1)
                         event_row["T" + str(tel_id)] = image_array          
                     elif STORAGE_MODE == 'mapped':
                         array_str = 'f.root.E{}.T{}'.format(bin_number,tel_id)
@@ -456,15 +411,21 @@ def imageExtractor():
                         tel_map.append(next_index)
 
                 else:
-                    trig_list.append(0)
                     if STORAGE_MODE == 'all':
-                        event_row["T" + str(tel_id)] = makeSCTImageArray(None,peaks,INCLUDE_TIMING,IMG_SCALE_FACTOR,IMG_DTYPE,IMG_DIM_ORDERING,IMAGE_CHANNELS)
+                        trig_list.append(0)
+                        event_row["T" + str(tel_id)] = make_sct_image_array(None,None,IMG_SCALE_FACTOR,IMG_DTYPE,IMG_DIM_ORDERING,IMAGE_CHANNELS)
                     elif STORAGE_MODE == 'mapped':
                         tel_map.append(-1)
                         
-        event_row['trig_list'] = trig_list 
-        if STORAGE_MODE == 'mapped':
+        if STORAGE_MODE == 'all':
+            event_row['trig_list'] = trig_list 
+        elif STORAGE_MODE == 'mapped':
             event_row['tel_map'] = tel_map
+
+        if event.mc.shower_primary_id == 0:
+            gamma_hadron_label = 1
+        elif event.mc.shower_primary_id == 101:
+            gamma_hadron_label = 0 
 
         #other parameter data
         event_row['event_number'] = event.r0.event_id
@@ -482,9 +443,37 @@ def imageExtractor():
     for table in dataset_tables:
         table.flush()
 
-    print("{} events processed".format(event_count))
-    print("{} events passed cuts/written to file".format(passing_count))
-    print("Done!")
+    logger.info("{} events processed".format(event_count))
+    logger.info("{} events passed cuts/written to file".format(passing_count))
+    logger.info("Done!")
 
 if __name__ == '__main__':
-    imageExtractor()
+    
+    parser = argparse.ArgumentParser(description='Load image data and event parameters from a simtel file into a formatted HDF5 file.')
+    parser.add_argument('data_file', help='path to input .simtel file')
+    parser.add_argument('hdf5_path', help='path of output HDF5 file, or currently existing file to append to')
+    parser.add_argument('bins_cuts_dict',help='dictionary containing bins/cuts in .pkl format')
+    parser.add_argument('config_file',help='configuration file specifying the selected telescope ids from simtel file, the desired energy bins, the correst image output dimensions/dtype, ')
+    parser.add_argument("--debug", help="print debug/logger messages",action="store_true")
+    args = parser.parse_args()
+
+    #Configuration file, load + validate
+    spc = config_spec.split('\n')
+    config = ConfigObj(args.config_file,configspec=spc)
+    validator = Validator()
+    val_result = config.validate(validator)
+
+    if val_result:
+        logger.info("Config file validated.")
+    else:
+        logger.error("Invalid config file.")
+        raise ValueError('Invalid config file.')
+
+    #load bins/cuts file
+    if config['use_pkl_dict']:
+        logger.info("Loading bins/cuts dictionary...")
+        bins_dict = pkl.load(open(args.bins_cuts_dict, "rb" ))
+    else:
+        bins_dict = None
+
+    image_extractor(args.data_file,args.hdf5_path,bins_dict,config)
