@@ -1,5 +1,4 @@
 # image-extractor
 
-ROOT directory contains image extractor code for reading from dst.root data files processed in EventDisplay.
+Software for loading simtel data files, processing them using ctapipe, and writing data to Pytables HDF5 format for use in machine learning and other analysis tasks. Designed for internal use in testing new analysis techniques for Cherenkov Telescope Array (CTA) data.
 
-ctapipe directory contains image extractor code for reading from .simtel data files, processing in ctapipe, and writing to HDF5.
