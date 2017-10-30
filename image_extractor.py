@@ -356,7 +356,7 @@ def image_extractor(data_file_path,output_file_path,bins_cuts_dict,config):
                 continue
         else:
             #if pass cuts (applied locally):
-            bin_number, reconstructed_energy = 0
+            bin_number, reconstructed_energy = [0, 0]
             #else:
             #continue
 
