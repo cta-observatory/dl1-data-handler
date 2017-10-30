@@ -356,7 +356,7 @@ def image_extractor(data_file_path,output_file_path,bins_cuts_dict,config):
                 continue
         else:
             #if pass cuts (applied locally):
-            bin_number, reconstructed_energy = 0
+            bin_number, reconstructed_energy = [0, 0]
             #else:
             #continue
 
@@ -451,8 +451,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Load image data and event parameters from a simtel file into a formatted HDF5 file.')
     parser.add_argument('data_file', help='path to input .simtel file')
     parser.add_argument('hdf5_path', help='path of output HDF5 file, or currently existing file to append to')
-    parser.add_argument('bins_cuts_dict',help='dictionary containing bins/cuts in .pkl format')
     parser.add_argument('config_file',help='configuration file specifying the selected telescope ids from simtel file, the desired energy bins, the correst image output dimensions/dtype, ')
+    parser.add_argument('--bins_cuts_dict',help='dictionary containing bins/cuts in .pkl format')
     parser.add_argument("--debug", help="print debug/logger messages",action="store_true")
     args = parser.parse_args()
 
@@ -470,9 +470,11 @@ if __name__ == '__main__':
 
     #load bins/cuts file
     if config['use_pkl_dict']:
-        logger.info("Loading bins/cuts dictionary...")
-        bins_dict = pkl.load(open(args.bins_cuts_dict, "rb" ))
-    else:
-        bins_dict = None
+        if args.bins_cuts_dict is not None:
+            logger.info("Loading bins/cuts dictionary...")
+            bins_dict = pkl.load(open(args.bins_cuts_dict, "rb" ))
+        else:
+            logger.error("Cuts enabled in config file but dictionary missing.")
+            raise ValueError("Cuts enabled in config file but dictionary missing.")
 
-    image_extractor(args.data_file,args.hdf5_path,bins_dict,config)
+    image_extractor(args.data_file,args.hdf5_path,args.bins_cuts_dict,config)
