@@ -39,9 +39,14 @@ class Event(IsDescription):
     event_number = UInt32Col()   
     run_number = UInt32Col() 
     gamma_hadron_label = UInt8Col()
+    core_x = Float64Col()
+    core_y = Float64Col()
+    h_first_int = Float64Col()
     MC_energy = Float64Col()
     reconstructed_energy = Float32Col()
-
+    alt = Float32Col()
+    az = Float32Col()
+    
 class Tel(IsDescription):
     """
     Row descriptor class for Pytables telescope data table.
@@ -421,16 +426,21 @@ def image_extractor(data_file_path,output_file_path,bins_cuts_dict,config):
         elif STORAGE_MODE == 'mapped':
             event_row['tel_map'] = tel_map
 
-        if event.mc.shower_primary_id == 0:
-            gamma_hadron_label = 1
-        elif event.mc.shower_primary_id == 101:
-            gamma_hadron_label = 0 
+#        if event.mc.shower_primary_id == 0:
+ #           gamma_hadron_label = 1
+  #      elif event.mc.shower_primary_id == 101:
+   #         gamma_hadron_label = 0 
 
         #other parameter data
         event_row['event_number'] = event.r0.event_id
         event_row['run_number'] = event.r0.run_id
-        event_row['gamma_hadron_label'] = gamma_hadron_label
+        event_row['gamma_hadron_label'] = event.mc.shower_primary_id
+        event_row['core_x'] = event.mc.core_x.value
+        event_row['core_y'] = event.mc.core_y.value
+        event_row['h_first_int'] = event.mc.h_first_int.value
         event_row['MC_energy'] = event.mc.energy.value
+        event_row['alt'] = event.mc.alt.value
+        event_row['az'] = event.mc.az.value
         event_row['reconstructed_energy'] = reconstructed_energy
 
         if MODE == 'energy_recon':
