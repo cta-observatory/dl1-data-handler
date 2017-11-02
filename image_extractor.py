@@ -39,8 +39,12 @@ class Event(IsDescription):
     event_number = UInt32Col()   
     run_number = UInt32Col() 
     gamma_hadron_label = UInt8Col()
-    MC_energy = Float64Col()
-    reconstructed_energy = Float32Col()
+    core_x = Float64Col()
+    core_y = Float64Col()
+    h_first_int = Float64Col()
+    mc_energy = Float64Col()
+    az = Float32Col()
+    alt = Float32Col()
 
 class Tel(IsDescription):
     """
@@ -51,6 +55,7 @@ class Tel(IsDescription):
     tel_y = Float32Col()
     tel_z = Float32Col()
     tel_type = StringCol(8)
+    run_array_direction = Float32Col(2)
 
 def make_sct_image_array(pixels_vector,peaks_vector,scale_factor,img_dtype,dim_order,channels):
     """
@@ -250,7 +255,7 @@ def image_extractor(data_file_path,output_file_path,bins_cuts_dict,config):
 
     #create table for telescope positions
     if not f.__contains__('/Tel_Table'):
-        tel_pos_table = f.create_table("/",'Tel_Table',Tel,"Table of telescope ids, positions, and types")
+        tel_pos_table = f.create_table("/",'Tel_Table', Tel, "Table of telescope ids, positions, and types")
         tel_row = tel_pos_table.row
 
         source_temp = hessio_event_source(data_file_path,max_events=1)
@@ -260,10 +265,12 @@ def image_extractor(data_file_path,output_file_path,bins_cuts_dict,config):
             for i in selected.keys():
                 for j in selected[i]:
                     tel_row["tel_id"] = j
-                    tel_row["tel_x"] = event.inst.tel_pos[j].value[0] 
+                    tel_row["tel_x"] = event.inst.tel_pos[j].value[0]
                     tel_row["tel_y"] = event.inst.tel_pos[j].value[1]
                     tel_row["tel_z"] = event.inst.tel_pos[j].value[2]
                     tel_row["tel_type"] = i
+                    tel_row["run_array_direction"] = \
+                        event.mcheader.run_array_direction
 
                     tel_row.append()
 
@@ -277,6 +284,7 @@ def image_extractor(data_file_path,output_file_path,bins_cuts_dict,config):
             #dynamically add correct label type
 
             if MODE == 'energy_recon':
+                descr2['reconstructed_energy'] = UInt8Col()
                 descr2['energy_reconstruction_bin_label'] = UInt8Col()
 
             #dynamically add columns for telescopes
@@ -342,7 +350,7 @@ def image_extractor(data_file_path,output_file_path,bins_cuts_dict,config):
     passing_count = 0
 
     #load all SCT data from simtel file
-    source = hessio_event_source(data_file_path,allowed_tels=[j for i in selected.keys() for j in selected[i]])
+    source = hessio_event_source(data_file_path,allowed_tels=[j for i in selected.keys() for j in selected[i]], max_events=max_events)
 
     for event in source:
         event_count += 1
@@ -421,19 +429,20 @@ def image_extractor(data_file_path,output_file_path,bins_cuts_dict,config):
         elif STORAGE_MODE == 'mapped':
             event_row['tel_map'] = tel_map
 
-        if event.mc.shower_primary_id == 0:
-            gamma_hadron_label = 1
-        elif event.mc.shower_primary_id == 101:
-            gamma_hadron_label = 0 
-
         #other parameter data
         event_row['event_number'] = event.r0.event_id
         event_row['run_number'] = event.r0.run_id
-        event_row['gamma_hadron_label'] = gamma_hadron_label
-        event_row['MC_energy'] = event.mc.energy.value
-        event_row['reconstructed_energy'] = reconstructed_energy
+        event_row['gamma_hadron_label'] = event.mc.shower_primary_id
+        event_row['core_x'] = event.mc.core_x.value
+        event_row['core_y'] = event.mc.core_y.value
+        event_row['h_first_int'] = event.mc.h_first_int.value
+        event_row['mc_energy'] = event.mc.energy.value
+        event_row['alt'] = event.mc.alt.value
+        event_row['az'] = event.mc.az.value
+
 
         if MODE == 'energy_recon':
+            event_row['reconstructed_energy'] = reconstructed_energy
             event_row['energy_reconstruction_bin_label'] = erec_bin_label
 
         #write data to table
@@ -453,7 +462,9 @@ if __name__ == '__main__':
     parser.add_argument('hdf5_path', help='path of output HDF5 file, or currently existing file to append to')
     parser.add_argument('config_file',help='configuration file specifying the selected telescope ids from simtel file, the desired energy bins, the correst image output dimensions/dtype, ')
     parser.add_argument('--bins_cuts_dict',help='dictionary containing bins/cuts in .pkl format')
-    parser.add_argument("--debug", help="print debug/logger messages",action="store_true")
+    parser.add_argument("--debug", help="print debug/logger messages", action="store_true")
+    parser.add_argument("--max_events", help="set a maximum number of events to process",type=int)
+
     args = parser.parse_args()
 
     #Configuration file, load + validate
@@ -476,5 +487,8 @@ if __name__ == '__main__':
         else:
             logger.error("Cuts enabled in config file but dictionary missing.")
             raise ValueError("Cuts enabled in config file but dictionary missing.")
+
+    #max-events?
+    max_events = args.max_events
 
     image_extractor(args.data_file,args.hdf5_path,args.bins_cuts_dict,config)
