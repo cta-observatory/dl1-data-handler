@@ -429,11 +429,6 @@ def image_extractor(data_file_path,output_file_path,bins_cuts_dict,config):
         elif STORAGE_MODE == 'mapped':
             event_row['tel_map'] = tel_map
 
-#        if event.mc.shower_primary_id == 0:
- #           gamma_hadron_label = 1
-  #      elif event.mc.shower_primary_id == 101:
-   #         gamma_hadron_label = 0 
-
         #other parameter data
         event_row['event_number'] = event.r0.event_id
         event_row['run_number'] = event.r0.run_id
