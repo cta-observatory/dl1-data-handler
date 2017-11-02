@@ -491,4 +491,4 @@ if __name__ == '__main__':
     #max-events?
     max_events = args.max_events
 
-    image_extractor(args.data_file,args.hdf5_path,args.bins_cuts_dict,config)
+    image_extractor(args.data_file,args.hdf5_path,bins_dict,config)
