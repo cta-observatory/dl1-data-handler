@@ -307,7 +307,7 @@ def image_extractor(data_file_path,output_file_path,bins_cuts_dict,config):
                     descr2["trig_list"] = UInt8Col(shape=(NUM_TEL))
  
             elif STORAGE_MODE == 'mapped':
-                descr2["tel_map"] = Int16Col(shape=(NUM_TEL))
+                descr2["tel_map"] = Int32Col(shape=(NUM_TEL))
     
             table2 = f.create_table(d, 'temp', descr2, "Table of event records")
             table.attrs._f_copy(table2)
