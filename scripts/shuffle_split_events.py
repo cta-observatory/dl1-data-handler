@@ -1,6 +1,6 @@
 import argparse
 import math
-from random import shuffle
+import random
 import re
 
 from configobj import ConfigObj
@@ -16,7 +16,7 @@ from ctapipe.image.charge_extractors import GlobalPeakIntegrator
 #from ctapipe.image
 from matplotlib import pyplot as plt
 from astropy import units as u
-#from PIL import Image
+
 
 TRAINING_SPLIT = 0.8
 VALIDATION_SPLIT = 0.1
@@ -94,7 +94,7 @@ if __name__ == '__main__':
         #create list of indices per group and shuffle them
         new_indices = [i for i in range(num_events)]
         if shuffle:
-            shuffle(new_indices)
+            random.shuffle(new_indices)
 
         if args.no_test:
             train_start = 0
