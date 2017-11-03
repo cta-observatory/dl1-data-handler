@@ -22,6 +22,9 @@ TRAINING_SPLIT = 0.8
 VALIDATION_SPLIT = 0.1
 TEST_SPLIT = 0.1
 
+TRAINING_SPLIT_NO_TEST = 0.9
+VALIDATION_SPLIT_NO_TEST = 0.1
+
 MODE = 'gh_class'
 
 if __name__ == '__main__': 
@@ -30,6 +33,7 @@ if __name__ == '__main__':
     parser.add_argument('hdf5_path', help='path to HDF5 file to be shuffled')
     parser.add_argument('output_file',help='path to output HDF5 file (shuffled). Must not already exist.')
     parser.add_argument('-shuffle', action = 'store_true')
+    parser.add_argument('-no_test', action = 'store_true')
     args = parser.parse_args()
 
     shuffle = args.shuffle
@@ -43,7 +47,11 @@ if __name__ == '__main__':
     tables = []
     new_tables = []
 
-    data_splits = ['Training','Validation','Test']
+    if args.no_test:
+        data_splits = ['Training','Validation']
+    else:
+        data_splits = ['Training','Validation','Test']
+
 
     #copy tel_table
     if f_in.__contains__('/Tel_Table'): 
@@ -88,12 +96,18 @@ if __name__ == '__main__':
         if shuffle:
             shuffle(new_indices)
 
-        train_start = 0
-        train_end = train_start + int(num_events*TRAINING_SPLIT)
-        val_start = train_end + 1
-        val_end = val_start + int(num_events*VALIDATION_SPLIT)
-        test_start = val_end + 1
-        test_end = num_events
+        if args.no_test:
+            train_start = 0
+            train_end = train_start + int(num_events*TRAINING_SPLIT_NO_TEST)
+            val_start = train_end + 1
+            val_end = num_events
+        else:
+            train_start = 0
+            train_end = train_start + int(num_events*TRAINING_SPLIT)
+            val_start = train_end + 1
+            val_end = val_start + int(num_events*VALIDATION_SPLIT)
+            test_start = val_end + 1
+            test_end = num_events
 
         for i in range(num_events):
             if i >= train_start and i <= train_end:
