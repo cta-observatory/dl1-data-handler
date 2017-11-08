@@ -18,7 +18,6 @@ cloudpickle=0.4.0=py35h10376d1_0
 configobj=5.0.6=py35_0
 coverage=4.4.1=py35_0
 cryptography=2.0.3=py35hef72dfd_1
-ctapipe-extra=0.2.11=h1dc6071_0
 cycler=0.10.0=py35hc4d5149_0
 cython=0.26.1=py35h636ebcb_0
 dask=0.15.3=py35h52d6c43_0
