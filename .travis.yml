@@ -24,6 +24,11 @@ install:
       - git pull upstream master
       - conda env create -n image_extractor -f environment.yml
       - source activate image_extractor
+      - cd ..
       - conda install --yes --file requirements.txt
       - python setup.py install
-script: cd tests && python -m unittest -v
+script: 
+      - python pytest --pep8;
+    
+after_success:
+      - coveralls
