@@ -178,7 +178,7 @@ extractor = image_extractor.ImageExtractor(output_path,bins_cuts_dict,mode, ...)
 
 extractor.process_data(data_file,max_events)
 
-...
+#...
 ```
 
 ### Config files and bins_cuts_dict files
