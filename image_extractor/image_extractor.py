@@ -1,13 +1,14 @@
 """
 ImageExtractor class for writing processed data from ctapipe containers to HDF5 files.
 """
-
+import random
 import argparse
 import math
 import pickle as pkl
 import logging
 import glob
 import shutil
+import os
 
 from configobj import ConfigObj
 from validate import Validator
@@ -18,72 +19,118 @@ from ctapipe.io.hessio import hessio_event_source
 from ctapipe.calib import pedestals,CameraCalibrator
 
 import config
+import trace_converter
 import row_types
-import trace_convertor 
 
-__all__ = ['Image_Extractor']
+__all__ = ['ImageExtractor']
 
 logger = logging.getLogger(__name__)
 
+class ImageExtractor:
 
-SCT_IMAGE_WIDTH = 120
-SCT_IMAGE_LENGTH = 120
+    NUM_PIXELS = {'LST':1855,'SCT':11328,'SST':0}
+    IMAGE_SHAPE = {'SCT':(120,120)}
 
-class ImageExtractor
-
-    def __init__(self, output_path,config_file,bins_cuts_dict):
-        self.output_path = output_path
+    def __init__(self, output_path,bins_cuts_dict,mode,tel_type_mode,storage_mode,
+            img_channels,include_timing,img_scale_factors,img_dtype,img_dim_order,energy_bins,energy_bin_units,energy_recon_bins):
         
-        if val_result:
-            logger.info("Config file validated.")
+        self.output_path = output_path
+        self.bins_cuts_dict = bins_cuts_dict
+        
+        self.mode = mode
+        self.tel_type_mode = tel_type_mode
+        self.storage_mode = storage_mode
 
-            self.mode = config['mode']
-            self.img_mode = config['image']['mode']
-            self.tel_type_mode = config['telescope']['type_mode']
-            self.storage_mode = config['storage_mode']
-            self.img_scale_factor = config['image']['scale_factor']
-            self.img_dtype = config['image']['dtype']
-            self.img_dim_order = config['image']['dim_ordering']
-            self.energy_bin_units = config['energy_bins']['units']
-            self.use_bins_cuts_dict = config['use_pkl_dict']
+        self.img_channels = img_channels
+        self.include_timing = include_timing
+        self.img_scale_factors = img_scale_factors
+        self.img_dtype = img_dtype
+        self.img_dim_order = img_dim_order
+       
+        self.energy_bins = energy_bins
+        self.energy_bin_units = energy_bin_units
 
+        self.energy_recon_bins = energy_recon_bins
+
+        self.trace_converter = trace_converter.TraceConverter(self.img_dtype,self.img_dim_order,self.img_channels,self.img_scale_factors)
+
+    @classmethod
+    def from_config(cls,output_path,bins_cuts_dict,config):
+        
+        img_mode = config['image']['mode']
+
+        if img_mode == 'PIXELS_3C':
+            img_channels = 3
+            include_timing = False
+        elif img_mode == 'PIXELS_1C':
+            img_channels = 1
+            include_timing = False
+        elif img_mode == 'PIXELS_TIMING_2C':
+            img_channels = 2
+            include_timing = True
+        elif img_mode == 'PIXELS_TIMING_3C':
+            img_channels = 3 
+            include_timing = True
         else:
-            logger.error("Invalid config file.")
-            raise ValueError('Invalid config file.')
+            logger.error("Invalid image format (img_mode).")
+            raise ValueError('Image processing mode not recognized.')
 
-        #load bins_cuts_dict
-        if self.use_bins_cuts_dict and bins_cuts_dict is None:
+        mode = config['mode']
+        tel_type_mode = config['telescope']['type_mode']
+        storage_mode = config['storage_mode']
+        
+        img_scale_factors = {'SCT':config['image']['scale_factor']}
+        img_dtype = config['image']['dtype']
+        img_dim_order = config['image']['dim_ordering']
+        energy_bin_units = config['energy_bins']['units']
+        
+        use_bins_cuts_dict = config['use_pkl_dict']
+
+        if use_bins_cuts_dict and bins_cuts_dict is None:
             logger.error("Cuts enabled in config file but dictionary missing.")
             raise ValueError("Cuts enabled in config file but dictionary missing.")
             
-        self.bins_cuts_dict = bins_cuts_dict
+        #energy bins
+        if mode == 'gh_class':
+
+            e_min = float(config['energy_bins']['min'])
+            e_max = float(config['energy_bins']['max'])
+            e_bin_size = float(config['energy_bins']['bin_size'])
+            num_e_bins = int((e_max - e_min)/e_bin_size)
+            energy_bins = [(e_min + i*e_bin_size, e_min + (i+1)*e_bin_size) for i in range(num_e_bins)]
+            energy_recon_bins = None
+
+        elif mode == 'energy_recon':
+
+            erec_min = float(config['energy_recon']['bins']['min'])
+            erec_max = float(config['energy_recon']['bins']['max'])
+            erec_bin_size = float(config['energy_recon']['bins']['bin_size'])
+            num_erec_bins = int((erec_max - erec_min)/erec_bin_size)
+            energy_bins = None
+            energy_recon_bins = [(erec_min+i*erec_bin_size,erec_min + (i+1)*erec_bin_size) for i in range(num_erec_bins)]   
+
+        return cls(output_path,bins_cuts_dict,mode,tel_type_mode,storage_mode,img_channels,include_timing,img_scale_factors,img_dtype,img_dim_order,energy_bins,energy_bin_units,energy_recon_bins)
 
     def select_telescopes(self,data_file):
-
-        #harcoded telescope constants
-        #TODO: find more natural way of handling this?
-        LST_NUM_PIXELS = 1855
-        SCT_NUM_PIXELS = 11328
-        SST_NUM_PIXELS = 0 #update
-
+            
         logger.info("Getting telescope types...")
 
         #collect telescope lists 
         source_temp = hessio_event_source(data_file,max_events=1)
 
-        all_tels = {'SST' : [], 'SCT' : SCT_list, 'LST' : LST_list}
+        all_tels = {'SST': [], 'SCT': [], 'LST': []}
 
         for event in source_temp: 
-            for i in event.inst.telescope_ids:
-                if event.inst.num_pixels[i] == SCT_NUM_PIXELS:
-                    all_tels['SCT'].append(i)
-                elif event.inst.num_pixels[i] == LST_NUM_PIXELS:
-                    all_tels['LST'].append(i)
-                elif event.inst.num_pixels[i] == SST_NUM_PIXELS:
-                    all_tels['SST'].append(i)
+            for tel_id in event.inst.telescope_ids:
+                if event.inst.num_pixels[tel_id] == self.NUM_PIXELS['SCT']:
+                    all_tels['SCT'].append(tel_id)
+                elif event.inst.num_pixels[tel_id] == self.NUM_PIXELS['LST']:
+                    all_tels['LST'].append(tel_id)
+                elif event.inst.num_pixels[tel_id] == self.NUM_PIXELS['SST']:
+                    all_tels['SST'].append(tel_id)
                 else:
                     logger.error("Unknown telescope type (invalid num_pixels).")
-                    raise ValueError("Unknown telescope type (invalid num_pixels).")
+                    raise ValueError("Unknown telescope type (invalid num_pixels: {}).".format(event.inst.num_pixels[tel_id]))
 
         #select telescopes by type
         logger.info("Telescope Mode: ",self.tel_type_mode)
@@ -121,158 +168,92 @@ class ImageExtractor
         Function to read and write data from ctapipe containers to HDF5 
         """
        
-        logger.info("Mode: ",MODE)
-        logger.info("Image mode: ",IMG_MODE)
-        logger.info("File storage mode: ",STORAGE_MODE)
-        logger.info("Image scale factor: ",IMG_SCALE_FACTOR)
-        logger.info("Image array type: ",IMG_DTYPE)
-        logger.info("Image dim order: ",IMG_DIM_ORDERING)
-
-        logger.info("Loading additional configuration settings...")
-
-        if MODE == 'gh_class':
-
-            e_min = float(config['energy_bins']['min'])
-            e_max = float(config['energy_bins']['max'])
-            e_bin_size = float(config['energy_bins']['bin_size'])
-            num_e_bins = int((e_max - e_min)/e_bin_size)
-            energy_bins = [(e_min + i*e_bin_size, e_min + (i+1)*e_bin_size) for i in range(num_e_bins)]
-
-        elif MODE == 'energy_recon':
-
-            erec_min = float(config['energy_recon']['bins']['min'])
-            erec_max = float(config['energy_recon']['bins']['max'])
-            erec_bin_size = float(config['energy_recon']['bins']['bin_size'])
-            num_erec_bins = int((erec_max - erec_min)/erec_bin_size)
-            energy_recon_bins = [(erec_min+i*erec_bin_size,erec_min + (i+1)*erec_bin_size) for i in range(num_erec_bins)]   
-
-        if IMG_MODE == 'PIXELS_3C':
-            IMAGE_CHANNELS = 3
-            INCLUDE_TIMING = False
-        elif IMG_MODE == 'PIXELS_1C':
-            IMAGE_CHANNELS = 1
-            INCLUDE_TIMING = False
-        elif IMG_MODE == 'PIXELS_TIMING_2C':
-            IMAGE_CHANNELS = 2
-            INCLUDE_TIMING = True
-        elif IMG_MODE == 'PIXELS_TIMING_3C':
-            IMAGE_CHANNELS = 3 
-            INCLUDE_TIMING = True
-        else:
-            logger.error("Invalid image format (IMG_MODE).")
-            raise ValueError('Image processing mode not recognized.')
+        logger.info("Mode: ",self.mode)
+        logger.info("File storage mode: ",self.storage_mode)
+        logger.info("Image scale factors: ",self.img_scale_factors)
+        logger.info("Image array type: ",self.img_dtype)
+        logger.info("Image dim order: ",self.img_dim_order)
 
         logger.info("Preparing HDF5 file structure...")
 
-        f = open_file(output_file_path, mode = "a", title = "Data File") 
+        f = open_file(self.output_path, mode = "a", title = "Output File") 
 
-        #prep data into bins based on mode (by energy bin for g/h classification, 1 group for energy reconstruction)
-        if MODE == 'gh_class':
-            #create groups for each energy bin, if not already existing
-            datasets = []
-            for i in range(len(energy_bins)):
+        #create groups for each energy bin
+        if self.mode == 'gh_class':
+            #create groups for each energy bin (naming convention = "E[NUM_BIN]")
+            groups = []
+            for i in range(len(self.energy_bins)):
+                #create group if it doesn't already exist
                 if not f.__contains__("/E" + str(i)):
                     group = f.create_group("/", "E" + str(i), 'Energy bin group' + str(i))
-                    group._v_attrs.min_energy = energy_bins[i][0]
-                    group._v_attrs.max_energy = energy_bins[i][1]
-                    group._v_attrs.units = ENERGY_BIN_UNITS
-                row_str = 'f.root.E{}'.format(str(i))
-                where = eval(row_str)
-                datasets.append(where)
+                    group._v_attrs.min_energy = self.energy_bins[i][0]
+                    group._v_attrs.max_energy = self.energy_bins[i][1]
+                    group._v_attrs.units = self.energy_bin_units
+                group = eval('f.root.E{}'.format(str(i)))
+                groups.append(group)
         elif MODE == 'energy_recon':
-            datasets = [f.root]
+            groups = [f.root]
 
-        dataset_tables = []
+        #read and select telescopes
+        selected_tels, num_tel = self.select_telescopes(data_file)
 
-        #create table for telescope positions
+        #create single table in root group for telescope information
         if not f.__contains__('/Tel_Table'):
-            tel_pos_table = f.create_table("/",'Tel_Table', Tel, "Table of telescope ids, positions, and types")
+            tel_pos_table = f.create_table("/",'Tel_Table', row_types.Tel, "Table of telescope ids, positions, and types")
             tel_row = tel_pos_table.row
 
-            source_temp = hessio_event_source(data_file_path,max_events=1)
-
+            source_temp = hessio_event_source(data_file,max_events=1)
             for event in source_temp: 
-
-                for i in selected.keys():
-                    for j in selected[i]:
-                        tel_row["tel_id"] = j
-                        tel_row["tel_x"] = event.inst.tel_pos[j].value[0]
-                        tel_row["tel_y"] = event.inst.tel_pos[j].value[1]
-                        tel_row["tel_z"] = event.inst.tel_pos[j].value[2]
-                        tel_row["tel_type"] = i
-                        tel_row["run_array_direction"] = \
-                            event.mcheader.run_array_direction
-
+                for tel_type in selected_tels.keys():
+                    for tel_id in selected_tels[tel_type]:
+                        tel_row["tel_id"] = tel_id
+                        tel_row["tel_x"] = event.inst.tel_pos[tel_id].value[0]
+                        tel_row["tel_y"] = event.inst.tel_pos[tel_id].value[1]
+                        tel_row["tel_z"] = event.inst.tel_pos[tel_id].value[2]
+                        tel_row["tel_type"] = tel_type
+                        tel_row["run_array_direction"] = event.mcheader.run_array_direction
                         tel_row.append()
 
-        #create table for events
-        for d in datasets:
-            if not d.__contains__('Events'):
-                table = f.create_table(d, 'Events', Event, "Table of event records") 
+        #create event table + tel arrays in each group
+        for group in groups:
+            if not group.__contains__('Events'):
+                table = f.create_table(group, 'Events', row_types.Event, "Table of Events") 
                 descr = table.description._v_colobjects
                 descr2 = descr.copy()
 
-                #dynamically add correct label type
-
-                if MODE == 'energy_recon':
-                    descr2['reconstructed_energy'] = UInt8Col()
+                if self.mode == 'energy_recon':
                     descr2['energy_reconstruction_bin_label'] = UInt8Col()
 
-                #dynamically add columns for telescopes
-                if STORAGE_MODE == 'all':
-                    for tel_type in selected.keys():
-
-                        if tel_type == 'SST':
-                            IMAGE_WIDTH = SST_IMAGE_WIDTH*IMG_SCALE_FACTOR
-                            IMAGE_LENGTH = SST_IMAGE_LENGTH*IMG_SCALE_FACTOR
-                        elif tel_type == 'SCT':
-                            IMAGE_WIDTH = SCT_IMAGE_WIDTH*IMG_SCALE_FACTOR
-                            IMAGE_LENGTH = SCT_IMAGE_LENGTH*IMG_SCALE_FACTOR
-                        elif tel_type == 'LST':
-                            IMAGE_WIDTH = LST_IMAGE_WIDTH*IMG_SCALE_FACTOR
-                            IMAGE_LENGTH = LST_IMAGE_LENGTH*IMG_SCALE_FACTOR
-
-                        for tel_id in selected[tel_type]:
-                            descr2["T" + str(tel_id)] = UInt16Col(shape=(IMAGE_WIDTH,IMAGE_LENGTH,IMAGE_CHANNELS))
-
-                        descr2["trig_list"] = UInt8Col(shape=(NUM_TEL))
-     
-                elif STORAGE_MODE == 'mapped':
-                    descr2["tel_map"] = Int32Col(shape=(NUM_TEL))
+                if self.storage_mode == 'all':
+                    descr2["trig_list"] = UInt8Col(shape=(num_tel)) 
+                elif self.storage_mode == 'mapped':
+                    descr2["tel_map"] = Int32Col(shape=(num_tel))
         
-                table2 = f.create_table(d, 'temp', descr2, "Table of event records")
+                for tel_type in selected_tels.keys():
+                    if tel_type == 'SST':
+                        img_width = self.IMAGE_SHAPE['SST'][0]*self.img_scale_factors['SST']
+                        img_length = self.IMAGE_SHAPE['SST'][1]*self.img_scale_factors['SST']
+                    elif tel_type == 'SCT':
+                        img_width = self.IMAGE_SHAPE['SCT'][0]*self.img_scale_factors['SCT']
+                        img_length = self.IMAGE_SHAPE['SCT'][1]*self.img_scale_factors['SCT']
+                    elif tel_type == 'LST':
+                        img_width = self.IMAGE_SHAPE['LST'][0]*self.img_scale_factors['LST']
+                        img_length = self.IMAGE_SHAPE['LST'][1]*self.img_scale_factors['LST']
+
+                    #for all storage, add columns to event table for each telescope
+                    for tel_id in selected_tels[tel_type]:
+                        if self.storage_mode == 'all':
+                            descr2["T" + str(tel_id)] = UInt16Col(shape=(img_width,img_length,self.img_channels))
+                        elif self.storage_mode == 'mapped':
+                            if not group.__contains__('T'+str(tel_id)):
+                                array = f.create_earray(group, 'T'+str(tel_id), Int16Atom(), (0,img_width,img_length,self.img_channels))
+       
+                table2 = f.create_table(group, 'temp', descr2, "Table of Events")
                 table.attrs._f_copy(table2)
                 table.remove()
-                table2.move(d, 'Events')
+                table2.move(group, 'Events')
             
-            dataset_tables.append(d.Events)
-
-        #for mapped storage, create 1 Array per telescope
-        #telescope_arrays = []
-        if STORAGE_MODE == 'mapped':
-            for d in datasets:
-                for tel_type in selected.keys():
-                    if tel_type == 'SST':
-                        IMAGE_WIDTH = SST_IMAGE_WIDTH*IMG_SCALE_FACTOR
-                        IMAGE_LENGTH = SST_IMAGE_LENGTH*IMG_SCALE_FACTOR
-                    elif tel_type == 'SCT':
-                        IMAGE_WIDTH = SCT_IMAGE_WIDTH*IMG_SCALE_FACTOR
-                        IMAGE_LENGTH = SCT_IMAGE_LENGTH*IMG_SCALE_FACTOR
-                    elif tel_type == 'LST':
-                        IMAGE_WIDTH = LST_IMAGE_WIDTH*IMG_SCALE_FACTOR
-                        IMAGE_LENGTH = LST_IMAGE_LENGTH*IMG_SCALE_FACTOR
-        
-                    #img_atom = Atom.from_dtype(np.dtype((np.int16, (IMAGE_WIDTH, IMAGE_LENGTH,IMAGE_CHANNELS))))
-                    #img_atom = Atom.from_type('int16', shape=(IMAGE_WIDTH,IMAGE_LENGTH,IMAGE_CHANNELS)) 
-                    img_atom = Int16Atom()
-
-                    for tel_id in selected[tel_type]:
-                        if not d.__contains__('T'+str(tel_id)):
-                            #print("creating T{}".format(tel_id))
-                            array = f.create_earray(d, 'T'+str(tel_id), img_atom, (0,IMAGE_WIDTH,IMAGE_LENGTH,IMAGE_CHANNELS))
-                            #telescope_arrays.append(array)
-
-        #define/specify calibration and other processing
+        #specify calibration and other processing options
         cal = CameraCalibrator(None,None)
 
         logger.info("Processing events...")
@@ -280,16 +261,15 @@ class ImageExtractor
         event_count = 0
         passing_count = 0
 
-        #load all SCT data from simtel file
-        source = hessio_event_source(data_file_path,allowed_tels=[j for i in selected.keys() for j in selected[i]], max_events=max_events)
-
+        source = hessio_event_source(data_file,allowed_tels=[j for i in selected_tels.keys() for j in selected_tels[i]], max_events=max_events)
+        
         for event in source:
             event_count += 1
 
             #get energy bin and reconstructed energy
-            if config['use_pkl_dict']:
-                if (event.r0.run_id,event.r0.event_id) in bins_cuts_dict:
-                    bin_number, reconstructed_energy = bins_cuts_dict[(event.r0.run_id,event.r0.event_id)]
+            if self.bins_cuts_dict is not None:
+                if (event.r0.run_id,event.r0.event_id) in self.bins_cuts_dict:
+                    bin_number, reconstructed_energy = self.bins_cuts_dict[(event.r0.run_id,event.r0.event_id)]
                     passing_count +=1
                 else:
                     continue
@@ -299,68 +279,64 @@ class ImageExtractor
                 #else:
                 #continue
 
-            #calibrate camera (charge extraction + pedestal subtraction + trace integration)
+            #calibrate raw image (charge extraction + pedestal subtraction + trace integration)
             #NOTE: MUST BE MOVED UP ONCE ENERGY RECONSTRUCTION AND BIN NUMBERS ARE CALCULATED LOCALLY
             cal.calibrate(event)
 
-            #compute correct energy reconstruction bin label
-            if MODE == 'energy_recon':
-                for i in range(len(energy_recon_bins)):
-                    if event.mc.energy.value >= 10**(energy_recon_bins[i][0]) and event.mc.energy.value < 10**(energy_recon_bins[i][1]):
+            #compute energy reconstruction bin true label
+            if self.mode == 'energy_recon':
+                for i in range(len(self.energy_recon_bins)):
+                    if event.mc.energy.value >= 10**(self.energy_recon_bins[i][0]) and event.mc.energy.value < 10**(self.energy_recon_bins[i][1]):
                         erec_bin_label = i
-                        passing_count += 1
                         break
 
-            #process and write data
-            if MODE == 'energy_recon':
-                event_row = dataset_tables[0].row
-            elif MODE == 'gh_class':
-                event_row = dataset_tables[bin_number].row
+            if self.mode == 'energy_recon':
+                table = eval('f.root.Events')
+            elif self.mode == 'gh_class':
+                table = eval('f.root.E{}.Events'.format(str(bin_number)))
+            event_row = table.row
 
-            #collect telescope data and create trig_list and tel_map
-            if STORAGE_MODE == 'all':
+            if self.storage_mode == 'all':
                 trig_list = []
-            if STORAGE_MODE == 'mapped':
+            elif self.storage_mode == 'mapped':
                 tel_map = []
-            for tel_type in selected.keys():
-                for tel_id in selected[tel_type]:
+            
+            for tel_type in selected_tels.keys():
+                for tel_id in selected_tels[tel_type]:
                     if tel_id in event.r0.tels_with_data:
-                        image = event.dl1.tel[tel_id].image
-                        #truncate at 0
-                        image[image < 0] = 0
-                        #round float values to hundredths + save as int
-                        image = [round(i*100) for i in image[0]]
-                        #compute peak position
-                        if INCLUDE_TIMING:
-                            peaks = event.dl1.tel[tel_id].peakpos[0]
-                        else:
-                            peaks = None 
+                        pixel_vector = event.dl1.tel[tel_id].image
+                        #truncate at 0, scale by 100, round
+                        pixel_vector[pixel_vector < 0] = 0
+                        pixel_vector = [round(i*100) for i in pixel_vector[0]]
 
-                        image_array = make_sct_image_array(image,peaks,IMG_SCALE_FACTOR,IMG_DTYPE,IMG_DIM_ORDERING,IMAGE_CHANNELS)
-     
-                        if STORAGE_MODE == 'all':
+                        if self.include_timing:
+                            peaks_vector = event.dl1.tel[tel_id].peakpos[0]
+                        else:
+                            peaks_vector = None 
+
+                        image_array = self.trace_converter.convert_SCT(pixel_vector,peaks_vector)
+
+                        if self.storage_mode == 'all':
                             trig_list.append(1)
                             event_row["T" + str(tel_id)] = image_array          
-                        elif STORAGE_MODE == 'mapped':
-                            array_str = 'f.root.E{}.T{}'.format(bin_number,tel_id)
-                            array = eval(array_str)
+                        elif self.storage_mode == 'mapped':
+                            array = eval('f.root.E{}.T{}'.format(bin_number,tel_id))
                             next_index = array.nrows
                             array.append(np.expand_dims(image_array,axis=0))
                             tel_map.append(next_index)
 
                     else:
-                        if STORAGE_MODE == 'all':
+                        if self.storage_mode == 'all':
                             trig_list.append(0)
-                            event_row["T" + str(tel_id)] = make_sct_image_array(None,None,IMG_SCALE_FACTOR,IMG_DTYPE,IMG_DIM_ORDERING,IMAGE_CHANNELS)
-                        elif STORAGE_MODE == 'mapped':
+                            event_row["T" + str(tel_id)] = self.trace_convertor.convert_SCT(None,None)
+                        elif self.storage_mode == 'mapped':
                             tel_map.append(-1)
                             
-            if STORAGE_MODE == 'all':
+            if self.storage_mode == 'all':
                 event_row['trig_list'] = trig_list 
-            elif STORAGE_MODE == 'mapped':
+            elif self.storage_mode == 'mapped':
                 event_row['tel_map'] = tel_map
 
-            #other parameter data
             event_row['event_number'] = event.r0.event_id
             event_row['run_number'] = event.r0.run_id
             event_row['gamma_hadron_label'] = event.mc.shower_primary_id
@@ -370,16 +346,13 @@ class ImageExtractor
             event_row['mc_energy'] = event.mc.energy.value
             event_row['alt'] = event.mc.alt.value
             event_row['az'] = event.mc.az.value
+            event_row['reconstructed_energy'] = reconstructed_energy
 
-
-            if MODE == 'energy_recon':
-                event_row['reconstructed_energy'] = reconstructed_energy
+            if self.mode == 'energy_recon':
                 event_row['energy_reconstruction_bin_label'] = erec_bin_label
 
-            #write data to table
             event_row.append()
 
-        for table in dataset_tables:
             table.flush()
 
         logger.info("{} events processed".format(event_count))
@@ -388,25 +361,12 @@ class ImageExtractor
 
     def shuffle_data(self,h5_file):
 
-        temp_filename = os.path.splitext(h5_file)[0] + "_temp.h5"
-
         #open input hdf5 file
-        f_in = open_file(h5_file, mode = "r", title = "Input file")
+        f = open_file(h5_file, mode = "r+", title = "Input file")
 
-        #create new file, duplicating file structure
-        f_shuffled =  open_file(temp_filename, mode ="w", title = "Output file") 
-
-        #copy tel_table
-        if f_in.__contains__('/Tel_Table'): 
-            tel_table = f_in.root.Tel_Table
-            new_tel_table = tel_table.copy(f_shuffled.root, 'Tel_Table')
-
-        if MODE == 'gh_class':
-            for group in f_in.walk_groups("/"):
-                if not group == f_in.root:
-                    #copy energy bin groups
-                    group_new = f_shuffled.create_group("/", group._v_name, group._v_attrs.TITLE)
-
+        if self.mode == 'gh_class':
+            for group in f.walk_groups("/"):
+                if not group == f.root:
                     #copy event table, but shuffle
                     table = group.Events
                     descr = table.description
@@ -415,19 +375,14 @@ class ImageExtractor
                     new_indices = [i for i in range(num_events)]
                     random.shuffle(new_indices)
 
-                    table_new = f_shuffled.create_table(group_new,'Events', descr,"Table of events")
+                    table_new = f.create_table(group,'Events_temp', descr,"Table of events")
 
                     for i in range(num_events):
                         table_new.append([tuple(table[new_indices[i]])]) 
 
-                    #copy tel arrays
-                    for child in group._v_children:
-                        if re.match("T[0-9]+",child):
-                            new_array = group._f_get_child(child).copy(group_new,child)
-
-
-       shutil.move(temp_filename, h5_file) 
-
+                    table.remove()
+                    table_new.move(group, 'Events')
+            
     def split_data(self,h5_file,split_dict):
 
         split_sum = 0
@@ -435,34 +390,16 @@ class ImageExtractor
             split_sum += split_dict[i]
         assert split_sum == 1,"Split fractions do not add up to 1"
 
-        temp_filename = os.path.splitext(h5_file)[0] + "_temp.h5"
-
         #open input hdf5 file
-        f_in = open_file(h5_file, mode = "r", title = "Input file")
-
-        #create new file, duplicating file structure
-        f_shuffled =  open_file(temp_filename, mode ="w", title = "Output file") 
-
-        #copy tel_table
-        if f_in.__contains__('/Tel_Table'): 
-            tel_table = f_in.root.Tel_Table
-            new_tel_table = tel_table.copy(f_shuffled.root, 'Tel_Table')
+        f = open_file(h5_file, mode = "r+", title = "Input file")
 
         tables = []
         new_tables = []
    
-        if MODE == 'gh_class':
-            for group in f_in.walk_groups("/"):
-                if not group == f_in.root:
-                    #copy energy bin groups
-                    group_new = f_shuffled.create_group("/", group._v_name, group._v_attrs.TITLE)
-
-                    #copy tel arrays
-                    for child in group._v_children:
-                        if re.match("T[0-9]+",child):
-                            new_array = group._f_get_child(child).copy(group_new,child)
-
-                    #move events into separate tables
+        if self.mode == 'gh_class':
+            for group in f.walk_groups("/"):
+                if not group == f.root:
+                    #copy events into separate tables
                     table = group.Events
                     descr = table.description
 
@@ -471,7 +408,7 @@ class ImageExtractor
                     i = 0
 
                     for split in list(split_dict.keys()):
-                        table_new = f_shuffled.create_table(group_new, 'Events_' + split, descr, "Table of " + split + " Events")
+                        table_new = f.create_table(group, 'Events_' + split, descr, "Table of " + split + " Events")
 
                         split_fraction = split_dict[split]
                         
@@ -480,12 +417,12 @@ class ImageExtractor
                         else:
                             split_indices = indices[i:num_events]
 
+                        for j in split_indices:
+                            table_new.append([tuple(table[j])])
+
                         i += int(split_fraction*num_events)
 
-                        for j in split_indices:
-                            table_new.append([tuple(table[split_indices[j]])])
-
-       shutil.move(temp_filename, h5_file)
+                    table.remove()
 
 if __name__ == '__main__':
     
@@ -509,11 +446,11 @@ if __name__ == '__main__':
 
     #load bins cuts dictionary from file
     if args.bins_cuts_dict_file is not None:
-        bins_cuts_dict = pkl.load(open(bins_cuts_dict_file, "rb" ))
+        bins_cuts_dict = pkl.load(open(args.bins_cuts_dict_file, "rb" ))
     else:
         bins_cuts_dict = None
 
-    extractor = ImageExtractor(args.hdf5_path,config,bins_cuts_dict)
+    extractor = ImageExtractor.from_config(args.hdf5_path,bins_cuts_dict,config)
 
     data_files = glob.glob(args.data_files)
 
@@ -522,6 +459,8 @@ if __name__ == '__main__':
 
     if args.shuffle:
         extractor.shuffle_data(args.hdf5_path)
+
+    split_dict = {'Training':0.9,'Validation':0.1}
 
     if args.split:
         extractor.split_data(args.hdf5_path,split_dict)

@@ -13,6 +13,7 @@ class Event(IsDescription):
     mc_energy = Float64Col()
     az = Float32Col()
     alt = Float32Col()
+    reconstructed_energy = Float64Col()
 
 class Tel(IsDescription):
     """
