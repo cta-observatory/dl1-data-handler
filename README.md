@@ -1,6 +1,7 @@
 # ImageExtractor
 
-![build status](https://travis-ci.org/bryankim96/image-extractor.svg?branch=master)
+![build status](https://travis-ci.org/bryankim96/image-extractor.svg?branch=master) [![Coverage Status](https://coveralls.io/repos/github/bryankim96/image-extractor/badge.svg?branch=master)](https://coveralls.io/github/bryankim96/image-extractor?branch=master)
+
 
 Package for loading simtel data files, processing and calibrating the event data, and writing the processed data to a custom Pytables HDF5 format. Created for the testing of new machine learning and other analysis techniques for the
 [Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") collaboration. Built using Pytables and ctapipe.
