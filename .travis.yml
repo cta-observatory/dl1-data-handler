@@ -1,6 +1,11 @@
 language: python
 python:
       - "3.5"
+notifications:
+    email:
+        on_success: change # default: change
+        on_failure: change # default: always
+
 install:
       - sudo apt-get update
         # We do this conditionally because it saves us some downloading if the
