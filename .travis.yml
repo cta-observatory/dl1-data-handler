@@ -25,6 +25,7 @@ install:
       - source activate test
       - python setup.py install
       - cd ..
+      - rm master.zip
       - wget https://github.com/cta-observatory/ctapipe-extra/archive/master.zip
       - unzip master.zip
       - cd ctapipe-extra-master
