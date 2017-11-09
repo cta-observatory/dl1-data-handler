@@ -181,12 +181,6 @@ extractor.process_data(data_file,max_events)
 ...
 ```
 
-```python
-from image_extractor import trace_converter
-
-conv = trace_converter.TraceConverter()
-```
-
 ### Config files and bins_cuts_dict files
 
 "Default" configuration files and bins_cuts_dict files are provided in /aux/. The "1bin" files use standard cuts, but only 1 large energy bin containing all events. The non-"1bin" files use the standard cuts and 3 energy bins (low, medium, high) which are specified in the config files.
