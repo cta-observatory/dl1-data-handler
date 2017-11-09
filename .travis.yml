@@ -18,7 +18,7 @@ install:
         # Useful for debugging any issues with conda
       - conda info -a
         #get most recent dev version of ctapipe
-      - wget https://github.com/cta-observator/ctapipe/archive/master.zip
+      - wget https://github.com/cta-observatory/ctapipe/archive/master.zip
       - tar -xzvf ctapipe-master.zip
       - cd ctapipe-master
       - conda env create -n test -f environment.yml
