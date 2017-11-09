@@ -20,7 +20,7 @@ from ctapipe.calib import pedestals,CameraCalibrator
 
 import config
 import trace_converter
-import row_types
+import row_descriptors
 
 __all__ = ['ImageExtractor']
 
@@ -199,7 +199,7 @@ class ImageExtractor:
 
         #create single table in root group for telescope information
         if not f.__contains__('/Tel_Table'):
-            tel_pos_table = f.create_table("/",'Tel_Table', row_types.Tel, "Table of telescope ids, positions, and types")
+            tel_pos_table = f.create_table("/",'Tel_Table', row_descriptors.Tel, "Table of telescope ids, positions, and types")
             tel_row = tel_pos_table.row
 
             source_temp = hessio_event_source(data_file,max_events=1)
@@ -217,7 +217,7 @@ class ImageExtractor:
         #create event table + tel arrays in each group
         for group in groups:
             if not group.__contains__('Events'):
-                table = f.create_table(group, 'Events', row_types.Event, "Table of Events") 
+                table = f.create_table(group, 'Events', row_descriptors.Event, "Table of Events") 
                 descr = table.description._v_colobjects
                 descr2 = descr.copy()
 
