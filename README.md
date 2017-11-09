@@ -26,7 +26,7 @@ Create a new Anaconda environment (defaults to Python 3.6), installing all of th
 conda create -n [ENV_NAME] --file requirements.txt -c cta-observatory -c conda-forge -c openastronomy
 ```
 
-###Install the bleeding edge version of ctapipe:
+### Install the bleeding edge version of ctapipe:
 
 NOTE: As of v0.2.1, the conda package version of ctapipe appears to be lagging somewhat behind the development version and is missing key features which are used by image\_extractor. As a result, it is necessary (as of now) to install ctapipe from source. This is slightly messier and more time-consuming than the conda installation. 
 
@@ -60,7 +60,7 @@ and looking for ctapipe.
 
 If it is showing up correctly, you should now be able to run image\_extractor.py or any of the other scripts from the command line in your environment.
 
-###Package Installation
+### Package Installation
 
 Finally, you can install image-extractor as a package so that you can import and use it just like any other Python package:
 
