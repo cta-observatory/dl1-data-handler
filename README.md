@@ -1,10 +1,9 @@
 # ImageExtractor
 
-## Description
-Software for loading simtel data files, processing them using ctapipe, and writing data to Pytables HDF5 format for use in machine learning and other analysis tasks. Designed to handle data storage for testing new analysis techniques for the 
-[Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") collaboration.
+Package for loading simtel data files, processing and calibrating the event data, and writing the processed data to a custom Pytables HDF5 format. Created for the testing of new machine learning and other analysis techniques for the
+[Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") collaboration. Built using Pytables and ctapipe.
 
-Currently in development, intended for internal use only.
+Currently under development, intended for internal use only.
 
 ## Installation
 
@@ -68,18 +67,11 @@ source activate [ENV_NAME]
 python setup.py install
 ```
 
-
-If both are showing up correctly, you should now be able to run image\_extractor.py or any of the other scripts from the command line in your environment.
+If both packages are showing up correctly, you should now be able to run image\_extractor.py or any of the other scripts from the command line in your environment.
 
 ### Package Installation
 
-Finally, you can install image-extractor as a package so that you can import and use it just like any other Python package:
-
-```python
-from image_extractor import trace_converter
-
-conv = trace_converter.TraceConverter()
-```
+Finally, you can install image-extractor as a package so that you can import and use it just like any other Python package.
 
 To install image-extractor as a package in your main Python installation:
 
@@ -107,7 +99,7 @@ conda env list
 
 ## Dependencies
 
-See requirements.txt for the full environment setup.
+See requirements.txt for the full list of dependencies.
 
 The main dependencies are:
 
@@ -127,19 +119,28 @@ for additional scripts in scripts directory:
 
 ## Usage
 
+### From the Command Line:
+
+To create a HDF5 dataset file out of a collection of .simtel.gz files, run:
+
+```bash
 image_extractor.py [path_to_simtel_files] [output_file] [config_file] [--bins_cuts_dict BINS_CUTS_DICT] [--max_events MAX_EVENTS] [--shuffle] [--split] [--debug]
+```
+on the command line.
 
 ex:
 
+```bash
 image_extractor.py "/data/simtel/*.simtel.gz" "./dataset.h5" "./configuration_settings.config" "./bins_cuts_dict.pkl" --shuffle --split
+```
 
-* path_to_simtel_files - The path to simtel.gz file(s) containing the events which you wish to process. Should be indicated using a wildcard.
-* output_file - The path to an HDF5 file into which you wish to write your data.
-* config_file - The path to a configobj configuration file containing various data format settings and specifying cuts and bins (currently not applied directly in image_extractor, but through EventDisplay by saving in bins_cuts_dict. At the current time (v0.2.1) the necessary analysis stages are not yet implemented in ctapipe). Details in config.py
+* path_to_simtel_files - The path to .simtel.gz file(s) containing the events which you wish to process. Multiple files should be located in the same directory and indicated using a wildcard.
+* output_file - The path to the HDF5 file into which you wish to write your data.
+* config_file - The path to a configobj configuration file containing various data format settings and specifying cuts and bins (currently not applied directly in image_extractor, but through EventDisplay by saving in bins_cuts_dict. At the current time (v0.2.1) the necessary analysis stages are not yet implemented in ctapipe). Details in config.py.
 * bins_cuts_dict - Optional path to a pickled Python dictionary of a specified format (see prepare_cuts_dict.py) containing information from EventDisplay on which events (run_number,event_number) passed the cuts, what their reconstructed energies are, and which energy bin they are in. This information is prepared in advance using prepare_cuts_dict.py and the settings indicated in the config file.
 * max_events - Optional argument to specify the maximum number of events to save from the simtel file
-* shuffle - Randomly shuffles the data in the Events table after writing
-* split - Splits the events table into separate training/validation/test for convenience
+* shuffle - Optional flag to randomly shuffle the data in the Events table after writing
+* split - Optional flag to split the Events table into separate training/validation/test tables for convenience
 * debug - Optional flag to print additional debug information.
 
 NOTE: The shuffle and split options are primarily for convenience when using the data files for training convolutional neural networks. It is unlikely they will be included as part of the final standard data format.
@@ -147,6 +148,44 @@ NOTE: The shuffle and split options are primarily for convenience when using the
 NOTE: The split option is currently set to use a hardcoded default split setting (0.9 training, 0.1 validation). This can be modified in the script if desired.
 
 NOTE: The splitting and shuffling handled by the split and shuffle options are NOT done in-place, so they require a temporary disk space overhead beyond the normal final size of the output .h5 file. Because only the Events tables are copied/duplicated and the majority of the final file size is in the telescope arrays, this overhead is likely insignificant for the 'mapped' storage format. However, it is much larger for the 'all' storage format, as the telescope images are stored directly in the Event tables and are therefore duplicated temporarily. Also, it is worth noting that this overhead becomes larger in absolute terms as the absolute size of the output files becomes larger.
+
+### From a Python script:
+
+If the package was installed locally as described above, you can import classes from it and use them directly in a Python script.
+
+ex:
+
+```python
+from image_extractor import image_extractor
+
+#max events to read per file
+max_events = 50
+
+#set parameters for your ImageExtractor
+output_path = "/home/computer/user/data/dataset.h5"
+mode = "gh_class"
+
+#...
+#more parameters
+
+#load bins cuts dictionary from file
+bins_cuts_dict = pkl.load(open(args.bins_cuts_dict_file, "rb" ))
+
+#data file
+data_file = "/home/computer/user/data/simtel/test.simtel.gz"
+
+extractor = image_extractor.ImageExtractor(output_path,bins_cuts_dict,mode, ...)
+
+extractor.process_data(data_file,max_events)
+
+...
+```
+
+```python
+from image_extractor import trace_converter
+
+conv = trace_converter.TraceConverter()
+```
 
 ### Config files and bins_cuts_dict files
 
