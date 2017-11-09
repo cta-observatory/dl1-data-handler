@@ -58,7 +58,18 @@ conda list
 
 and looking for ctapipe.
 
-If it is showing up correctly, you should now be able to run image\_extractor.py or any of the other scripts from the command line in your environment.
+Do the same for ctapipe-extra (a repository containing additional resources for ctapipe):
+
+```bash
+cd software
+git clone https://github.com/cta-observatory/ctapipe-extra.git
+cd ctapipe-extra
+source activate [ENV_NAME]
+python setup.py install
+```
+
+
+If both are showing up correctly, you should now be able to run image\_extractor.py or any of the other scripts from the command line in your environment.
 
 ### Package Installation
 
