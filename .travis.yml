@@ -19,8 +19,8 @@ install:
       - conda info -a
         #get most recent dev version of ctapipe
       - wget https://github.com/cta-observatory/ctapipe/archive/master.zip
-      - unzip ctapipe-master.zip
-      - cd ctapipe-master
+      - unzip master.zip
+      - cd master
       - conda env create -n test -f environment.yml
       - source activate test
       - python setup.py install
