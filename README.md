@@ -8,74 +8,138 @@ Currently in development, intended for internal use only.
 
 ## Installation
 
-As of now, no packaged version or setuptools-style installation method is supported. The recommended way to use the code is to  fork/clone the repository locally, create an Anaconda environment, and install into it all of the relevant dependencies listed in requirements.txt. Alternatively, a particular release version can be downloaded from the releases page (dependency installation should be handled in the same way). 
+The following installation method (for Linux) is recommended:
 
-NOTE: Depending on the release/version of ImageExtractor, it may be necessary to install the dev version of ctapipe (rather than the conda package version), as explained [here](https://cta-observatory.github.io/ctapipe/getting_started/index.html#get-the-ctapipe-software)
+First, install the Anaconda Python distribution (Python 3.6), which can be found [here](https://www.anaconda.com/download/).
+
+Clone the repository (or fork and clone if you wish to develop) into a local directory of your choice.
+
+```bash
+cd software
+git clone https://github.com/bryankim96/image-extractor.git
+cd image-extractor
+```
+
+Create a new Anaconda environment (defaults to Python 3.6), installing all of the dependencies using requirements.txt.
+
+```bash
+conda create -n [ENV_NAME] --file requirements.txt -c cta-observatory -c conda-forge -c openastronomy
+```
+
+###Install the bleeding edge version of ctapipe:
+
+NOTE: As of v0.2.1, the conda package version of ctapipe appears to be lagging somewhat behind the development version and is missing key features which are used by image\_extractor. As a result, it is necessary (as of now) to install ctapipe from source. This is slightly messier and more time-consuming than the conda installation. 
+
+Clone the ctapipe repository (or fork and clone if you wish to develop) into a local directory of your choice.
+
+```bash
+cd software
+git clone https://github.com/cta-observatory/ctapipe.git
+cd ctapipe
+```
+
+Activate the Anaconda environment you set up earlier:
+
+```bash
+source activate [ENV_NAME]
+```
+
+Then to install, simply run:
+
+```bash
+python setup.py install
+```
+
+You can verify that ctapipe was installed correctly by running:
+
+```bash
+conda list
+```
+
+and looking for ctapipe.
+
+If it is showing up correctly, you should now be able to run image\_extractor.py or any of the other scripts from the command line in your environment.
+
+###Package Installation
+
+Finally, you can install image-extractor as a package so that you can import and use it just like any other Python package:
+
+```python
+from image_extractor import trace_converter
+
+conv = trace_converter.TraceConverter()
+```
+
+To install image-extractor as a package in your main Python installation:
+
+```bash
+cd image-extractor
+pip install . 
+```
+
+To install image-extractor as a package in your Anaconda environment:
+
+```bash
+source activate [ENV_NAME]
+conda install pip
+
+cd image-extractor
+/path/to/anaconda/install/envs/[ENV_NAME]/bin/pip install .
+```
+where /path/to/anaconda/install is the path to your anaconda installation directory and ENV\_NAME is the name of your environment.
+
+The path to the environment directory for the environment you wish to install into can be found quickly by running
+
+```bash
+conda env list
+```
 
 ## Dependencies
 
-See requirements.txt for up-to-date list.
+See requirements.txt for the full environment setup.
 
-As of release v0.2.1,
+The main dependencies are:
 
-for image_extractor.py:
+for image_extractor:
 
-* Pytables 3.4.2
-* Numpy 1.13.3
-* Astropy 2.0.2
-* configobj 5.0.6
-* ctapipe 0.3.1 (dev)
+* Pytables
+* Numpy
+* Astropy
+* configobj
+* ctapipe
 
-for scripts in scripts directory:
+for additional scripts in scripts directory:
 
-* Pillow 4.3.0
-* ROOT 0.0.1
-* h5py 2.7.1
-* matplotlib 2.1.0
+* Pillow
+* ROOT
+* matplotlib
 
 ## Usage
 
-Once in an appropriate conda environment with all dependencies installed (or using another Python installation with all dependencies installed):
-
-### For processing one simtel file:
-
-image_extractor.py [simtel_file] [output_file] [config_file] [--bins_cuts_dict BINS_CUTS_DICT] [--debug] [--max_events MAX_EVENTS]
+image_extractor.py [path_to_simtel_files] [output_file] [config_file] [--bins_cuts_dict BINS_CUTS_DICT] [--max_events MAX_EVENTS] [--shuffle] [--split] [--debug]
 
 ex:
 
-image_extractor.py "gamma_20deg_0deg_run30137___cta-prod3-lapalma-2147m-LaPalma-SCT_cone10.simtel.gz" "./dataset.h5" "configuration_settings.config" "bins_cuts_dict.pkl"
+image_extractor.py "/data/simtel/*.simtel.gz" "./dataset.h5" "./configuration_settings.config" "./bins_cuts_dict.pkl" --shuffle --split
 
-* simtel_file - The path to a simtel.gz file containing the events which you wish to process
-* output_file - The path to an HDF5 file into which you wish to write your data. If it does not exist, it will be created. If it does, it will be appended to.
+* path_to_simtel_files - The path to simtel.gz file(s) containing the events which you wish to process. Should be indicated using a wildcard.
+* output_file - The path to an HDF5 file into which you wish to write your data.
 * config_file - The path to a configobj configuration file containing various data format settings and specifying cuts and bins (currently not applied directly in image_extractor, but through EventDisplay by saving in bins_cuts_dict. At the current time (v0.2.1) the necessary analysis stages are not yet implemented in ctapipe). Details in config.py
 * bins_cuts_dict - Optional path to a pickled Python dictionary of a specified format (see prepare_cuts_dict.py) containing information from EventDisplay on which events (run_number,event_number) passed the cuts, what their reconstructed energies are, and which energy bin they are in. This information is prepared in advance using prepare_cuts_dict.py and the settings indicated in the config file.
-* debug - Optional flag to print additional debug information.
 * max_events - Optional argument to specify the maximum number of events to save from the simtel file
+* shuffle - Randomly shuffles the data in the Events table after writing
+* split - Splits the events table into separate training/validation/test for convenience
+* debug - Optional flag to print additional debug information.
 
-### For processing an entire dataset (format is designed for deep learning use):
+NOTE: The shuffle and split options are primarily for convenience when using the data files for training convolutional neural networks. It is unlikely they will be included as part of the final standard data format.
 
-NOTE: These scripts are specifically for internal use by the Columbia/Barnard deep learning group and are not likely to be part of the standard collaboration-wide format. 
+NOTE: The split option is currently set to use a hardcoded default split setting (0.9 training, 0.1 validation). This can be modified in the script if desired.
 
-Use generate_dataset_pytables.sh to process multiple simtel files (specified with a wilcard argument), then shuffle and split into train/validation/test tables using shuffle_split_events.py. 
-
-NOTE: generate_datset_pytables.sh will leave behind a "raw" dataset file (before shuffling and splitting) which is named, by default, output_temp.h5. This can be kept or deleted as desired after it finishes. Be sure when running generate_dataset_pytables.sh that no such file already exists, as this will cause any data already in that file to be included in the final output HDF5 file. 
-
-To generate dataset:
-
-ex.
-
-python generate_dataset_pytables.sh "simtel_directory/*.simtel.gz" "./dataset.h5" "bins_cuts_dict.pkl" "configuration_settings.config"
-
-To shuffle/split a dataset:
-
-ex.
-
-python shuffle_split_events.py "-shuffle" "-no_test" "./dataset_raw.h5" "./dataset_final.h5"
-
+NOTE: The splitting and shuffling handled by the split and shuffle options are NOT done in-place, so they require a temporary disk space overhead beyond the normal final size of the output .h5 file. Because only the Events tables are copied/duplicated and the majority of the final file size is in the telescope arrays, this overhead is likely insignificant for the 'mapped' storage format. However, it is much larger for the 'all' storage format, as the telescope images are stored directly in the Event tables and are therefore duplicated temporarily. Also, it is worth noting that this overhead becomes larger in absolute terms as the absolute size of the output files becomes larger.
 
 ### Config files and bins_cuts_dict files
 
-"Default" configuration files and bins_cuts_dict files are provided in /aux/. The "1bin" files use standard cuts, but only 1 large energy bin. The non-"1bin" files use the standard cuts and 3 energy bins (low, medium, high) which are specified in the config files.
+"Default" configuration files and bins_cuts_dict files are provided in /aux/. The "1bin" files use standard cuts, but only 1 large energy bin containing all events. The non-"1bin" files use the standard cuts and 3 energy bins (low, medium, high) which are specified in the config files.
 
 The config files can be modified directly using a text editor, although it should be ensured that they match the config spec located in config.py. Config.py can be used to generate an example default configuration file or validate an existing one.
 
