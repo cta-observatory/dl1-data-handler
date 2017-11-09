@@ -23,20 +23,20 @@ install:
         # Useful for debugging any issues with conda
       - conda info -a
         #get most recent dev version of ctapipe
-      - wget https://github.com/cta-observatory/ctapipe/archive/master.zip
-      - unzip master.zip
+      - wget -quiet https://github.com/cta-observatory/ctapipe/archive/master.zip
+      - unzip -qq master.zip
       - cd ctapipe-master
-      - conda env create -n test -f environment.yml
+      - conda env create -q -n test -f environment.yml
       - source activate test
       - python setup.py install
       - cd ..
       - rm master.zip
-      - wget https://github.com/cta-observatory/ctapipe-extra/archive/master.zip
-      - unzip master.zip
+      - wget -quiet https://github.com/cta-observatory/ctapipe-extra/archive/master.zip
+      - unzip -qq master.zip
       - cd ctapipe-extra-master
       - python setup.py install
       - cd ..
-      - conda install --yes --file requirements.txt -c cta-observatory -c conda-forge -c openastronomy
+      - conda install -q --yes --file requirements.txt -c cta-observatory -c conda-forge -c openastronomy
       - python setup.py install
 script: 
       - python pytest --pep8;
