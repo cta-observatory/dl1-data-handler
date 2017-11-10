@@ -1,4 +1,5 @@
-from tables import IsDescription, UInt32Col, UInt8Col, Float64Col, Float32Col, StringCol
+from tables import (IsDescription, UInt32Col, UInt8Col, 
+                    Float64Col, Float32Col, StringCol)
 
 
 class Event(IsDescription):
