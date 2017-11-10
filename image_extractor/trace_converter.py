@@ -42,10 +42,10 @@ class TraceConverter:
             5]
 
         # counting from the bottom row, left to right
-        MODULE_START_POSITIONS = [(((image_shape[0] - MODULES_PER_ROW[j] 
-                                     * MODULE_DIM[0]) / 2) +
-                                   (MODULE_DIM[0] * i), j * MODULE_DIM[1]) 
-                                  for j in range(ROWS) 
+        MODULE_START_POSITIONS = [(((image_shape[0] - MODULES_PER_ROW[j] * 
+                                     MODULE_DIM[0]) / 2) +
+                                   (MODULE_DIM[0] * i), j * MODULE_DIM[1])
+                                  for j in range(ROWS)
                                   for i in range(MODULES_PER_ROW[j])]
 
         if self.dim_order == 'channels_first':
