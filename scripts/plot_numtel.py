@@ -18,10 +18,10 @@ LST_NUM_PIXELS = 1855
 SCT_NUM_PIXELS = 11328
 SST_NUM_PIXELS = 0  # update
 
+input_simtel_file = ""
+
 # collect telescope lists
-source_temp = hessio_event_source(
-    "gamma_20deg_180deg_run655___cta-prod3-lapalma-2147m-LaPalma-SCT_cone10.simtel.gz",
-     max_events=1)
+source_temp = hessio_event_source(input_simtel_file,max_events=1)
 
 LST_list = []
 SCT_list = []
@@ -73,8 +73,7 @@ for i in selected.keys():
         len(all_tels[i])) + " telescopes selected.")
     NUM_TEL += len(selected[i])
 
-source = hessio_event_source(
-    "gamma_20deg_180deg_run655___cta-prod3-lapalma-2147m-LaPalma-SCT_cone10.simtel.gz")
+source = hessio_event_source(input_simtel_file)
 
 trig_nums_list = []
 
@@ -123,6 +122,7 @@ plt.axvline(np.mean(passing_trig_nums_list), color='r', linestyle='dashed')
 plt.savefig('combined_num_trig.png')
 
 print(
-    "Mean number of triggered telescopes (all) : {}".format(np.mean(trig_nums_list)))
-print("Mean number of triggered telescopes (pasing) : {}".format(
+    "Mean number of triggered telescopes (all) : {}".format(
+    np.mean(trig_nums_list)))
+print("Mean number of triggered telescopes (passing) : {}".format(
     np.mean(passing_trig_nums_list)))

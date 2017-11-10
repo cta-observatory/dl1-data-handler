@@ -31,10 +31,20 @@ class ImageExtractor:
     NUM_PIXELS = {'LST': 1855, 'SCT': 11328, 'SST': 0}
     IMAGE_SHAPE = {'SCT': (120, 120)}
 
-    def __init__(self, output_path, bins_cuts_dict, mode, tel_type_mode,
-                 storage_mode, img_channels, include_timing,
-                 img_scale_factors, img_dtype, img_dim_order, energy_bins,
-                 energy_bin_units, energy_recon_bins):
+    def __init__(self,
+                 output_path, 
+                 bins_cuts_dict, 
+                 mode, 
+                 tel_type_mode,
+                 storage_mode, 
+                 img_channels, 
+                 include_timing,
+                 img_scale_factors, 
+                 img_dtype, 
+                 img_dim_order, 
+                 energy_bins,
+                 energy_bin_units, 
+                 energy_recon_bins):
 
         self.output_path = output_path
         self.bins_cuts_dict = bins_cuts_dict
@@ -54,8 +64,10 @@ class ImageExtractor:
         self.energy_recon_bins = energy_recon_bins
 
         self.trace_converter = trace_converter.TraceConverter(
-            self.img_dtype, self.img_dim_order,
-                self.img_channels, self.img_scale_factors)
+            self.img_dtype, 
+            self.img_dim_order,
+            self.img_channels, 
+            self.img_scale_factors)
 
     @classmethod
     def from_config(cls, output_path, bins_cuts_dict, config):
@@ -98,7 +110,8 @@ class ImageExtractor:
             e_max = float(config['energy_bins']['max'])
             e_bin_size = float(config['energy_bins']['bin_size'])
             num_e_bins = int((e_max - e_min) / e_bin_size)
-            energy_bins = [(e_min + i * e_bin_size, e_min + (i + 1) * e_bin_size)
+            energy_bins = [(e_min + i * e_bin_size, e_min + 
+                            (i + 1) * e_bin_size)
                            for i in range(num_e_bins)]
             energy_recon_bins = None
 
@@ -108,14 +121,23 @@ class ImageExtractor:
             erec_bin_size = float(config['energy_recon']['bins']['bin_size'])
             num_erec_bins = int((erec_max - erec_min) / erec_bin_size)
             energy_bins = None
-            energy_recon_bins = [(erec_min + i * erec_bin_size, erec_min
-                                  + (i + 1) * erec_bin_size)
+            energy_recon_bins = [(erec_min + i * erec_bin_size, erec_min +
+                                  (i + 1) * erec_bin_size)
                                  for i in range(num_erec_bins)]
 
-        return cls(output_path, bins_cuts_dict, mode, tel_type_mode,
-                   storage_mode, img_channels, include_timing, img_scale_factors,
-                   img_dtype, img_dim_order, energy_bins,
-                   energy_bin_units, energy_recon_bins)
+        return cls(output_path, 
+                   bins_cuts_dict, 
+                   mode, 
+                   tel_type_mode,
+                   storage_mode, 
+                   img_channels, 
+                   include_timing, 
+                   img_scale_factors,
+                   img_dtype, 
+                   img_dim_order, 
+                   energy_bins,
+                   energy_bin_units, 
+                   energy_recon_bins)
 
     def select_telescopes(self, data_file):
 
@@ -137,9 +159,9 @@ class ImageExtractor:
                 else:
                     logger.error("Unknown telescope type
                                  (invalid num_pixels).")
-                    raise ValueError("Unknown telescope type
-                                     (invalid num_pixels:
-                                      {}).".format(event.inst.num_pixels[tel_id]))
+                    raise ValueError("Unknown telescope type (invalid 
+                                     num_pixels: {}).".format(
+                                         event.inst.num_pixels[tel_id]))
 
         # select telescopes by type
         logger.info("Telescope Mode: ", self.tel_type_mode)
@@ -213,7 +235,8 @@ class ImageExtractor:
         if not f.__contains__('/Tel_Table'):
             tel_pos_table = f.create_table("/", 'Tel_Table',
                                            row_descriptors.Tel,
-                                           "Table of telescope ids, positions, and types")
+                                           ("Table of telescope ids, " 
+                                            "positions, and types"))
             tel_row = tel_pos_table.row
 
             source_temp = hessio_event_source(data_file, max_events=1)
@@ -258,31 +281,31 @@ class ImageExtractor:
                         img_length = self.IMAGE_SHAPE['SCT'][1] * \
                             self.img_scale_factors['SCT']
                     elif tel_type == 'LST':
-                        img_width = self.IMAGE_SHAPE[
-                            'LST'][
-                                0] * self.img_scale_factors[
-                                    'LST']
-                        img_length = self.IMAGE_SHAPE[
-                            'LST'][
-                                1] * self.img_scale_factors[
-                                    'LST']
+                        img_width = self.IMAGE_SHAPE['LST'][0] * \
+                            self.img_scale_factors['LST']
+                        img_length = self.IMAGE_SHAPE['LST'][1] * \
+                            self.img_scale_factors['LST']
 
                     # for 'all' storage_mode, add columns to event table for
                     # each telescope
                     for tel_id in selected_tels[tel_type]:
                         if self.storage_mode == 'all':
                             descr2["T" + str(tel_id)] = UInt16Col(
-                                shape=(img_width, img_length, self.img_channels))
+                                shape=(img_width, 
+                                       img_length, 
+                                       self.img_channels))
                         elif self.storage_mode == 'mapped':
                             if not group.__contains__('T' + str(tel_id)):
                                 array = f.create_earray(group,
-                                                        'T' +
-                                                        str(tel_id), Int16Atom(
-                                                        ),
-                                                        (0, img_width, img_length, self.img_channels))
+                                                        'T' + str(tel_id),
+                                                        Int16Atom(),
+                                                        (0, 
+                                                         img_width, 
+                                                         img_length, 
+                                                         self.img_channels))
 
-                table2 = f.create_table(group, 'temp',
-                                        descr2, "Table of Events")
+                table2 = f.create_table(group, 'temp', descr2, 
+                                        "Table of Events")
                 table.attrs._f_copy(table2)
                 table.remove()
                 table2.move(group, 'Events')
@@ -296,8 +319,9 @@ class ImageExtractor:
         passing_count = 0
 
         source = hessio_event_source(data_file,
-                                     allowed_tels=[j for i in selected_tels.keys()
-                                                   for j in selected_tels[i]],
+                                     allowed_tels=[j 
+                                        for i in selected_tels.keys()
+                                        for j in selected_tels[i]],
                                      max_events=max_events)
 
         for event in source:
@@ -370,8 +394,8 @@ class ImageExtractor:
                     else:
                         if self.storage_mode == 'all':
                             trig_list.append(0)
-                            event_row["T" + str(tel_id)] = self.trace_convertor.convert_SCT(
-                                None, None)
+                            event_row["T" + str(tel_id)] = \
+                                self.trace_convertor.convert_SCT(None, None)
                         elif self.storage_mode == 'mapped':
                             tel_map.append(-1)
 
@@ -483,35 +507,39 @@ class ImageExtractor:
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
-        description='Load image data and event parameters from a simtel file into a formatted HDF5 file.')
+        description=("Load image data and event parameters from a simtel file"
+                     "into a formatted HDF5 file."))
     parser.add_argument(
         'data_files',
         help='wildcard path to input .simtel files')
     parser.add_argument(
         'hdf5_path',
-        help='path of output HDF5 file, or currently existing file to append to')
+        help=('path of output HDF5 file, or 
+              currently existing file to append to'))
     parser.add_argument(
         'config_file',
-        help='configuration file specifying the selected telescope ids from simtel file, the desired energy bins, the correst image output dimensions/dtype, ')
+        help=('configuration file specifying the selected telescope ids '
+              'from simtel file, the desired energy bins, and the correct '
+              'image output dimensions/dtype.'))
     parser.add_argument(
         '--bins_cuts_dict_file',
         help='path of .pkl file containing bins/cuts dictionary')
     parser.add_argument(
         "--debug",
         help="print debug/logger messages",
-     action="store_true")
+        action="store_true")
     parser.add_argument(
         "--max_events",
         help="set a maximum number of events to process from each file",
-     type=int)
+        type=int)
     parser.add_argument(
         "--shuffle",
         help="shuffle output data file",
-     action="store_true")
+        action="store_true")
     parser.add_argument(
         "--split",
         help="split output data file into separate event tables",
-     action="store_true")
+        action="store_true")
 
     args = parser.parse_args()
 
