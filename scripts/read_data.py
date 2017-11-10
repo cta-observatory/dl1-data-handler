@@ -58,7 +58,7 @@ def makeSCTImageArray(
     MODULE_START_POSITIONS = [
             (((CAMERA_DIM[0] - MODULES_PER_ROW[j] * MODULE_DIM[0]) / 2) +
              (MODULE_DIM[0] * i), j * MODULE_DIM[1])
-            for j in range(ROWS) for i in range(MODULES_PER_ROW[j])] 
+            for j in range(ROWS) for i in range(MODULES_PER_ROW[j])]
 
     if dim_order == 'channels_first':
         im_array = np.zeros(
@@ -91,16 +91,16 @@ def makeSCTImageArray(
                 for (x_coord, y_coord) in scaled_region:
                     if dim_order == 'channels_first':
                         im_array[0, x_coord, y_coord] = \
-                        pixels_vector[pixel_num]
+                            pixels_vector[pixel_num]
                         if include_timing:
                             im_array[1, x_coord, y_coord] = \
-                            peaks_vector[pixel_num]
+                                peaks_vector[pixel_num]
                     elif dim_order == 'channels_last':
                         im_array[x_coord, y_coord, 0] = \
-                        pixels_vector[pixel_num]
+                            pixels_vector[pixel_num]
                         if include_timing:
-                            im_array[x_coord, y_coord,1] = \
-                            peaks_vector[pixel_num]
+                            im_array[x_coord, y_coord, 1] = \
+                                peaks_vector[pixel_num]
 
                 pixel_num += 1
 

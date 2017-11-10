@@ -32,18 +32,18 @@ class ImageExtractor:
     IMAGE_SHAPE = {'SCT': (120, 120)}
 
     def __init__(self,
-                 output_path, 
-                 bins_cuts_dict, 
-                 mode, 
+                 output_path,
+                 bins_cuts_dict,
+                 mode,
                  tel_type_mode,
-                 storage_mode, 
-                 img_channels, 
+                 storage_mode,
+                 img_channels,
                  include_timing,
-                 img_scale_factors, 
-                 img_dtype, 
-                 img_dim_order, 
+                 img_scale_factors,
+                 img_dtype,
+                 img_dim_order,
                  energy_bins,
-                 energy_bin_units, 
+                 energy_bin_units,
                  energy_recon_bins):
 
         self.output_path = output_path
@@ -64,9 +64,9 @@ class ImageExtractor:
         self.energy_recon_bins = energy_recon_bins
 
         self.trace_converter = trace_converter.TraceConverter(
-            self.img_dtype, 
+            self.img_dtype,
             self.img_dim_order,
-            self.img_channels, 
+            self.img_channels,
             self.img_scale_factors)
 
     @classmethod
@@ -110,7 +110,7 @@ class ImageExtractor:
             e_max = float(config['energy_bins']['max'])
             e_bin_size = float(config['energy_bins']['bin_size'])
             num_e_bins = int((e_max - e_min) / e_bin_size)
-            energy_bins = [(e_min + i * e_bin_size, e_min + 
+            energy_bins = [(e_min + i * e_bin_size, e_min +
                             (i + 1) * e_bin_size)
                            for i in range(num_e_bins)]
             energy_recon_bins = None
@@ -125,18 +125,18 @@ class ImageExtractor:
                                   (i + 1) * erec_bin_size)
                                  for i in range(num_erec_bins)]
 
-        return cls(output_path, 
-                   bins_cuts_dict, 
-                   mode, 
+        return cls(output_path,
+                   bins_cuts_dict,
+                   mode,
                    tel_type_mode,
-                   storage_mode, 
-                   img_channels, 
-                   include_timing, 
+                   storage_mode,
+                   img_channels,
+                   include_timing,
                    img_scale_factors,
-                   img_dtype, 
-                   img_dim_order, 
+                   img_dtype,
+                   img_dim_order,
                    energy_bins,
-                   energy_bin_units, 
+                   energy_bin_units,
                    energy_recon_bins)
 
     def select_telescopes(self, data_file):
@@ -159,8 +159,8 @@ class ImageExtractor:
                 else:
                     logger.error("Unknown telescope type
                                  (invalid num_pixels).")
-                    raise ValueError("Unknown telescope type (invalid 
-                                     num_pixels: {}).".format(
+                    raise ValueError("Unknown telescope type (invalid "
+                                     "num_pixels: {}).".format(
                                          event.inst.num_pixels[tel_id]))
 
         # select telescopes by type
@@ -235,7 +235,7 @@ class ImageExtractor:
         if not f.__contains__('/Tel_Table'):
             tel_pos_table = f.create_table("/", 'Tel_Table',
                                            row_descriptors.Tel,
-                                           ("Table of telescope ids, " 
+                                           ("Table of telescope ids, "
                                             "positions, and types"))
             tel_row = tel_pos_table.row
 
@@ -291,8 +291,8 @@ class ImageExtractor:
                     for tel_id in selected_tels[tel_type]:
                         if self.storage_mode == 'all':
                             descr2["T" + str(tel_id)] = UInt16Col(
-                                shape=(img_width, 
-                                       img_length, 
+                                shape=(img_width,
+                                       img_length,
                                        self.img_channels))
                         elif self.storage_mode == 'mapped':
                             if not group.__contains__('T' + str(tel_id)):
@@ -300,11 +300,11 @@ class ImageExtractor:
                                                         'T' + str(tel_id),
                                                         Int16Atom(),
                                                         (0, 
-                                                         img_width, 
-                                                         img_length, 
+                                                         img_width,
+                                                         img_length,
                                                          self.img_channels))
 
-                table2 = f.create_table(group, 'temp', descr2, 
+                table2 = f.create_table(group, 'temp', descr2,
                                         "Table of Events")
                 table.attrs._f_copy(table2)
                 table.remove()
@@ -319,9 +319,11 @@ class ImageExtractor:
         passing_count = 0
 
         source = hessio_event_source(data_file,
-                                     allowed_tels=[j 
-                                        for i in selected_tels.keys()
-                                        for j in selected_tels[i]],
+                                     allowed_tels=[j
+                                                   for i
+                                                   in selected_tels.keys()
+                                                   for j
+                                                   in selected_tels[i]],
                                      max_events=max_events)
 
         for event in source:
@@ -341,7 +343,8 @@ class ImageExtractor:
                 # else:
                 # continue
 
-            # calibrate raw image (charge extraction + pedestal subtraction + trace integration)
+            # calibrate raw image (charge extraction +
+            # pedestal subtraction + trace integration)
             # NOTE: MUST BE MOVED UP ONCE ENERGY RECONSTRUCTION AND BIN NUMBERS
             # ARE CALCULATED LOCALLY
             cal.calibrate(event)
@@ -514,7 +517,7 @@ if __name__ == '__main__':
         help='wildcard path to input .simtel files')
     parser.add_argument(
         'hdf5_path',
-        help=('path of output HDF5 file, or 
+        help=('path of output HDF5 file, or
               currently existing file to append to'))
     parser.add_argument(
         'config_file',

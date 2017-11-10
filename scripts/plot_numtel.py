@@ -1,4 +1,4 @@
-import image_extractor 
+import image_extractor
 
 # telescope constants
 SCT_IMAGE_WIDTH = 120
@@ -87,7 +87,6 @@ for event in source:
 
 
 # plot
-
 plt.hist(trig_nums_list, bins=range(NUM_TEL + 1))
 plt.xlabel('Number of triggered telescopes')
 plt.ylabel('Number of events')
