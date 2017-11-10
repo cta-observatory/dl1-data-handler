@@ -4,10 +4,11 @@ from PIL import Image, ImageOps
 import random
 import numpy as np
 
+
 def normalize(image_array):
 
     max_value = np.amax(image_array)
-    
+
     if max_value == 0:
         return image_array
 
@@ -26,7 +27,7 @@ if __name__ == '__main__':
     # parser.add_argument('tel_id')
     args = parser.parse_args()
 
-    f = open_file(args.data_file, mode = "r", title = "Data file")
+    f = open_file(args.data_file, mode="r", title="Data file")
 
     row_str = 'f.root.E{}.Events'.format(int(args.bin_number))
     table = eval(row_str)
@@ -36,13 +37,13 @@ if __name__ == '__main__':
     if args.random:
         # select random run_number, event_number combination
         unique_events = [(x['run_number'], x['event_number']) for x in table.iterrows()]
-        run_number_selection, event_number_selection = random.choice(unique_events)
+        run_num_selected, event_num_selected = random.choice(unique_events)
 
     else:
-        run_number_selection = int(args.run_number)
-        event_number_selection = int(args.event_number)
+        run_num_selected = int(args.run_number)
+        event_num_selected = int(args.event_number)
 
-    result = [ row[j]  for j in tel_ids for row in table.where('(event_number == event_number_selection) & (run_number == run_number_selection)') ]
+    result = [row[j]  for j in tel_ids for row in table.where('(event_number == event_num_selected)&(run_number == run_num_selected)')]
 
     # print(len(result))
 
@@ -51,17 +52,15 @@ if __name__ == '__main__':
         full_image_array = np.array(i)
         # print(full_image_array.shape)
         # full_image = Image.fromarray(full_image_array,'RGB')
-        charge_image_array = full_image_array[:,:, 0].astype(np.uint32)
+        charge_image_array = full_image_array[:, :, 0].astype(np.uint32)
         # charge_image_array = normalize(charge_image_array)
         # print(charge_image_array.shape)
         charge_image = Image.fromarray(charge_image_array, 'I')
-        timing_image_array = full_image_array[:,:, 1].astype(np.uint32)
+        timing_image_array = full_image_array[:, :, 1].astype(np.uint32)
         # timing_image_array = normalize(timing_image_array)
         # print(timing_image_array.shape)
         timing_image = Image.fromarray(timing_image_array, 'I')
-        
+ 
         # full_image.save("test_full.png")
         charge_image.save("test_charge.png")
         timing_image.save("test_timing.png")
-
-

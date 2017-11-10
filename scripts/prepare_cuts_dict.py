@@ -10,10 +10,14 @@ import pickle as pkl
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
-        description='Load mscw files to get event-level parameters and apply desired bins/cuts. Then writes dictionary mapping (runNumber,eventNumber) to (energy bin, reconstructed energy).')
+        description=("Load mscw files to get event-level parameters and "
+                     "apply desired bins/cuts. Then writes dictionary "
+                     "mapping (runNumber,eventNumber) to "
+                     "(energy bin, reconstructed energy).")
     parser.add_argument(
         'mscw_files',
-        help='path of mscw files containing event-level reconstructed parameters for applying cuts/bins')
+        help=("path of mscw files containing event-level"
+              "reconstructed parameters for applying cuts/bins")
     # parser.add_argument('config_file',help='configuration file')
     parser.add_argument(
         'output_filename',
@@ -27,8 +31,14 @@ if __name__ == '__main__':
     MAX_FLOAT = float('inf')
     MAX_INT = sys.maxsize
 
-    CUT_PARAMETERS = [('MSCW', (-2.0, 2.0)), ('MSCL', (-2.0, 5.0)), ('EChi2S', (0.0, MAX_FLOAT)), ('ErecS', (0.0, MAX_FLOAT)), (
-        'EmissionHeight', (0.0, 50.0)), (('MCxoff', 'MCyoff'), (0.0, 3.0)), ('NImages', (3, MAX_INT)), ('dES', (0.0, MAX_FLOAT))]
+    CUT_PARAMETERS = [('MSCW', (-2.0, 2.0)), 
+                      ('MSCL', (-2.0, 5.0)), 
+                      ('EChi2S', (0.0, MAX_FLOAT)), 
+                      ('ErecS', (0.0, MAX_FLOAT)), 
+                      ('EmissionHeight', (0.0, 50.0)),
+                      (('MCxoff', 'MCyoff'), (0.0, 3.0)), 
+                      ('NImages', (3, MAX_INT)), 
+                      ('dES', (0.0, MAX_FLOAT))]
 
     # create TChain and add all relevant files
     chain = TChain('data')
@@ -50,22 +60,19 @@ if __name__ == '__main__':
         for i in CUT_PARAMETERS:
             if not isinstance(i[0], tuple):
                 CUTS.append(
-                    getattr(entry,
-                            i[0]) >= i[1][0] and getattr(entry,
-                                                         i[0]) < i[1][1])
+                    getattr(entry,i[0]) >= i[1][0] and 
+                    getattr(entry,i[0]) < i[1][1])
             else:
                 CUTS.append(
-                    math.sqrt(getattr(entry,
-                                      i[0][0])**2 + getattr(entry,
-                                                            i[0][1])**2) >= i[1][0] and math.sqrt(getattr(entry,
-                                                                                                          i[0][0])**2 + getattr(entry,
-                                                                                                                                i[0][1])**2) < i[1][1])
-
-        # print(CUTS)
+                    math.sqrt(getattr(entry,i[0][0])**2 + 
+                              getattr(entry,i[0][1])**2) >= i[1][0] and
+                    math.sqrt(getattr(entry,i[0][0])**2 +
+                              getattr(entry,i[0][1])**2) < i[1][1])
 
         if all(CUTS):
             for j in range(len(ENERGY_BINS)):
-                if entry.ErecS >= ENERGY_BINS[j][0] and entry.ErecS < ENERGY_BINS[j][1]:
+                if entry.ErecS >= ENERGY_BINS[j][0] \
+                and entry.ErecS < ENERGY_BINS[j][1]:
                     event_bin_Erec_dict[(
                                         entry.runNumber,
                                         entry.eventNumber)] = (j,
