@@ -7,7 +7,6 @@ notifications:
         on_failure: change # default: always
 
 install:
-      - pwd
       - sudo apt-get update
         # We do this conditionally because it saves us some downloading if the
         # version is the same.
@@ -23,24 +22,25 @@ install:
       - conda update -q conda
         # Useful for debugging any issues with conda
       - conda info -a
-        #get most recent dev version of ctapipe
+        #get most recent dev version of ctapipe and install from source
+      - cd ..
       - wget -q https://github.com/cta-observatory/ctapipe/archive/master.zip
       - unzip -qq master.zip
       - cd ctapipe-master
       - conda env create -q -n test -f environment.yml
       - source activate test
       - python setup.py install
+        # get most recent dev version of ctapipe-extra and install from source
       - cd ..
       - rm master.zip
       - wget -q https://github.com/cta-observatory/ctapipe-extra/archive/master.zip
       - unzip -qq master.zip
       - cd ctapipe-extra-master
       - python setup.py install
-      - cd ..
+      - cd ../image-extractor
       - conda install -q --yes --file requirements.txt -c cta-observatory -c conda-forge -c openastronomy
       - python setup.py install
 script: 
-      - cd tests
       - pytest --pep8;
 after_success:
       - coveralls
