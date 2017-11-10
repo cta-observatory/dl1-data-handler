@@ -19,28 +19,27 @@ from astropy import units as u
 from PIL import Image
 
 IMG_DTYPE = 'int32'
-
 GLOBAL_COUNT = 0
 
 
 def makeSCTImageArray(
-    pixels_vector,
-    peaks_vector,
-    image_mode,
-    scale_factor,
-    img_dtype,
-    dim_order):
+        pixels_vector,
+        peaks_vector,
+        img_mode,
+        scale_factor,
+        img_dtype,
+        dim_order):
 
-    if image_mode == 'PIXELS_3C':
+    if img_mode == 'PIXELS_3C':
         channels = 3
         include_timing = False
-    elif image_mode == 'PIXELS_1C':
+    elif img_mode == 'PIXELS_1C':
         channels = 1
         include_timing = False
-    elif image_mode == 'PIXELS_TIMING_2C':
+    elif img_mode == 'PIXELS_TIMING_2C':
         channels = 2
         include_timing = True
-    elif image_mode == 'PIXELS_TIMING_3C':
+    elif img_mode == 'PIXELS_TIMING_3C':
         channels = 3
         include_timing = True
     else:
@@ -58,8 +57,8 @@ def makeSCTImageArray(
     # starting modules from the bottom row, left to right
     MODULE_START_POSITIONS = [
             (((CAMERA_DIM[0] - MODULES_PER_ROW[j] * MODULE_DIM[0]) / 2) +
-            (MODULE_DIM[0] * i), j * MODULE_DIM[1])
-            for j in range(ROWS) for i in range(MODULES_PER_ROW[j])]  
+             (MODULE_DIM[0] * i), j * MODULE_DIM[1])
+            for j in range(ROWS) for i in range(MODULES_PER_ROW[j])] 
 
     if dim_order == 'channels_first':
         im_array = np.zeros(
@@ -78,7 +77,7 @@ def makeSCTImageArray(
         pixel_num = 0
 
         assert len(pixels_vector) == NUM_PIXELS
-        if image_mode == 'PIXELS_TIMING_2C' or image_mode == 'PIXELS_TIMING_3C':
+        if img_mode == 'PIXELS_TIMING_2C' or img_mode == 'PIXELS_TIMING_3C':
             assert len(peaks_vector) == NUM_PIXELS
 
         for (x_start, y_start) in MODULE_START_POSITIONS:
@@ -91,29 +90,17 @@ def makeSCTImageArray(
 
                 for (x_coord, y_coord) in scaled_region:
                     if dim_order == 'channels_first':
-                        im_array[
-                            0,
-                            x_coord,
-                            y_coord] = pixels_vector[
-                                pixel_num]
+                        im_array[0, x_coord, y_coord] = \
+                        pixels_vector[pixel_num]
                         if include_timing:
-                            im_array[
-                                1,
-                                x_coord,
-                                y_coord] = peaks_vector[
-                                    pixel_num]
+                            im_array[1, x_coord, y_coord] = \
+                            peaks_vector[pixel_num]
                     elif dim_order == 'channels_last':
-                        im_array[
-                            x_coord,
-                            y_coord,
-                            0] = pixels_vector[
-                                pixel_num]
+                        im_array[x_coord, y_coord, 0] = \
+                        pixels_vector[pixel_num]
                         if include_timing:
-                            im_array[
-                                x_coord,
-                                y_coord,
-                                1] = peaks_vector[
-                                    pixel_num]
+                            im_array[x_coord, y_coord,1] = \
+                            peaks_vector[pixel_num]
 
                 pixel_num += 1
 
