@@ -1,5 +1,6 @@
 import argparse
 import os
+import logging
 
 from configobj import ConfigObj
 from validate import Validator
@@ -40,6 +41,8 @@ dES = tuple(default=list(0.0,None))
     bin_size = float(default=0.05)
 """
 
+logger = logging.getLogger(__name__)
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Generate/validate config files')
@@ -48,7 +51,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.mode == 'config':
-
         spec = s.split("\n")
         config = ConfigObj(args.file, configspec=spec)
         validator = Validator()
@@ -56,21 +58,15 @@ if __name__ == '__main__':
         config.filename = args.file
         config.write()
 
-    elif args.mode == 'val':
-    
+    elif args.mode == 'val':    
         spec = s.split('\n')
-        config = ConfigObj(args.file,configspec=spec)
+        config = ConfigObj(args.file, configspec=spec)
         validator = Validator()
         assert config.validate(validator, copy=True), "Error"
 
     elif args.mode == 'spec':
-
         with open(args.file, 'wb') as f:
             write(s)
- 
+
     else:
         print("Invalid mode")
-
-
-    
-
