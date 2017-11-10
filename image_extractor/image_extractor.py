@@ -1,21 +1,18 @@
+# -*- coding: utf-8 -*-
 """
-ImageExtractor class for writing processed data
-from ctapipe containers to HDF5 files.
+Module for main ImageExtractor class and command line tool.
 """
+
 import random
 import argparse
-import math
 import pickle as pkl
 import logging
 import glob
-import shutil
-import os
 
 from configobj import ConfigObj
 from validate import Validator
 import numpy as np
-from astropy import units as u
-from tables import *
+import tables
 from ctapipe.io.hessio import hessio_event_source
 from ctapipe.calib import pedestals, CameraCalibrator
 
@@ -27,9 +24,33 @@ logger = logging.getLogger(__name__)
 
 
 class ImageExtractor:
+    """Class to handle reading in simtel files and writing to HDF5.
+
+    Requires an output file path (.h5) to write/append to, and a
+    pickled bins cuts dictionary to apply bins and cuts.
+
+    Configuration settings can be initialized with a config object
+    (from validating a ConfigObj configuration file), which is recommended,
+    or by using the normal constructor and passing parameters manually (not
+    recommended because settings are not validated and must be manually
+    checked for agreement with allowed options.
+
+    Once initialized, can read in simtel files and write to the output file
+    in accordance with the provided configuration settings.
+
+    Attributes
+    ----------
+    NUM_PIXELS : dict(str:int)
+        The number of camera pixels for each camera type.
+        Used to identify camera types in ctapipe container.
+    IMAGE_SHAPES : dict(str:tuple(int,int))
+        The shape of the output image for each camera type. 
+        Defined in TraceConverter.
+
+    """
 
     NUM_PIXELS = {'LST': 1855, 'SCT': 11328, 'SST': 0}
-    IMAGE_SHAPE = {'SCT': (120, 120)}
+    IMAGE_SHAPE = trace_converter.TraceConverter.IMAGE_SHAPE
 
     def __init__(self,
                  output_path,
@@ -45,6 +66,24 @@ class ImageExtractor:
                  energy_bins,
                  energy_bin_units,
                  energy_recon_bins):
+
+        """Constructor for ImageExtractor
+
+        Parameters
+        ----------
+        output_path : str
+        mode : str
+        tel_type_mode : str
+        storage_mode : str
+        img_channels : int
+        include_timing : bool
+        img_scale_factors : dict(str:int)
+        img_dtype : str
+        img_dim_order : str
+        energy_bins : list(tuple(float,float))
+        energy_bin_units : str
+        energy_recon_bins : list(tuple(float,float))
+        """
 
         self.output_path = output_path
         self.bins_cuts_dict = bins_cuts_dict
@@ -71,6 +110,28 @@ class ImageExtractor:
 
     @classmethod
     def from_config(cls, output_path, bins_cuts_dict, config):
+        """Initializes an ImageExtractor from a ConfigObj object
+
+        Note
+        ----
+        Unless the chosen ConfigObj has been validated using Validator(),
+        the items in it will not be converted to the correct types
+        and errors will ensue. 
+
+        Parameters
+        ----------
+        output_path : str
+            A filepath string (relative or absolute) indicating the
+            location and name of the output .h5 file to write to.
+        bins_cuts_dict : dict(tuple(int,int):tuple(int,float))
+            A dictionary containing a mapping from (run number, event id)
+            to (bin number, reconstructed energy) for all events passing the
+            preselection cuts. Usually pre-computed using ROOT EventDisplay
+            with Python. Bin and cut settings should be taken from the
+            config file.
+        config : ConfigObj
+            A dictionary-style object containing configuration parameters.
+        """
 
         img_mode = config['image']['mode']
 
@@ -140,6 +201,23 @@ class ImageExtractor:
                    energy_recon_bins)
 
     def select_telescopes(self, data_file):
+        """Method to read telescope info from a given simtel file
+        and select the desired telescopes indicated by self.tel_type_mode.
+
+        Parameters
+        ----------
+        data_file: str
+            The string path (relative or absolute) to the input simtel.gz 
+            file.
+
+        Returns
+        -------
+        tuple(dict(str:list(int)),int)
+            Returns a dictionary of selected telescopes of format
+            dict(<tel_type>:list(<tel_id>)) and an int number of total
+            telescopes
+
+        """
 
         logger.info("Getting telescope types...")
 
@@ -196,8 +274,11 @@ class ImageExtractor:
         return selected_tels, num_tel
 
     def process_data(self, data_file, max_events):
-        """
-        Function to read and write data from ctapipe containers to HDF5
+        """Main method to read a simtel.gz data file, process the event data,
+        and write it to a formatted HDF5 data file.
+
+        Parameters
+
         """
 
         logger.info("Mode: ", self.mode)
