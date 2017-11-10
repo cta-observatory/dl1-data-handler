@@ -13,7 +13,8 @@ class TraceConverter:
 
     def convert_SCT(self, pixels_vector, peaks_vector):
         """
-        Converter from ctapipe image pixel vector, peak position vector to numpy array format.
+        Converter from ctapipe image pixel vector, 
+        peak position vector to numpy array format.
         """
         # hardcoded to correct SCT values
         # TODO: find more natural way to handle these?
@@ -41,10 +42,10 @@ class TraceConverter:
             5]
 
         # counting from the bottom row, left to right
-        MODULE_START_POSITIONS = [(
-                                  ((image_shape[0] - MODULES_PER_ROW[j] * MODULE_DIM[0]) / 2) +
-                                  (MODULE_DIM[0] * i),
-                                  j * MODULE_DIM[1]) for j in range(ROWS) for i in range(MODULES_PER_ROW[j])]
+        MODULE_START_POSITIONS = [
+            (((image_shape[0] - MODULES_PER_ROW[j] * MODULE_DIM[0]) / 2) +
+            (MODULE_DIM[0] * i), j * MODULE_DIM[1]) 
+            for j in range(ROWS) for i in range(MODULES_PER_ROW[j])]
 
         if self.dim_order == 'channels_first':
             im_array = np.zeros(
@@ -76,7 +77,7 @@ class TraceConverter:
                     x = (int(x_start + int(i / MODULE_DIM[0]))) * scale_factor
                     y = (y_start + i % MODULE_DIM[1]) * scale_factor
 
-                    scaled_region = [(x + i, y + j) for i in range(0, scale_factor)
+                    scaled_region = [(x+i, y+j) for i in range(0, scale_factor)
                                      for j in range(0, scale_factor)]
 
                     for (x_coord, y_coord) in scaled_region:

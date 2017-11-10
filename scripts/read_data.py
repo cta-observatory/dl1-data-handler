@@ -25,11 +25,11 @@ GLOBAL_COUNT = 0
 
 def makeSCTImageArray(
     pixels_vector,
-     peaks_vector,
-     image_mode,
-     scale_factor,
-     img_dtype,
-     dim_order):
+    peaks_vector,
+    image_mode,
+    scale_factor,
+    img_dtype,
+    dim_order):
 
     if image_mode == 'PIXELS_3C':
         channels = 3
@@ -55,8 +55,11 @@ def makeSCTImageArray(
     MODULE_SIZE = MODULE_DIM[0] * MODULE_DIM[1]
     MODULES_PER_ROW = [5, 9, 11, 13, 13, 15, 15, 15, 15, 15, 13, 13, 11, 9, 5]
 
-    MODULE_START_POSITIONS = [(((CAMERA_DIM[0] - MODULES_PER_ROW[j] * MODULE_DIM[0]) / 2) + (MODULE_DIM[0] * i), j * MODULE_DIM[1])
-                              for j in range(ROWS) for i in range(MODULES_PER_ROW[j])]  # counting from the bottom row, left to right
+    # starting modules from the bottom row, left to right
+    MODULE_START_POSITIONS = [
+            (((CAMERA_DIM[0] - MODULES_PER_ROW[j] * MODULE_DIM[0]) / 2) +
+            (MODULE_DIM[0] * i), j * MODULE_DIM[1])
+            for j in range(ROWS) for i in range(MODULES_PER_ROW[j])]  
 
     if dim_order == 'channels_first':
         im_array = np.zeros(
@@ -124,7 +127,7 @@ def makeSCTImageArray(
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
-        description='Used to test reading various parameters from simtel files.')
+        description='Reads event parameters directly from simtel files.')
     parser.add_argument('data_file', help='path to input .simtel file')
     args = parser.parse_args()
 
@@ -157,11 +160,11 @@ if __name__ == '__main__':
 
     # impact reconstructor
 
-   # load all SCT data from simtel file
+    # load all SCT data from simtel file
     source = hessio_event_source(
         args.data_file,
         allowed_tels=SCT_list,
-     max_events=100)
+        max_events=100)
 
     pedestal_start = 48
     pedestal_end = None
@@ -230,7 +233,9 @@ if __name__ == '__main__':
                 # pix_x, pix_y= event.inst.pixel_pos[tel_id]
                 # image_orig = event.dl1.tel[tel_id].image[0]
 
-                # hillas_params_dict[tel_id] = hillas_parameters_4(pix_x,pix_y,image_orig)
+                # hillas_params_dict[tel_id] = hillas_parameters_4(pix_x,
+                #                                                  pix_y,
+                #                                                  image_orig)
                 # tel_phi_dict[tel_id] = event.mc.tel[tel_id]['altitude_cor']
                 # tel_theta_dict[tel_id] = event.mc.tel[tel_id]['azimuth_cor']
 
@@ -238,5 +243,9 @@ if __name__ == '__main__':
                 # print(hillas_params_dict[tel_id])
                 # print(X[tel_id])
 
-            # hillas_reconstruction = hillas_reco.predict(hillas_dict=hillas_params_dict,tel_phi=tel_phi_dict,tel_theta=tel_theta_dict,inst=event.inst)
+            # hillas_reconstruction = hillas_reco.predict(
+            #                              hillas_dict=hillas_params_dict,
+            #                              tel_phi=tel_phi_dict,
+            #                              tel_theta=tel_theta_dict,
+            #                              inst=event.inst)
             # print(hillas_reconstruction)
