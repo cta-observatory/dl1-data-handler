@@ -13,10 +13,11 @@ if __name__ == '__main__':
         description=("Load mscw files to get event-level parameters and "
                      "apply desired bins/cuts. Then writes dictionary "
                      "mapping (runNumber,eventNumber) to "
-                     "(energy bin, reconstructed energy).")
+                     "(energy bin, reconstructed energy)."))
     parser.add_argument('mscw_files',
                         help=("path of mscw files containing event-level"
-                        "reconstructed parameters for applying cuts/bins"))
+                              "reconstructed parameters for applying"
+                              "cuts/bins"))
     # parser.add_argument('config_file',help='configuration file')
     parser.add_argument('output_filename',
                         help='name of output .pkl dictionary file')

@@ -299,7 +299,7 @@ class ImageExtractor:
                                 array = f.create_earray(group,
                                                         'T' + str(tel_id),
                                                         Int16Atom(),
-                                                        (0, 
+                                                        (0,
                                                          img_width,
                                                          img_length,
                                                          self.img_channels))
@@ -352,7 +352,9 @@ class ImageExtractor:
             # compute energy reconstruction bin true label
             if self.mode == 'energy_recon':
                 for i in range(len(self.energy_recon_bins)):
-                    if event.mc.energy.value >= 10**(self.energy_recon_bins[i][0]) and event.mc.energy.value < 10**(self.energy_recon_bins[i][1]):
+                    mc_energy = event.mc.energy.value
+                    if mc_energy >= 10**(self.energy_recon_bins[i][0]) and \
+                        mc_energy < 10**(self.energy_recon_bins[i][1]):
                         erec_bin_label = i
                         break
 
