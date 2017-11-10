@@ -1,9 +1,8 @@
 import numpy as np
 
-from .image_extractor import ImageExtractor
-
-
 class TraceConverter:
+
+    IMAGE_SHAPE = {'SCT': (120, 120)}
 
     def __init__(self, img_dtype, dim_order, num_channels, scale_factors):
         self.img_dtype = img_dtype
@@ -18,7 +17,7 @@ class TraceConverter:
         """
         # hardcoded to correct SCT values
         # TODO: find more natural way to handle these?
-        image_shape = ImageExtractor.IMAGE_SHAPE['SCT']
+        image_shape = IMAGE_SHAPE['SCT']
         scale_factor = self.scale_factors['SCT']
 
         ROWS = 15
