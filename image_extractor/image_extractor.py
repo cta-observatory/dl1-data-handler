@@ -354,7 +354,7 @@ class ImageExtractor:
                 for i in range(len(self.energy_recon_bins)):
                     mc_energy = event.mc.energy.value
                     if mc_energy >= 10**(self.energy_recon_bins[i][0]) and \
-                        mc_energy < 10**(self.energy_recon_bins[i][1]):
+                            mc_energy < 10**(self.energy_recon_bins[i][1]):
                         erec_bin_label = i
                         break
 
