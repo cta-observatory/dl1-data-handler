@@ -17,7 +17,10 @@ def normalize(image_array):
         return image_array_normalized
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Visualize a particular telescope image from a given event number (and run number). Seperately shows visualization for the charge image and the timing image.')
+    parser = argparse.ArgumentParser(
+        description=('Visualize a particular telescope image from a '
+                     'given event number (and run number). Seperately shows '
+                     'visualization for the charge image and the timing image.'))
     parser.add_argument('data_file', help='path to input hdf5 file')
     parser.add_argument('bin_number')
     parser.add_argument('--event_number')
@@ -36,18 +39,19 @@ if __name__ == '__main__':
 
     if args.random:
         # select random run_number, event_number combination
-        unique_events = [(x['run_number'], x['event_number']) for x in table.iterrows()]
+        unique_events = [(x['run_number'], x['event_number']) 
+                         for x in table.iterrows()]
         run_num_selected, event_num_selected = random.choice(unique_events)
 
     else:
         run_num_selected = int(args.run_number)
         event_num_selected = int(args.event_number)
 
-    result = [row[j]  for j in tel_ids for row in table.where('(event_number == event_num_selected)&(run_number == run_num_selected)')]
+    result = [row[j] 
+              for j in tel_ids 
+              for row in table.where('(event_number == event_num_selected) 
+                                     & (run_number == run_num_selected)')]
 
-    # print(len(result))
-
-    # for i in result:
     for i in [result[0]]:
         full_image_array = np.array(i)
         # print(full_image_array.shape)
@@ -60,7 +64,7 @@ if __name__ == '__main__':
         # timing_image_array = normalize(timing_image_array)
         # print(timing_image_array.shape)
         timing_image = Image.fromarray(timing_image_array, 'I')
- 
+
         # full_image.save("test_full.png")
         charge_image.save("test_charge.png")
         timing_image.save("test_timing.png")
