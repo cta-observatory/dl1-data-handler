@@ -1,15 +1,4 @@
-import numpy as np
-from tables import *
-from ctapipe.io.hessio import hessio_event_source
-# from ctapipe.visualization import CameraDisplay
-from ctapipe.instrument import CameraGeometry
-from ctapipe.image.charge_extractors import NeighbourPeakIntegrator
-# from ctapipe.reco import EnergyRegressor
-from ctapipe.calib import pedestals, CameraCalibrator
-from astropy import units as u
-from PIL import Image
-import matplotlib.pyplot as plt
-import pickle as pkl
+import image_extractor 
 
 # telescope constants
 SCT_IMAGE_WIDTH = 120
@@ -21,7 +10,7 @@ SST_NUM_PIXELS = 0  # update
 input_simtel_file = ""
 
 # collect telescope lists
-source_temp = hessio_event_source(input_simtel_file,max_events=1)
+source_temp = hessio_event_source(input_simtel_file, max_events=1)
 
 LST_list = []
 SCT_list = []
@@ -123,6 +112,6 @@ plt.savefig('combined_num_trig.png')
 
 print(
     "Mean number of triggered telescopes (all) : {}".format(
-    np.mean(trig_nums_list)))
+        np.mean(trig_nums_list)))
 print("Mean number of triggered telescopes (passing) : {}".format(
-    np.mean(passing_trig_nums_list)))
+        np.mean(passing_trig_nums_list)))
