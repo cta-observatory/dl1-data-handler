@@ -58,7 +58,7 @@ if __name__ == '__main__':
         config.filename = args.file
         config.write()
 
-    elif args.mode == 'val':    
+    elif args.mode == 'val':
         spec = s.split('\n')
         config = ConfigObj(args.file, configspec=spec)
         validator = Validator()
