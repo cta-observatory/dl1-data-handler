@@ -18,7 +18,7 @@ from ctapipe.calib import pedestals, CameraCalibrator
 
 import config
 import trace_converter
-import row_descriptors
+import row_types
 
 logger = logging.getLogger(__name__)
 
@@ -315,7 +315,7 @@ class ImageExtractor:
         # create single table in root group for telescope information
         if not f.__contains__('/Tel_Table'):
             tel_pos_table = f.create_table("/", 'Tel_Table',
-                                           row_descriptors.Tel,
+                                           row_types.Tel,
                                            ("Table of telescope ids, "
                                             "positions, and types"))
             tel_row = tel_pos_table.row
@@ -337,7 +337,7 @@ class ImageExtractor:
         for group in groups:
             if not group.__contains__('Events'):
                 table = f.create_table(group, 'Events',
-                                       row_descriptors.Event,
+                                       row_types.Event,
                                        "Table of Events")
                 descr = table.description._v_colobjects
                 descr2 = descr.copy()
