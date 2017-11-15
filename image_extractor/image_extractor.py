@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 class ImageExtractor:
 
-    NUM_PIXELS = {'LST':1855,'SCT':11328,'SST':0}
+    NUM_PIXELS = {'LST':1855,'MST':1764,'SCT':11328,'SST':0}
     IMAGE_SHAPE = {'SCT':(120,120)}
 
     def __init__(self, output_path,bins_cuts_dict,mode,tel_type_mode,storage_mode,
@@ -131,7 +131,7 @@ class ImageExtractor:
         #collect telescope lists 
         source_temp = hessio_event_source(data_file,max_events=1)
 
-        all_tels = {'SST': [], 'SCT': [], 'LST': []}
+        all_tels = {'SST': [], 'SCT': [], 'MST': [], 'LST': []}
 
         for event in source_temp: 
             for tel_id in event.inst.telescope_ids:
@@ -139,6 +139,8 @@ class ImageExtractor:
                     all_tels['SCT'].append(tel_id)
                 elif event.inst.num_pixels[tel_id] == self.NUM_PIXELS['LST']:
                     all_tels['LST'].append(tel_id)
+                elif event.inst.num_pixels[tel_id] == self.NUM_PIXELS['MST']:
+                    all_tels['MST'].append(tel_id)
                 elif event.inst.num_pixels[tel_id] == self.NUM_PIXELS['SST']:
                     all_tels['SST'].append(tel_id)
                 else:
@@ -192,6 +194,7 @@ class ImageExtractor:
         f = open_file(self.output_path, mode = "a", title = "Output File") 
 
         #create groups for each energy bin
+        # (Future flattening) if self.mode == 'gh_class' and self.bins_cuts_dict is not None:
         if self.mode == 'gh_class':
             #create groups for each energy bin (naming convention = "E[NUM_BIN]")
             groups = []
@@ -204,7 +207,8 @@ class ImageExtractor:
                     group._v_attrs.units = self.energy_bin_units
                 group = eval('f.root.E{}'.format(str(i)))
                 groups.append(group)
-        elif mode == 'energy_recon':
+        # (Future flattening) else:
+        elif self.mode == 'energy_recon':
             groups = [f.root]
 
         #read and select telescopes
@@ -244,16 +248,19 @@ class ImageExtractor:
         
                 for tel_type in selected_tels.keys():
                     if tel_type == 'SST':
-                        img_width = self.IMAGE_SHAPE['SST'][0]*self.img_scale_factors['SST']
-                        img_length = self.IMAGE_SHAPE['SST'][1]*self.img_scale_factors['SST']
+                        if self.format_mode == '2d':
+                            img_width = self.IMAGE_SHAPE['SST'][0]*self.img_scale_factors['SST']
+                            img_length = self.IMAGE_SHAPE['SST'][1]*self.img_scale_factors['SST']
                         num_pixels = self.NUM_PIXELS['SST']
                     elif tel_type == 'SCT':
-                        img_width = self.IMAGE_SHAPE['SCT'][0]*self.img_scale_factors['SCT']
-                        img_length = self.IMAGE_SHAPE['SCT'][1]*self.img_scale_factors['SCT']
+                        if self.format_mode == '2d':
+                            img_width = self.IMAGE_SHAPE['SCT'][0]*self.img_scale_factors['SCT']
+                            img_length = self.IMAGE_SHAPE['SCT'][1]*self.img_scale_factors['SCT']
                         num_pixels = self.NUM_PIXELS['SCT']
                     elif tel_type == 'LST':
-                        img_width = self.IMAGE_SHAPE['LST'][0]*self.img_scale_factors['LST']
-                        img_length = self.IMAGE_SHAPE['LST'][1]*self.img_scale_factors['LST']
+                        if self.format_mode == '2d':
+                            img_width = self.IMAGE_SHAPE['LST'][0]*self.img_scale_factors['LST']
+                            img_length = self.IMAGE_SHAPE['LST'][1]*self.img_scale_factors['LST']
                         num_pixels = self.NUM_PIXELS['LST']
 
                     #for all storage, add columns to event table for each telescope
@@ -316,7 +323,11 @@ class ImageExtractor:
             if self.mode == 'energy_recon':
                 table = eval('f.root.Events')
             elif self.mode == 'gh_class':
+# (Future flattening) if self.bins_cuts_dict is not None:
                 table = eval('f.root.E{}.Events'.format(str(bin_number)))
+#                else:
+#                    table = eval('f.root.Events'.format(str(bin_number)))
+
             event_row = table.row
 
             if self.storage_mode == 'all':
@@ -348,7 +359,8 @@ class ImageExtractor:
                             trig_list.append(1)
                             event_row["T" + str(tel_id)] = image_array
                         elif self.storage_mode == 'mapped':
-                            array = eval('f.root.E{}.T{}'.format(bin_number,tel_id))
+                            #(Future flattening) array = eval('f.root.T{}'.format(tel_id))
+                            array = eval('f.root.E{}.T{}'.format(bin_number, tel_id))
                             next_index = array.nrows
                             logger.debug('earray shape: '+format(str(array.shape)))
                             array.append(np.expand_dims(image_array, axis=0))
