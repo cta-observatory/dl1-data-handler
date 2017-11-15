@@ -32,7 +32,7 @@ class ImageExtractor:
     IMAGE_SHAPE = {'SCT':(120,120)}
 
     def __init__(self, output_path,bins_cuts_dict,mode,tel_type_mode,storage_mode,
-            img_channels,include_timing,img_scale_factors,img_dtype,img_dim_order,energy_bins,energy_bin_units,energy_recon_bins):
+            img_channels,include_timing,format_mode,img_scale_factors,img_dtype,img_dim_order,energy_bins,energy_bin_units,energy_recon_bins):
         
         self.output_path = output_path
         self.bins_cuts_dict = bins_cuts_dict
@@ -43,6 +43,7 @@ class ImageExtractor:
 
         self.img_channels = img_channels
         self.include_timing = include_timing
+        self.format_mode = format_mode
         self.img_scale_factors = img_scale_factors
         self.img_dtype = img_dtype
         self.img_dim_order = img_dim_order
@@ -62,15 +63,27 @@ class ImageExtractor:
         if img_mode == 'PIXELS_3C':
             img_channels = 3
             include_timing = False
+            format_mode = '2d'
         elif img_mode == 'PIXELS_1C':
             img_channels = 1
             include_timing = False
+            format_mode = '2d'
         elif img_mode == 'PIXELS_TIMING_2C':
             img_channels = 2
             include_timing = True
+            format_mode = '2d'
         elif img_mode == 'PIXELS_TIMING_3C':
             img_channels = 3 
             include_timing = True
+            format_mode = '2d'
+        elif img_mode == 'VECTOR':
+            img_channels = 1
+            include_timing = False
+            format_mode = '1d'
+        elif img_mode == 'VECTOR_TIMING':
+            img_channels = 2
+            include_timing = True
+            format_mode = '1d'
         else:
             logger.error("Invalid image format (img_mode).")
             raise ValueError('Image processing mode not recognized.')
@@ -109,7 +122,7 @@ class ImageExtractor:
             energy_bins = None
             energy_recon_bins = [(erec_min+i*erec_bin_size,erec_min + (i+1)*erec_bin_size) for i in range(num_erec_bins)]   
 
-        return cls(output_path,bins_cuts_dict,mode,tel_type_mode,storage_mode,img_channels,include_timing,img_scale_factors,img_dtype,img_dim_order,energy_bins,energy_bin_units,energy_recon_bins)
+        return cls(output_path,bins_cuts_dict,mode,tel_type_mode,storage_mode,img_channels,include_timing,format_mode,img_scale_factors,img_dtype,img_dim_order,energy_bins,energy_bin_units,energy_recon_bins)
 
     def select_telescopes(self,data_file):
             
@@ -163,11 +176,11 @@ class ImageExtractor:
 
         return selected_tels,num_tel
 
-    def process_data(self,data_file,max_events):
+    def process_data(self, data_file, max_events):
         """
         Function to read and write data from ctapipe containers to HDF5 
         """
-       
+
         logger.info("Mode: ",self.mode)
         logger.info("File storage mode: ",self.storage_mode)
         logger.info("Image scale factors: ",self.img_scale_factors)
@@ -191,7 +204,7 @@ class ImageExtractor:
                     group._v_attrs.units = self.energy_bin_units
                 group = eval('f.root.E{}'.format(str(i)))
                 groups.append(group)
-        elif MODE == 'energy_recon':
+        elif mode == 'energy_recon':
             groups = [f.root]
 
         #read and select telescopes
@@ -233,21 +246,31 @@ class ImageExtractor:
                     if tel_type == 'SST':
                         img_width = self.IMAGE_SHAPE['SST'][0]*self.img_scale_factors['SST']
                         img_length = self.IMAGE_SHAPE['SST'][1]*self.img_scale_factors['SST']
+                        num_pixels = self.NUM_PIXELS['SST']
                     elif tel_type == 'SCT':
                         img_width = self.IMAGE_SHAPE['SCT'][0]*self.img_scale_factors['SCT']
                         img_length = self.IMAGE_SHAPE['SCT'][1]*self.img_scale_factors['SCT']
+                        num_pixels = self.NUM_PIXELS['SCT']
                     elif tel_type == 'LST':
                         img_width = self.IMAGE_SHAPE['LST'][0]*self.img_scale_factors['LST']
                         img_length = self.IMAGE_SHAPE['LST'][1]*self.img_scale_factors['LST']
+                        num_pixels = self.NUM_PIXELS['LST']
 
                     #for all storage, add columns to event table for each telescope
                     for tel_id in selected_tels[tel_type]:
                         if self.storage_mode == 'all':
-                            descr2["T" + str(tel_id)] = UInt16Col(shape=(img_width,img_length,self.img_channels))
+                            if self.format_mode == '2d':
+                                descr2["T" + str(tel_id)] = UInt16Col(shape=(img_width, img_length, self.img_channels))
+                            elif self.format_mode == '1d':
+                                descr2["T" + str(tel_id)] = UInt16Col(shape=(num_pixels,self.img_channels))
                         elif self.storage_mode == 'mapped':
                             if not group.__contains__('T'+str(tel_id)):
-                                array = f.create_earray(group, 'T'+str(tel_id), Int16Atom(), (0,img_width,img_length,self.img_channels))
-       
+                                if self.format_mode == '2d':
+                                    array = f.create_earray(group, 'T' + str(tel_id), Int16Atom(), (0, img_width, img_length, self.img_channels))
+                                elif self.format_mode == '1d':
+                                    array = f.create_earray(group, 'T' + str(tel_id), Int16Atom(), (0, num_pixels, self.img_channels))
+
+
                 table2 = f.create_table(group, 'temp', descr2, "Table of Events")
                 table.attrs._f_copy(table2)
                 table.remove()
@@ -314,21 +337,27 @@ class ImageExtractor:
                         else:
                             peaks_vector = None 
 
-                        image_array = self.trace_converter.convert_SCT(pixel_vector,peaks_vector)
+                        if self.format_mode == '2d':
+                            image_array = self.trace_converter.convert_SCT(pixel_vector, peaks_vector)
+                        elif self.format_mode == '1d':
+                            image_array = np.column_stack((pixel_vector, peaks_vector))
+                        logger.debug('image_array shape: '+format(str(image_array.shape)))
+                        logger.debug('image_array exp. shape: '+format(str(np.expand_dims(image_array, axis=0).shape)))
 
                         if self.storage_mode == 'all':
                             trig_list.append(1)
-                            event_row["T" + str(tel_id)] = image_array          
+                            event_row["T" + str(tel_id)] = image_array
                         elif self.storage_mode == 'mapped':
                             array = eval('f.root.E{}.T{}'.format(bin_number,tel_id))
                             next_index = array.nrows
-                            array.append(np.expand_dims(image_array,axis=0))
+                            logger.debug('earray shape: '+format(str(array.shape)))
+                            array.append(np.expand_dims(image_array, axis=0))
                             tel_map.append(next_index)
 
                     else:
                         if self.storage_mode == 'all':
                             trig_list.append(0)
-                            event_row["T" + str(tel_id)] = self.trace_convertor.convert_SCT(None,None)
+                            event_row["T" + str(tel_id)] = self.trace_converter.convert_SCT(None,None)
                         elif self.storage_mode == 'mapped':
                             tel_map.append(-1)
                             
