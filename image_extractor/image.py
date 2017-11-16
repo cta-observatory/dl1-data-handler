@@ -15,8 +15,7 @@ class TraceConverter:
         Converter from ctapipe image pixel vector,
         peak position vector to numpy array format.
         """
-        # hardcoded to correct SCT values
-        # TODO: find more natural way to handle these?
+        
         image_shape = IMAGE_SHAPE['SCT']
         scale_factor = self.scale_factors['SCT']
 
@@ -60,15 +59,8 @@ class TraceConverter:
                  self.num_channels],
                 dtype=self.img_dtype)
 
-        if pixels_vector is not None:
-            image_exists = True
-        else:
-            image_exists = False
-
-        if peaks_vector is not None:
-            include_timing = True
-        else:
-            include_timing = False
+        image_exists = True if pixels_vector is not None else False
+        include_timing = True if peaks_vector is not None else False
 
         if image_exists:
             pixel_index = 0
