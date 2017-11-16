@@ -17,7 +17,7 @@ from ctapipe.io.hessio import hessio_event_source
 from ctapipe.calib import pedestals, CameraCalibrator
 
 import config
-import trace_converter
+import image
 import row_types
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class ImageExtractor:
     """
 
     NUM_PIXELS = {'LST': 1855, 'SCT': 11328, 'SST': 0}
-    IMAGE_SHAPE = trace_converter.TraceConverter.IMAGE_SHAPE
+    IMAGE_SHAPE = image.TraceConverter.IMAGE_SHAPE
 
     def __init__(self,
                  output_path,
@@ -64,7 +64,6 @@ class ImageExtractor:
                  img_dtype,
                  img_dim_order,
                  energy_bins,
-                 energy_bin_units,
                  energy_recon_bins):
 
         """Constructor for ImageExtractor
@@ -81,7 +80,6 @@ class ImageExtractor:
         img_dtype : str
         img_dim_order : str
         energy_bins : list(tuple(float,float))
-        energy_bin_units : str
         energy_recon_bins : list(tuple(float,float))
         """
 
@@ -99,10 +97,9 @@ class ImageExtractor:
         self.img_dim_order = img_dim_order
 
         self.energy_bins = energy_bins
-        self.energy_bin_units = energy_bin_units
         self.energy_recon_bins = energy_recon_bins
 
-        self.trace_converter = trace_converter.TraceConverter(
+        self.trace_converter= image.TraceConverter(
             self.img_dtype,
             self.img_dim_order,
             self.img_channels,
@@ -115,7 +112,7 @@ class ImageExtractor:
         Note
         ----
         Unless the chosen ConfigObj has been validated using Validator(),
-        the items in it will not be converted to the correct types
+        the elements in it will not be converted to the correct types
         and errors will ensue. 
 
         Parameters
@@ -291,28 +288,10 @@ class ImageExtractor:
 
         f = open_file(self.output_path, mode="a", title="Output File")
 
-        # create groups for each energy bin
-        if self.mode == 'gh_class':
-            # create groups for each energy bin (naming convention =
-            # "E[NUM_BIN]")
-            groups = []
-            for i in range(len(self.energy_bins)):
-                # create group if it doesn't already exist
-                if not f.__contains__("/E" + str(i)):
-                    group = f.create_group("/", "E" + str(i),
-                                           'Energy bin group' + str(i))
-                    group._v_attrs.min_energy = self.energy_bins[i][0]
-                    group._v_attrs.max_energy = self.energy_bins[i][1]
-                    group._v_attrs.units = self.energy_bin_units
-                group = eval('f.root.E{}'.format(str(i)))
-                groups.append(group)
-        elif MODE == 'energy_recon':
-            groups = [f.root]
-
         # read and select telescopes
         selected_tels, num_tel = self.select_telescopes(data_file)
 
-        # create single table in root group for telescope information
+        # create and fill telescope information table
         if not f.__contains__('/Tel_Table'):
             tel_pos_table = f.create_table("/", 'Tel_Table',
                                            row_types.Tel,
@@ -333,63 +312,62 @@ class ImageExtractor:
                             event.mcheader.run_array_direction
                         tel_row.append()
 
-        # create event table + tel arrays in each group
-        for group in groups:
-            if not group.__contains__('Events'):
-                table = f.create_table(group, 'Events',
-                                       row_types.Event,
-                                       "Table of Events")
-                descr = table.description._v_colobjects
-                descr2 = descr.copy()
+        #create event table
+        if not group.__contains__('/Events'):
+            table = f.create_table(f.root, 'Events',
+                                   row_types.Event,
+                                   "Table of Event metadata")
+            descr = table.description._v_colobjects
+            descr2 = descr.copy()
 
-                if self.mode == 'energy_recon':
-                    descr2['energy_reconstruction_bin_label'] = UInt8Col()
+            if self.mode == 'energy_recon':
+                descr2['energy_reconstruction_bin_label'] = UInt8Col()
 
-                if self.storage_mode == 'all':
-                    descr2["trig_list"] = UInt8Col(shape=(num_tel))
-                elif self.storage_mode == 'mapped':
-                    descr2["tel_map"] = Int32Col(shape=(num_tel))
+            if self.storage_mode == 'all':
+                descr2["trig_list"] = UInt8Col(shape=(num_tel))
+            elif self.storage_mode == 'mapped':
+                descr2["tel_map"] = Int32Col(shape=(num_tel))
 
-                for tel_type in selected_tels.keys():
-                    if tel_type == 'SST':
-                        img_width = self.IMAGE_SHAPE['SST'][0] * \
-                            self.img_scale_factors['SST']
-                        img_length = self.IMAGE_SHAPE['SST'][1] * \
-                            self.img_scale_factors['SST']
-                    elif tel_type == 'SCT':
-                        img_width = self.IMAGE_SHAPE['SCT'][0] * \
-                            self.img_scale_factors['SCT']
-                        img_length = self.IMAGE_SHAPE['SCT'][1] * \
-                            self.img_scale_factors['SCT']
-                    elif tel_type == 'LST':
-                        img_width = self.IMAGE_SHAPE['LST'][0] * \
-                            self.img_scale_factors['LST']
-                        img_length = self.IMAGE_SHAPE['LST'][1] * \
-                            self.img_scale_factors['LST']
+            for tel_type in selected_tels.keys():
+                if tel_type == 'SST':
+                    img_width = self.IMAGE_SHAPE['SST'][0] * \
+                        self.img_scale_factors['SST']
+                    img_length = self.IMAGE_SHAPE['SST'][1] * \
+                        self.img_scale_factors['SST']
+                elif tel_type == 'SCT':
+                    img_width = self.IMAGE_SHAPE['SCT'][0] * \
+                        self.img_scale_factors['SCT']
+                    img_length = self.IMAGE_SHAPE['SCT'][1] * \
+                        self.img_scale_factors['SCT']
+                elif tel_type == 'LST':
+                    img_width = self.IMAGE_SHAPE['LST'][0] * \
+                        self.img_scale_factors['LST']
+                    img_length = self.IMAGE_SHAPE['LST'][1] * \
+                        self.img_scale_factors['LST']
 
-                    # for 'all' storage_mode, add columns to event table for
-                    # each telescope
-                    for tel_id in selected_tels[tel_type]:
-                        if self.storage_mode == 'all':
-                            descr2["T" + str(tel_id)] = UInt16Col(
-                                shape=(img_width,
-                                       img_length,
-                                       self.img_channels))
-                        elif self.storage_mode == 'mapped':
-                            if not group.__contains__('T' + str(tel_id)):
-                                array = f.create_earray(group,
-                                                        'T' + str(tel_id),
-                                                        Int16Atom(),
-                                                        (0,
-                                                         img_width,
-                                                         img_length,
-                                                         self.img_channels))
+                # for 'all' storage_mode, add columns to event table for
+                # each telescope
+                for tel_id in selected_tels[tel_type]:
+                    if self.storage_mode == 'all':
+                        descr2["T" + str(tel_id)] = UInt16Col(
+                            shape=(img_width,
+                                   img_length,
+                                   self.img_channels))
+                    elif self.storage_mode == 'mapped':
+                        if not group.__contains__('T' + str(tel_id)):
+                            array = f.create_earray(group,
+                                                    'T' + str(tel_id),
+                                                    Int16Atom(),
+                                                    (0,
+                                                     img_width,
+                                                     img_length,
+                                                     self.img_channels))
 
-                table2 = f.create_table(group, 'temp', descr2,
-                                        "Table of Events")
-                table.attrs._f_copy(table2)
-                table.remove()
-                table2.move(group, 'Events')
+            table2 = f.create_table(group, 'temp', descr2,
+                                    "Table of Events")
+            table.attrs._f_copy(table2)
+            table.remove()
+            table2.move(group, 'Events')
 
         # specify calibration and other processing options
         cal = CameraCalibrator(None, None)
@@ -397,7 +375,7 @@ class ImageExtractor:
         logger.info("Processing events...")
 
         event_count = 0
-        passing_count = 0
+        passing_event_count = 0
 
         source = hessio_event_source(data_file,
                                      allowed_tels=[j
@@ -415,7 +393,7 @@ class ImageExtractor:
                 if (event.r0.run_id, event.r0.event_id) in self.bins_cuts_dict:
                     bin_number, reconstructed_energy = self.bins_cuts_dict[
                         (event.r0.run_id, event.r0.event_id)]
-                    passing_count += 1
+                    passing_event_count += 1
                 else:
                     continue
             else:
@@ -510,8 +488,32 @@ class ImageExtractor:
 
         logger.info("{} events processed".format(event_count))
         logger.info(
-            "{} events passed cuts/written to file".format(passing_count))
+            "{} events passed cuts/written to file".format(passing_event_count))
         logger.info("Done!")
+
+    def add_energy_recon_bin_labels(self, h5_file):
+    
+    def bin_data(self, h5_file):
+        # create groups for each energy bin
+        if self.mode == 'gh_class':
+            # create groups for each energy bin (naming convention =
+            # "E[NUM_BIN]")
+            groups = []
+            for i in range(len(self.energy_bins)):
+                # create group if it doesn't already exist
+                if not f.__contains__("/E" + str(i)):
+                    group = f.create_group("/", "E" + str(i),
+                                           'Energy bin group' + str(i))
+                    group._v_attrs.min_energy = self.energy_bins[i][0]
+                    group._v_attrs.max_energy = self.energy_bins[i][1]
+                    group._v_attrs.units = self.energy_bin_units
+                group = eval('f.root.E{}'.format(str(i)))
+                groups.append(group)
+        elif MODE == 'energy_recon':
+            groups = [f.root]
+
+
+
 
     def shuffle_data(self, h5_file):
 
