@@ -25,6 +25,7 @@ import row_descriptors
 __all__ = ['ImageExtractor']
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class ImageExtractor:
 
@@ -351,7 +352,10 @@ class ImageExtractor:
                         if self.format_mode == '2d':
                             image_array = self.trace_converter.convert_SCT(pixel_vector, peaks_vector)
                         elif self.format_mode == '1d':
-                            image_array = np.column_stack((pixel_vector, peaks_vector))
+                            if peaks_vector is not None:
+                                image_array = np.column_stack((pixel_vector, peaks_vector))
+                            else:
+                                image_array = np.expand_dims(np.array(pixel_vector),axis=1)
                         logger.debug('image_array shape: '+format(str(image_array.shape)))
                         logger.debug('image_array exp. shape: '+format(str(np.expand_dims(image_array, axis=0).shape)))
 
