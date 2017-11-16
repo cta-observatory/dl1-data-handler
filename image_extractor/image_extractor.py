@@ -25,7 +25,6 @@ import row_descriptors
 __all__ = ['ImageExtractor']
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 class ImageExtractor:
 
@@ -488,6 +487,9 @@ if __name__ == '__main__':
     config = ConfigObj(args.config_file,configspec=spc)
     validator = Validator()
     val_result = config.validate(validator)
+
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
 
     #load bins cuts dictionary from file
     if args.bins_cuts_dict_file is not None:
