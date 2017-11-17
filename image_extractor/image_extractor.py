@@ -28,7 +28,8 @@ logger = logging.getLogger(__name__)
 
 class ImageExtractor:
 
-    NUM_PIXELS = {'LST':1855,'MST':1764,'SCT':11328,'SST':0}
+    TEL_TYPE = dict(LST=51940, MSTF=29680, MSTN=28224, MSTS=63282, SST1=7258, SSTA=5091, SSTC=4676)
+    NUM_PIXELS = {'LST':1855,'MSTF':1855, 'MSTN':1764,'MSTS':11328,'SST1':1296, 'SSTA':2368, 'SSTC':2048}
     IMAGE_SHAPE = {'SCT':(120,120)}
 
     def __init__(self, output_path,bins_cuts_dict,mode,tel_type_mode,storage_mode,
@@ -131,42 +132,52 @@ class ImageExtractor:
         #collect telescope lists 
         source_temp = hessio_event_source(data_file,max_events=1)
 
-        all_tels = {'SST': [], 'SCT': [], 'MST': [], 'LST': []}
+        all_tels = {'LST': [], 'MSTF': [], 'MSTN': [], 'MSTS': [], 'SST1': [], 'SSTA': [], 'SSTC': []}
 
-        for event in source_temp: 
+        for event in source_temp:
             for tel_id in event.inst.telescope_ids:
-                if event.inst.num_pixels[tel_id] == self.NUM_PIXELS['SCT']:
-                    all_tels['SCT'].append(tel_id)
-                elif event.inst.num_pixels[tel_id] == self.NUM_PIXELS['LST']:
+                if round(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value) == self.TEL_TYPE['LST']:
                     all_tels['LST'].append(tel_id)
-                elif event.inst.num_pixels[tel_id] == self.NUM_PIXELS['MST']:
-                    all_tels['MST'].append(tel_id)
-                elif event.inst.num_pixels[tel_id] == self.NUM_PIXELS['SST']:
-                    all_tels['SST'].append(tel_id)
+                elif round(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value) == self.TEL_TYPE['MSTF']:
+                    all_tels['MSTF'].append(tel_id)
+                elif round(event.inst.num_pixels[tel_id] * event.inst.optical_foclen[tel_id].value) == self.TEL_TYPE['MSTN']:
+                    all_tels['MSTN'].append(tel_id)
+                elif round(event.inst.num_pixels[tel_id] * event.inst.optical_foclen[tel_id].value) == self.TEL_TYPE['MSTS']:
+                    all_tels['MSTS'].append(tel_id)
+                elif round(event.inst.num_pixels[tel_id] * event.inst.optical_foclen[tel_id].value) == self.TEL_TYPE['SST1']:
+                    all_tels['SST1'].append(tel_id)
+                elif round(event.inst.num_pixels[tel_id] * event.inst.optical_foclen[tel_id].value) == self.TEL_TYPE['SSTA']:
+                    all_tels['SSTA'].append(tel_id)
+                elif round(event.inst.num_pixels[tel_id] * event.inst.optical_foclen[tel_id].value) == self.TEL_TYPE['SSTC']:
+                    all_tels['SSTC'].append(tel_id)
                 else:
-                    logger.error("Unknown telescope type (invalid num_pixels).")
-                    raise ValueError("Unknown telescope type (invalid num_pixels: {}).".format(event.inst.num_pixels[tel_id]))
+                    logger.error("Telescope type not implemented.")
+                    raise ValueError("Telescope type not implemented ({}).".format(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value))
 
         #select telescopes by type
-        logger.info("Telescope Mode: ",self.tel_type_mode)
-
-        if self.tel_type_mode == 'SST':
-            selected_tel_types = ['SST']
-        elif self.tel_type_mode == 'SCT':
-            selected_tel_types = ['SCT']
-        elif self.tel_type_mode == 'LST':
-            selected_tel_types = ['LST']
-        elif self.tel_type_mode == 'SCT+LST':
-            selected_tel_types = ['SCT','LST']
-        elif self.tel_type_mode == 'SST+SCT':
-            selected_tel_types = ['SST','SCT']
-        elif self.tel_type_mode == 'SST+LST':
-            selected_tel_types = ['SST','LST']
-        elif self.tel_type_mode == 'ALL':
-            selected_tel_types = ['SST','SCT','LST']
+        logger.info("Telescope Mode: {}".format(str(self.tel_type_mode)))
+        if self.tel_type_mode == 'ALL':
+            selected_tel_types = np.sort(np.array([k for k, v in all_tels.items()]))
         else:
-            logger.error("Telescope selection mode invalid.")
-            raise ValueError('Telescope selection mode not recognized.') 
+            selected_tel_types = np.sort(np.array(self.tel_type_mode.split('+')))
+        logger.debug("Selected telescopes: {}".format(selected_tel_types))
+
+        # check if all telescope types from user are supported
+        for tel in selected_tel_types:
+            try:
+                self.TEL_TYPE[tel]
+            except:
+                logger.error('Telescope type {} not supported.'.format(tel))
+                raise ValueError('Telescope type {} not supported.'.format(tel))
+            if self.TEL_TYPE[tel] is not self.TEL_TYPE['MSTS'] and self.format_mode is '2d':
+                logger.error('Telescope type {} not supported for 2d-array storage.'.format(tel))
+                raise ValueError('Telescope type {} not supported for 2d-array storage.'.format(tel))
+
+        #check if there are duplicated telescope types from user
+        duplicated_tel_types = selected_tel_types[:-1][selected_tel_types[1:] == selected_tel_types[:-1]]
+        if duplicated_tel_types.size > 0:
+            logger.error('Telescope type duplicated: {}'.format(duplicated_tel_types[0]))
+            raise ValueError('Telescope type duplicated: {}'.format(duplicated_tel_types[0]))
 
         selected_tels = {key:all_tels[key] for key in selected_tel_types}
 
@@ -183,11 +194,11 @@ class ImageExtractor:
         Function to read and write data from ctapipe containers to HDF5 
         """
 
-        logger.info("Mode: ",self.mode)
-        logger.info("File storage mode: ",self.storage_mode)
-        logger.info("Image scale factors: ",self.img_scale_factors)
-        logger.info("Image array type: ",self.img_dtype)
-        logger.info("Image dim order: ",self.img_dim_order)
+        logger.info("Mode: {}".format(self.mode))
+        logger.info("File storage mode: {}".format(self.storage_mode))
+        logger.info("Image scale factors: {}".format(self.img_scale_factors))
+        logger.info("Image array type: {}".format(self.img_dtype))
+        logger.info("Image dim order: {}".format(self.img_dim_order))
 
         logger.info("Preparing HDF5 file structure...")
 
@@ -229,6 +240,8 @@ class ImageExtractor:
                         tel_row["tel_z"] = event.inst.tel_pos[tel_id].value[2]
                         tel_row["tel_type"] = tel_type
                         tel_row["run_array_direction"] = event.mcheader.run_array_direction
+                        tel_row["optical_foclen"] = event.inst.optical_foclen[tel_id].value
+                        tel_row["num_pixels"] = event.inst.num_pixels[tel_id]
                         tel_row.append()
 
         #create event table + tel arrays in each group
@@ -247,16 +260,36 @@ class ImageExtractor:
                     descr2["tel_map"] = Int32Col(shape=(num_tel))
         
                 for tel_type in selected_tels.keys():
-                    if tel_type == 'SST':
+                    if tel_type == 'SST1':
                         if self.format_mode == '2d':
-                            img_width = self.IMAGE_SHAPE['SST'][0]*self.img_scale_factors['SST']
-                            img_length = self.IMAGE_SHAPE['SST'][1]*self.img_scale_factors['SST']
-                        num_pixels = self.NUM_PIXELS['SST']
-                    elif tel_type == 'SCT':
+                            img_width = self.IMAGE_SHAPE['SST1'][0] * self.img_scale_factors['SST1']
+                            img_length = self.IMAGE_SHAPE['SST1'][1] * self.img_scale_factors['SST1']
+                        num_pixels = self.NUM_PIXELS['SST1']
+                    elif tel_type == 'SSTA':
                         if self.format_mode == '2d':
-                            img_width = self.IMAGE_SHAPE['SCT'][0]*self.img_scale_factors['SCT']
-                            img_length = self.IMAGE_SHAPE['SCT'][1]*self.img_scale_factors['SCT']
-                        num_pixels = self.NUM_PIXELS['SCT']
+                            img_width = self.IMAGE_SHAPE['SSTA'][0]*self.img_scale_factors['SSTA']
+                            img_length = self.IMAGE_SHAPE['SSTA'][1]*self.img_scale_factors['SSTA']
+                        num_pixels = self.NUM_PIXELS['SSTA']
+                    elif tel_type == 'SSTC':
+                        if self.format_mode == '2d':
+                            img_width = self.IMAGE_SHAPE['SSTC'][0]*self.img_scale_factors['SSTC']
+                            img_length = self.IMAGE_SHAPE['SSTC'][1]*self.img_scale_factors['SSTC']
+                        num_pixels = self.NUM_PIXELS['SSTC']
+                    elif tel_type == 'MSTF':
+                        if self.format_mode == '2d':
+                            img_width = self.IMAGE_SHAPE['MSTF'][0] * self.img_scale_factors['MSTF']
+                            img_length = self.IMAGE_SHAPE['MSTF'][1] * self.img_scale_factors['MSTF']
+                        num_pixels = self.NUM_PIXELS['MSTF']
+                    elif tel_type == 'MSTN':
+                        if self.format_mode == '2d':
+                            img_width = self.IMAGE_SHAPE['MSTN'][0] * self.img_scale_factors['MSTN']
+                            img_length = self.IMAGE_SHAPE['MSTN'][1] * self.img_scale_factors['MSTN']
+                        num_pixels = self.NUM_PIXELS['MSTN']
+                    elif tel_type == 'MSTS':
+                        if self.format_mode == '2d':
+                            img_width = self.IMAGE_SHAPE['MSTS'][0]*self.img_scale_factors['MSTS']
+                            img_length = self.IMAGE_SHAPE['MSTS'][1]*self.img_scale_factors['MSTS']
+                        num_pixels = self.NUM_PIXELS['MSTS']
                     elif tel_type == 'LST':
                         if self.format_mode == '2d':
                             img_width = self.IMAGE_SHAPE['LST'][0]*self.img_scale_factors['LST']
@@ -400,7 +433,8 @@ class ImageExtractor:
             table.flush()
 
         logger.info("{} events processed".format(event_count))
-        logger.info("{} events passed cuts/written to file".format(passing_count))
+        if self.bins_cuts_dict is not None:
+            logger.info("{} events passed cuts/written to file".format(passing_count))
         logger.info("Done!")
 
     def shuffle_data(self,h5_file):
