@@ -1,8 +1,9 @@
 import numpy as np
 
-class TraceConverter:
+IMAGE_SHAPES = {'SCT': (120, 120)}
 
-    IMAGE_SHAPE = {'SCT': (120, 120)}
+
+class TraceConverter:
 
     def __init__(self, img_dtype, dim_order, num_channels, scale_factors):
         self.img_dtype = img_dtype
@@ -16,7 +17,7 @@ class TraceConverter:
         peak position vector to numpy array format.
         """
         
-        image_shape = IMAGE_SHAPE['SCT']
+        image_shape = IMAGE_SHAPES['SCT']
         scale_factor = self.scale_factors['SCT']
 
         ROWS = 15
@@ -47,20 +48,26 @@ class TraceConverter:
                                   for i in range(MODULES_PER_ROW[j])]
 
         if self.dim_order == 'channels_first':
-            im_array = np.zeros(
-                [self.num_channels,
-                 image_shape[0] * scale_factor,
-                 image_shape[1] * scale_factor],
-                dtype=self.img_dtype)
+            shape = [self.num_channels,
+                    image_shape[0] * scale_factor,
+                    image_shape[1] * scale_factor]
         elif self.dim_order == 'channels_last':
-            im_array = np.zeros(
-                [image_shape[0] * scale_factor,
-                 image_shape[1] * scale_factor,
-                 self.num_channels],
-                dtype=self.img_dtype)
+            shape = [image_shape[0] * scale_factor,
+                    image_shape[1] * scale_factor,
+                    self.num_channels]
+    
+        img_array = np.zeros(shape,dtype=self.img_dtype)
 
         image_exists = True if pixels_vector is not None else False
         include_timing = True if peaks_vector is not None else False
+
+        if include_timing and self.img_channels < 2:
+            raise ValueError('To include timing information, num channels must be >=2.')
+
+        #preprocess pixels vector
+        # truncate at 0, scale by 100
+        pixel_vector[pixel_vector < 0] = 0
+        pixel_vector = [(i * 100) for i in pixel_vector[0]]
 
         if image_exists:
             pixel_index = 0
@@ -74,33 +81,18 @@ class TraceConverter:
 
                     for (x_coord, y_coord) in scaled_region:
                         if self.dim_order == 'channels_first':
-                            im_array[
-                                0,
-                                x_coord,
-                                y_coord] = pixels_vector[
-                                    pixel_index]
-                            if include_timing:
-                                im_array[
-                                    1,
-                                    x_coord,
-                                    y_coord] = peaks_vector[
-                                        pixel_index]
+                            charge_pos = (0,x_coord,y_coord)
+                            timing_pos = (1,x_coord,y_coord)
                         elif self.dim_order == 'channels_last':
-                            im_array[
-                                x_coord,
-                                y_coord,
-                                0] = pixels_vector[
-                                    pixel_index]
-                            if include_timing:
-                                im_array[
-                                    x_coord,
-                                    y_coord,
-                                    1] = peaks_vector[
-                                        pixel_index]
+                            charge_pos = (x_coord,y_coord,0)
+                            timing_pos = (x_coord,y_coord,1)
+                        
+                        img_array[charge_pos] = pixels_vector[pixel_index]
+                        if include_timing:
+                            img_array[timing_pos] = peaks_vector[pixel_index]
+                pixel_index += 1
 
-                    pixel_index += 1
-
-        return im_array
+        return img_array
 
     def convert_LST(self, pixels_vector, peaks_vector):
         raise NotImplementedError
