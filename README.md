@@ -125,7 +125,7 @@ for additional scripts in scripts directory:
 To create a HDF5 dataset file out of a collection of .simtel.gz files, run:
 
 ```bash
-image_extractor.py [path_to_simtel_files] [output_file] [config_file] [--bins_cuts_dict BINS_CUTS_DICT] [--max_events MAX_EVENTS] [--shuffle [SEED]] [--split [SPLIT_LIST]] [--debug]
+image_extractor.py [path_to_simtel_files] [output_file] [--bins_cuts_dict BINS_CUTS_DICT] [--max_events MAX_EVENTS] [--shuffle [SEED]] [--split [SPLIT_LIST]] [--debug]
 ```
 on the command line.
 
@@ -137,7 +137,6 @@ image_extractor.py "/data/simtel/*.simtel.gz" "./dataset.h5" "./configuration_se
 
 * path_to_simtel_files - The path to .simtel.gz file(s) containing the events which you wish to process. Multiple files should be located in the same directory and indicated using a wildcard.
 * output_file - The path to the HDF5 file into which you wish to write your data.
-* config_file - The path to a configobj configuration file containing various data format settings and specifying cuts and bins (currently not applied directly in image_extractor, but through EventDisplay by saving in bins_cuts_dict. At the current time (v0.2.1) the necessary analysis stages are not yet implemented in ctapipe). Details in config.py.
 * bins_cuts_dict - Optional path to a pickled Python dictionary of a specified format (see prepare_cuts_dict.py) containing information from EventDisplay on which events (run_number,event_number) passed the cuts, what their reconstructed energies are, and which energy bin they are in. This information is prepared in advance using prepare_cuts_dict.py and the settings indicated in the config file.
 * max_events - Optional argument to specify the maximum number of events to save from the simtel file
 * shuffle [SEED]- Optional flag to randomly shuffle the data in the Events table after writing. Can provide an optional seed value to get a reproduceable result.
