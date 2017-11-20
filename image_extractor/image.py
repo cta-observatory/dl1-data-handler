@@ -1,6 +1,6 @@
 import numpy as np
 
-IMAGE_SHAPES = {'SCT': (120, 120)}
+IMAGE_SHAPES = {'MSTS': (120, 120)}
 
 
 class TraceConverter:
@@ -11,14 +11,14 @@ class TraceConverter:
         self.num_channels = num_channels
         self.scale_factors = scale_factors
 
-    def convert_SCT(self, pixels_vector, peaks_vector):
+    def convert_MSTS(self, pixels_vector, peaks_vector):
         """
         Converter from ctapipe image pixel vector,
         peak position vector to numpy array format.
         """
         
-        image_shape = IMAGE_SHAPES['SCT']
-        scale_factor = self.scale_factors['SCT']
+        image_shape = IMAGE_SHAPES['MSTS']
+        scale_factor = self.scale_factors['MSTS']
 
         ROWS = 15
         MODULE_DIM = (8, 8)
@@ -67,7 +67,7 @@ class TraceConverter:
         #preprocess pixels vector
         # truncate at 0, scale by 100
         pixels_vector[pixels_vector < 0] = 0
-        pixels_vector = [(i * 100) for i in pixels_vector[0]]
+        pixels_vector = [int(round(i * 100)) for i in pixels_vector[0]]
 
         if image_exists:
             pixel_index = 0
@@ -97,5 +97,18 @@ class TraceConverter:
     def convert_LST(self, pixels_vector, peaks_vector):
         raise NotImplementedError
 
-    def convert_SST(self, pixels_vector, peaks_vector):
+    def convert_MSTF(self, pixels_vector, peaks_vector):
         raise NotImplementedError
+
+    def convert_MSTN(self, pixels_vector, peaks_vector):
+        raise NotImplementedError
+
+    def convert_SST1(self, pixels_vector, peaks_vector):
+        raise NotImplementedError
+
+    def convert_SSTA(self, pixels_vector, peaks_vector):
+        raise NotImplementedError
+
+    def convert_SSTC(self, pixels_vector, peaks_vector):
+        raise NotImplementedError
+
