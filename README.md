@@ -110,8 +110,6 @@ for image_extractor:
 
 * Pytables
 * Numpy
-* Astropy
-* configobj
 * ctapipe
 
 for additional scripts in scripts directory:
@@ -127,7 +125,7 @@ for additional scripts in scripts directory:
 To create a HDF5 dataset file out of a collection of .simtel.gz files, run:
 
 ```bash
-image_extractor.py [path_to_simtel_files] [output_file] [config_file] [--bins_cuts_dict BINS_CUTS_DICT] [--max_events MAX_EVENTS] [--shuffle] [--split] [--debug]
+image_extractor.py [path_to_simtel_files] [output_file] [config_file] [--bins_cuts_dict BINS_CUTS_DICT] [--max_events MAX_EVENTS] [--shuffle [SEED]] [--split [SPLIT_LIST]] [--debug]
 ```
 on the command line.
 
@@ -142,8 +140,8 @@ image_extractor.py "/data/simtel/*.simtel.gz" "./dataset.h5" "./configuration_se
 * config_file - The path to a configobj configuration file containing various data format settings and specifying cuts and bins (currently not applied directly in image_extractor, but through EventDisplay by saving in bins_cuts_dict. At the current time (v0.2.1) the necessary analysis stages are not yet implemented in ctapipe). Details in config.py.
 * bins_cuts_dict - Optional path to a pickled Python dictionary of a specified format (see prepare_cuts_dict.py) containing information from EventDisplay on which events (run_number,event_number) passed the cuts, what their reconstructed energies are, and which energy bin they are in. This information is prepared in advance using prepare_cuts_dict.py and the settings indicated in the config file.
 * max_events - Optional argument to specify the maximum number of events to save from the simtel file
-* shuffle - Optional flag to randomly shuffle the data in the Events table after writing
-* split - Optional flag to split the Events table into separate training/validation/test tables for convenience
+* shuffle [SEED]- Optional flag to randomly shuffle the data in the Events table after writing. Can provide an optional seed value to get a reproduceable result.
+* split [SPLIT_LIST]- Optional flag to split the Events table into separate training/validation/test tables for convenience. Can provide a list (3 arguments) which give the split proportions between train, val, and test. A split proportion of 0 indicates that the corresponding table will not be created. Split proportions must sum to 1.
 * debug - Optional flag to print additional debug information.
 
 NOTE: The shuffle and split options are primarily for convenience when using the data files for training convolutional neural networks. It is unlikely they will be included as part of the final standard data format.
@@ -164,20 +162,14 @@ from image_extractor import image_extractor
 #max events to read per file
 max_events = 50
 
-#set parameters for your ImageExtractor
-output_path = "/home/computer/user/data/dataset.h5"
-mode = "gh_class"
-
-#...
-#more parameters
-
-#load bins cuts dictionary from file
+#optionally load bins cuts dictionary from file
 bins_cuts_dict = pkl.load(open(args.bins_cuts_dict_file, "rb" ))
 
 #data file
 data_file = "/home/computer/user/data/simtel/test.simtel.gz"
 
-extractor = image_extractor.ImageExtractor(output_path,bins_cuts_dict,mode, ...)
+#create an ImageExtractor with default settings
+extractor = image_extractor.ImageExtractor(output_path,ED_cuts_dict=bins_cuts_dict)
 
 extractor.process_data(data_file,max_events)
 
@@ -185,10 +177,6 @@ extractor.process_data(data_file,max_events)
 ```
 
 ### Config files and bins_cuts_dict files
-
-"Default" configuration files and bins_cuts_dict files are provided in /aux/. The "1bin" files use standard cuts, but only 1 large energy bin containing all events. The non-"1bin" files use the standard cuts and 3 energy bins (low, medium, high) which are specified in the config files.
-
-The config files can be modified directly using a text editor, although it should be ensured that they match the config spec located in config.py. Config.py can be used to generate an example default configuration file or validate an existing one.
 
 Bins_cuts_dict.pkl files are the result of running the EventDisplay analysis on the simtel files through to the MSCW stage, then applying the cuts specified in the config file on the array/event-level parameters. The default cuts were selected to match those used by the Boosted Decision Tree analysis method for Gamma-Hadron separation currently being used in EventDisplay for VERITAS data. A new one can be created (for example, to match a new set of simtel files) by running the standard ED analysis on all simtel files up to the MSCW stage, then passing the MSCW.root files into prepare_bins_dict.py.
 
