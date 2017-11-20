@@ -41,9 +41,6 @@ class Event(IsDescription):
         Float32 placeholder type for the shower azimuth angle.
     alt : Float32Col
         Float32 placeholder type for the shower altitude (zenith) angle
-    reconstructed_energy : Float64Col
-        Float64 placeholder type for the shower's reconstructed energy,
-        computed using a standard analysis method
     """
     event_number = UInt32Col()
     run_number = UInt32Col()
@@ -54,8 +51,6 @@ class Event(IsDescription):
     mc_energy = Float64Col()
     az = Float32Col()
     alt = Float32Col()
-    reconstructed_energy = Float64Col()
-
 
 class Tel(IsDescription):
     """Row descriptor class for Pytables telescope data table.
