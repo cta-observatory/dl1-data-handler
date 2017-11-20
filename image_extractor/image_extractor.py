@@ -236,7 +236,7 @@ class ImageExtractor:
                     array_shape = (0,self.img_channels,self.TEL_NUM_PIXELS[tel_type])
                 elif self.img_dim_order == 'channels_last':
                     array_shape = (0,self.TEL_NUM_PIXELS[tel_type],self.img_channels)
-            
+           
             if self.storage_mode == 'tel_type':
                 if not f.__contains__(tel_type):
                     array = f.create_earray(f.root,tel_type,
@@ -329,7 +329,7 @@ class ImageExtractor:
                     event_row[tel_type+'_indices'] = tel_index_vectors[tel_type]
             elif self.storage_mode == 'tel_id':
                 event_row['indices'] = all_tel_index_vector
-
+            
             event_row['event_number'] = event.r0.event_id
             event_row['run_number'] = event.r0.run_id
             event_row['gamma_hadron_label'] = event.mc.shower_primary_id
@@ -482,6 +482,9 @@ if __name__ == '__main__':
         nargs='*',const = [0.9,0.1,0.0],default=None)
 
     args = parser.parse_args()
+
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
 
     # load bins cuts dictionary from file
     if args.ED_cuts_dict_file is not None:
