@@ -132,7 +132,7 @@ class ImageExtractor:
 
         all_tels = {tel_type:[] for tel_type in self.TEL_TYPES}
 
-        dict_to_tel_type = {value: tel_type for tel_type, value in TEL_TYPES.items()}
+        dict_to_tel_type = {value: tel_type for tel_type, value in self.TEL_TYPES.items()}
 
         for event in source_temp:
             for tel_id in sorted(event.inst.telescope_ids):
@@ -297,7 +297,8 @@ class ImageExtractor:
                             peaks_vector = None
 
                         if self.img_mode == '2D':
-                            image = self.trace_converter.convert_SCT(pixel_vector, peaks_vector)
+                            convert_to_image = getattr(self.trace_converter, 'convert_'+tel_type)
+                            image = convert_to_image(pixel_vector, peaks_vector)
                         elif self.img_mode == '1D':
                             if self.img_dim_order == 'channels_first':
                                 image = np.stack([pixel_vector,peaks_vector],axis=0)
