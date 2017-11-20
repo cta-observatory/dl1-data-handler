@@ -48,7 +48,8 @@ class ImageExtractor:
 
     """
 
-    TEL_NUM_PIXELS = {'LST': 1855, 'SCT': 11328, 'SST': 0}
+    TEL_TYPES = {LST=51940, MSTF=29680, MSTN=28224, MSTS=63282, SST1=7258, SSTA=5091, SSTC=4676)
+
     IMAGE_SHAPES = image.IMAGE_SHAPES
 
     ALLOWED_CUT_PARAMS = {}
@@ -83,7 +84,7 @@ class ImageExtractor:
             raise ValueError('Invalid storage mode: {}.'.format(storage_mode))
         
         for tel_type in tel_type_list:
-            if tel_type not in self.TEL_NUM_PIXELS.keys():
+            if tel_type not in self.TEL_TYPES:
                 raise ValueError('Invalid telescope type: {}.'.format(tel_type))
         self.tel_type_list = tel_type_list
 
@@ -138,12 +139,15 @@ class ImageExtractor:
 
         source_temp = hessio_event_source(data_file, max_events=1)
 
-        all_tels = {tel_type:[] for tel_type in self.TEL_NUM_PIXELS}
+        all_tels = {tel_type:[] for tel_type in self.TEL_TYPES}
+
+        dict_to_tel_type = {value: tel_type for tel_type, value in TEL_TYPES.items()}
 
         for event in source_temp:
             for tel_id in sorted(event.inst.telescope_ids):
-                if event.inst.num_pixels[tel_id] in num_pixels_to_tel_type:
-                    all_tels[num_pixels_to_tel_type[event.inst.num_pixels[tel_id]]].append(tel_id)
+                if round(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value) in dict_to_tel_type:
+                    tel_type = dict_to_tel_type[round(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value)] 
+                    all_tels[tel_type].append(tel_id)
                 else:
                     logger.error("Telescope type not implemented.")
                     raise ValueError("Telescope type not implemented ({}).".format(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value))
@@ -153,7 +157,7 @@ class ImageExtractor:
         for tel_type in self.tel_type_list:
             logger.info("{},".format(tel_type))
         logger.info("]")
-
+       
         selected_tels = {tel_type: all_tels[tel_type] for tel_type in self.tel_type_list}
 
         total_num_tel_selected = 0
@@ -199,6 +203,8 @@ class ImageExtractor:
                         tel_row["tel_type"] = tel_type
                         tel_row["run_array_direction"] = \
                             event.mcheader.run_array_direction
+                        tel_row["optical_foclen"] = event.inst.optical_foclen[tel_id].value
+                        tel_row["num_pixels"] = event.inst.num_pixels[tel_id]
                         tel_row.append()
 
         #create event table
