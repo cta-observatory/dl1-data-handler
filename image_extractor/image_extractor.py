@@ -8,6 +8,8 @@ import argparse
 import pickle as pkl
 import logging
 import glob
+import os
+import math
 
 import numpy as np
 import tables
@@ -62,7 +64,7 @@ class ImageExtractor:
                  include_timing=False,
                  img_scale_factors={'SCT':1},
                  img_dtype='uint16',
-                 img_dim_order='channels_last'
+                 img_dim_order='channels_last',
                  cuts_dict=DEFAULT_CUTS_DICT):
 
         """Constructor for ImageExtractor
@@ -81,7 +83,7 @@ class ImageExtractor:
             raise ValueError('Invalid storage mode: {}.'.format(storage_mode))
         
         for tel_type in tel_type_list:
-            if tel_type not in TEL_NUM_PIXELS.keys():
+            if tel_type not in self.TEL_NUM_PIXELS.keys():
                 raise ValueError('Invalid telescope type: {}.'.format(tel_type))
         self.tel_type_list = tel_type_list
 
@@ -111,6 +113,8 @@ class ImageExtractor:
             self.img_channels,
             self.img_scale_factors)
 
+        self.cuts_dict = cuts_dict
+
     def select_telescopes(self, data_file):
         """Method to read telescope info from a given simtel file
         and select the desired telescopes indicated by self.tel_type_mode.
@@ -134,19 +138,15 @@ class ImageExtractor:
 
         source_temp = hessio_event_source(data_file, max_events=1)
 
-        all_tels = {key:[] for tel_type in self.TEL_NUM_PIXELS.keys()}
+        all_tels = {tel_type:[] for tel_type in self.TEL_NUM_PIXELS}
 
         for event in source_temp:
             for tel_id in sorted(event.inst.telescope_ids):
-                for tel_type in self.TEL_NUM_PIXELS:
-                    if event.inst.num_pixels[tel_id] == self.TEL_NUM_PIXELS[tel_type]:
-                        all_tels[tel_type].append(tel_id)
-                    else:
-                        logger.error("Unknown telescope type
-                                     (invalid num_pixels).")
-                        raise ValueError("Unknown telescope type (invalid "
-                                         "num_pixels: {}).".format(
-                                             event.inst.num_pixels[tel_id]))
+                if event.inst.num_pixels[tel_id] in num_pixels_to_tel_type:
+                    all_tels[num_pixels_to_tel_type[event.inst.num_pixels[tel_id]]].append(tel_id)
+                else:
+                    logger.error("Telescope type not implemented.")
+                    raise ValueError("Telescope type not implemented ({}).".format(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value))
 
         # select telescopes by type
         logger.info("Selected telescope types: [")
@@ -162,7 +162,7 @@ class ImageExtractor:
                 num_tel_selected = len(selected_tels[tel_type])
             else:
                 num_tel_selected = 0
-            logger.info(tel_type + ": " + str(len(selected_tels[tel_type])) +
+            logger.info(tel_type + ": " + str(num_tel_selected) +
                         " out of " + str(len(all_tels[tel_type])) +
                         " telescopes selected.")
             total_num_tel_selected += num_tel_selected
@@ -177,7 +177,7 @@ class ImageExtractor:
 
         logger.info("Preparing HDF5 file structure...")
 
-        f = open_file(self.output_path, mode="a", title="Output File")
+        f = tables.open_file(self.output_path, mode="a", title="Output File")
 
         selected_tels, num_tel = self.select_telescopes(data_file)
 
@@ -211,10 +211,10 @@ class ImageExtractor:
             descr2 = descr.copy()
 
             if self.storage_mode == 'tel_type':
-                for tel_type in selected:
-                    descr2[tel_type+'_indices'] = Int32Col(shape=(len(selected[tel_type])))
+                for tel_type in selected_tels:
+                    descr2[tel_type+'_indices'] = tables.Int32Col(shape=(len(selected_tels[tel_type])))
             elif self.storage_mode == 'tel_id':
-                descr2["indices"] = Int32Col(shape=(num_tel))
+                descr2["indices"] = tables.Int32Col(shape=(num_tel))
 
             table2 = f.create_table(f.root, 'temp', descr2,"Table of Events")
             table.attrs._f_copy(table2)
@@ -238,7 +238,7 @@ class ImageExtractor:
                     array_shape = (0,self.TEL_NUM_PIXELS[tel_type],self.img_channels)
            
             if self.storage_mode == 'tel_type':
-                if not f.__contains__(tel_type):
+                if not f.__contains__('/' + tel_type):
                     array = f.create_earray(f.root,tel_type,
                                             tables.Atom.from_dtype(np.dtype(self.img_dtype)),
                                             array_shape)
@@ -263,7 +263,7 @@ class ImageExtractor:
         for event in source:
             event_count += 1
 
-            if cuts_dict:
+            if self.cuts_dict:
                 if self.ED_cuts_dict is not None:
                     logger.warning('Warning: Both ED_cuts_dict and cuts dictionary found. Using cuts dictionary instead.')
 
@@ -324,7 +324,7 @@ class ImageExtractor:
                     else:
                         index_vector.append(-1)
 
-            if self.storage_mode = 'tel_type':
+            if self.storage_mode == 'tel_type':
                 for tel_type in tel_index_vectors:
                     event_row[tel_type+'_indices'] = tel_index_vectors[tel_type]
             elif self.storage_mode == 'tel_id':
@@ -373,7 +373,7 @@ class ImageExtractor:
     def shuffle_data(self, h5_file, random_seed):
 
         # open input hdf5 file
-        f = open_file(h5_file, mode="r+", title="Input file")
+        f = tables.open_file(h5_file, mode="r+", title="Input file")
 
         table = f.root.Events
         descr = table.description
@@ -407,7 +407,7 @@ class ImageExtractor:
         assert math.isclose(split_sum,1.0,rel_tol=1e-5), "Split fractions do not add up to 1"
 
         # open input hdf5 file
-        f = open_file(h5_file, mode="r+", title="Input file")
+        f = tables.open_file(h5_file, mode="r+", title="Input file")
 
         table = f.root.Events
         descr = table.description
@@ -421,7 +421,7 @@ class ImageExtractor:
         for j in range(len(splits)):
             if splits[j] != 0.0:
                 table_new = f.create_table(
-                    group,
+                    f.root,
                     'Events_' +
                     split_names[j],
                     descr,
@@ -455,8 +455,7 @@ if __name__ == '__main__':
         help='wildcard path to input .simtel files')
     parser.add_argument(
         'hdf5_path',
-        help=('path of output HDF5 file, or
-              currently existing file to append to'))
+        help=('path of output HDF5 file, or currently existing file to append to'))
     parser.add_argument(
         '--config_file',
         help=('configuration file specifying the selected telescope ids '
@@ -475,11 +474,11 @@ if __name__ == '__main__':
         type=int)
     parser.add_argument(
         "--shuffle",
-        help="shuffle output data file",nargs='?',const='default',default=None)
+        help="shuffle output data file. Can pass optional random seed",nargs='?',const='default',action='store',default=None)
     parser.add_argument(
         "--split",
         help="Split output data file into separate event tables. Pass optional list of splits (training, validation, test)",
-        nargs='*',const = [0.9,0.1,0.0],default=None)
+        nargs='?',const = [0.9,0.1,0.0],action='store',default=None)
 
     args = parser.parse_args()
 
@@ -500,7 +499,7 @@ if __name__ == '__main__':
         extractor.process_data(data_file, args.max_events)
 
     if args.shuffle:
-        extractor.shuffle_data(args.hdf5_path, random_seed)
+        extractor.shuffle_data(args.hdf5_path, args.shuffle)
 
     if args.split:
-        extractor.split_data(args.hdf5_path, split_dict)
+        extractor.split_data(args.hdf5_path, args.split)
