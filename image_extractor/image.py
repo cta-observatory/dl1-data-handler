@@ -66,8 +66,8 @@ class TraceConverter:
 
         #preprocess pixels vector
         # truncate at 0, scale by 100
-        pixel_vector[pixel_vector < 0] = 0
-        pixel_vector = [(i * 100) for i in pixel_vector[0]]
+        pixels_vector[pixels_vector < 0] = 0
+        pixels_vector = [(i * 100) for i in pixels_vector[0]]
 
         if image_exists:
             pixel_index = 0
