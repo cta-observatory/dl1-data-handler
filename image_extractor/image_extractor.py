@@ -36,18 +36,10 @@ class ImageExtractor:
     Once initialized, can read in simtel files and write to the output file
     in accordance with the provided configuration settings.
 
-    Attributes
-    ----------
-    TEL_NUM_PIXELS : dict(str:int)
-        The number of camera pixels for each camera type.
-        Used to identify camera types in ctapipe container.
-    IMAGE_SHAPES : dict(str:tuple(int,int))
-        The shape of the output image for each camera type. 
-        Defined in TraceConverter.
 
     """
 
-    TEL_TYPES = {LST=51940, MSTF=29680, MSTN=28224, MSTS=63282, SST1=7258, SSTA=5091, SSTC=4676)
+    TEL_TYPES = {'LST':51940, 'MSTF':29680, 'MSTN':28224, 'MSTS':63282, 'SST1':7258, 'SSTA':5091, 'SSTC':4676}
 
     IMAGE_SHAPES = image.IMAGE_SHAPES
 
@@ -58,11 +50,11 @@ class ImageExtractor:
                  output_path,
                  ED_cuts_dict=None,
                  storage_mode='tel_type',
-                 tel_type_list=['SCT'],
+                 tel_type_list=['MSTS'],
                  img_mode='2D',
                  img_channels=1,
                  include_timing=False,
-                 img_scale_factors={'SCT':1},
+                 img_scale_factors={'MSTS':1},
                  img_dtype='uint16',
                  img_dim_order='channels_last',
                  cuts_dict=DEFAULT_CUTS_DICT):
