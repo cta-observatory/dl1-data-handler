@@ -67,7 +67,7 @@ class TraceConverter:
         #preprocess pixels vector
         # truncate at 0, scale by 100
         pixels_vector[pixels_vector < 0] = 0
-        pixels_vector = [int(round(i * 100)) for i in pixels_vector[0]]
+        pixels_vector = np.around(np.multiply(pixels_vector[0],100))
 
         if image_exists:
             pixel_index = 0
@@ -89,6 +89,7 @@ class TraceConverter:
                         
                         img_array[charge_pos] = pixels_vector[pixel_index]
                         if include_timing:
+                            peaks_vector = peaks_vector.astype
                             img_array[timing_pos] = peaks_vector[pixel_index]
                 pixel_index += 1
 
