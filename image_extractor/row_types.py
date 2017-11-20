@@ -85,4 +85,4 @@ class Tel(IsDescription):
     tel_type = StringCol(8)
     run_array_direction = Float32Col(2)
     optical_foclen = Float32Col()
-    num_pixels= UInt8Col()
+    num_pixels= UInt32Col()
