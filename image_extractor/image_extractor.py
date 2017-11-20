@@ -21,7 +21,6 @@ import row_types
 
 logger = logging.getLogger(__name__)
 
-
 class ImageExtractor:
     """Class to handle reading in simtel files and writing to HDF5.
 
@@ -60,7 +59,7 @@ class ImageExtractor:
                  ED_cuts_dict=None,
                  storage_mode='tel_type',
                  tel_type_list=['SCT'],
-                 img_mode='array',
+                 img_mode='2D',
                  img_channels=1,
                  include_timing=False,
                  img_scale_factors={'SCT':1},
@@ -88,7 +87,7 @@ class ImageExtractor:
                 raise ValueError('Invalid telescope type: {}.'.format(tel_type))
         self.tel_type_list = tel_type_list
 
-        if img_mode in ['vector','array']:
+        if img_mode in ['1D','2D']:
             self.img_mode = img_mode
         else:
             raise ValueError('Invalid img_mode: {}.'.format(img_mode))
@@ -148,9 +147,6 @@ class ImageExtractor:
                 if round(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value) in dict_to_tel_type:
                     tel_type = dict_to_tel_type[round(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value)] 
                     all_tels[tel_type].append(tel_id)
-                else:
-                    logger.error("Telescope type not implemented.")
-                    raise ValueError("Telescope type not implemented ({}).".format(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value))
 
         # select telescopes by type
         logger.info("Selected telescope types: [")
@@ -176,9 +172,7 @@ class ImageExtractor:
     def process_data(self, data_file, max_events):
         """Main method to read a simtel.gz data file, process the event data,
         and write it to a formatted HDF5 data file.
-
         """
-
         logger.info("Preparing HDF5 file structure...")
 
         f = tables.open_file(self.output_path, mode="a", title="Output File")
@@ -201,18 +195,18 @@ class ImageExtractor:
                         tel_row["tel_y"] = event.inst.tel_pos[tel_id].value[1]
                         tel_row["tel_z"] = event.inst.tel_pos[tel_id].value[2]
                         tel_row["tel_type"] = tel_type
-                        tel_row["run_array_direction"] = \
-                            event.mcheader.run_array_direction
+                        tel_row["run_array_direction"] = event.mcheader.run_array_direction
                         tel_row["optical_foclen"] = event.inst.optical_foclen[tel_id].value
                         tel_row["num_pixels"] = event.inst.num_pixels[tel_id]
                         tel_row.append()
+
 
         #create event table
         if not f.__contains__('/Events'):
             table = f.create_table(f.root, 'Events',
                                    row_types.Event,
                                    "Table of Event metadata")
-            
+           
             descr = table.description._v_colobjects
             descr2 = descr.copy()
 
@@ -229,7 +223,7 @@ class ImageExtractor:
 
         #create image arrays
         for tel_type in selected_tels:
-            if self.img_mode == 'array':
+            if self.img_mode == '2D':
                 img_width = self.IMAGE_SHAPES[tel_type][0]*self.img_scale_factors[tel_type]
                 img_length = self.IMAGE_SHAPES[tel_type][1]*self.img_scale_factors[tel_type]
     
@@ -237,7 +231,7 @@ class ImageExtractor:
                     array_shape = (0,self.img_channels,img_width,img_length)
                 elif self.img_dim_order == 'channels_last':
                     array_shape = (0,img_width,img_length,self.img_channels)
-            elif self.img_mode == 'vector':
+            elif self.img_mode == '1D':
                 if self.img_dim_order == 'channels_first':
                     array_shape = (0,self.img_channels,self.TEL_NUM_PIXELS[tel_type])
                 elif self.img_dim_order == 'channels_last':
@@ -262,7 +256,7 @@ class ImageExtractor:
         logger.info("Processing events...")
 
         event_count = 0
-        passing_event_count = 0
+        passing_count = 0
 
         source = hessio_event_source(data_file,allowed_tels=[j for i in selected_tels for j in selected_tels[i]],max_events=max_events)
 
@@ -274,7 +268,7 @@ class ImageExtractor:
                     logger.warning('Warning: Both ED_cuts_dict and cuts dictionary found. Using cuts dictionary instead.')
 
                 if test_cuts(event,cuts_dict):
-                    passing_event_count += 1
+                    passing_count += 1
                 else:
                     continue
             else:
@@ -282,7 +276,7 @@ class ImageExtractor:
                     if (event.r0.run_id, event.r0.event_id) in self.ED_cuts_dict:
                         bin_number, reconstructed_energy = self.ED_cuts_dict[
                             (event.r0.run_id, event.r0.event_id)]
-                        passing_event_count += 1
+                        passing_count += 1
                     else:
                         continue
      
@@ -310,9 +304,9 @@ class ImageExtractor:
                         else:
                             peaks_vector = None
 
-                        if self.img_mode == 'array':
+                        if self.img_mode == '2D':
                             image = self.trace_converter.convert_SCT(pixel_vector, peaks_vector)
-                        elif self.img_mode == 'vector':
+                        elif self.img_mode == '1D':
                             if self.img_dim_order == 'channels_first':
                                 image = np.stack([pixel_vector,peaks_vector],axis=0)
                             elif self.img_dim_order == 'channels_last':
@@ -352,7 +346,8 @@ class ImageExtractor:
         f.close()
 
         logger.info("{} events read in file".format(event_count))
-        logger.info("{} events passed cuts/written to file".format(passing_event_count))
+        if self.cuts_dict or self.ED_cuts_dict:
+            logger.info("{} events passed cuts/written to file".format(passing_count))
         logger.info("Done!")
 
     def set_cuts(self,cuts_dict):
