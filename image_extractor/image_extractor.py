@@ -40,6 +40,7 @@ class ImageExtractor:
     """
 
     TEL_TYPES = {'LST':51940, 'MSTF':29680, 'MSTN':28224, 'MSTS':63282, 'SST1':7258, 'SSTA':5091, 'SSTC':4676}
+    TEL_NUM_PIXELS = {'LST':1855,'MSTF':1855, 'MSTN':1764,'MSTS':11328,'SST1':1296, 'SSTA':2368, 'SSTC':2048}
 
     IMAGE_SHAPES = image.IMAGE_SHAPES
 
@@ -290,7 +291,7 @@ class ImageExtractor:
                         index_vector = all_tel_index_vector
                     
                     if tel_id in event.r0.tels_with_data:
-                        pixel_vector = event.dl1.tel[tel_id].image  
+                        pixel_vector = event.dl1.tel[tel_id].image[0] 
                         if self.include_timing:
                             peaks_vector = event.dl1.tel[tel_id].peakpos[0]
                         else:
@@ -301,16 +302,20 @@ class ImageExtractor:
                             image = convert_to_image(pixel_vector, peaks_vector)
                         elif self.img_mode == '1D':
                             if self.img_dim_order == 'channels_first':
-                                image = np.stack([pixel_vector,peaks_vector],axis=0)
+                                axis = 0
                             elif self.img_dim_order == 'channels_last':
-                                image = np.stack([pixel_vector,peaks_vector],axis=1)
-                    
+                                axis = 1
+                            if peaks_vector is not None:
+                                image = np.stack([pixel_vector,peaks_vector],axis=axis)
+                            else:
+                                image = np.expand_dims(pixel_vector,axis=axis)
+
                         if self.storage_mode == 'tel_type':
                             array = eval('f.root.{}'.format(tel_type))
                         elif self.storage_mode == 'tel_id':
                             array = eval('f.root.T{}'.format(tel_id))
                         next_index = array.nrows
-                        array.append(np.expand_dims(image, axis=0))
+                        array.append(np.expand_dims(image,axis=0))
                         
                         index_vector.append(next_index)
 
@@ -485,7 +490,7 @@ if __name__ == '__main__':
     else:
         ED_cuts_dict = None
 
-    extractor = ImageExtractor(args.hdf5_path,ED_cuts_dict=ED_cuts_dict)
+    extractor = ImageExtractor(args.hdf5_path,img_mode='2D',ED_cuts_dict=ED_cuts_dict)
 
     data_files = glob.glob(args.data_files)
 
