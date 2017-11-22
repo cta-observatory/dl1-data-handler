@@ -16,7 +16,7 @@ chardet=3.0.4=py35hb6e9ddf_1
 click=6.7=py35h353a69f_0
 cloudpickle=0.4.0=py35h10376d1_0
 configobj=5.0.6=py35_0
-coverage=4.4.1=py35_0
+coverage=4.0.3=py35_1
 coveralls=1.2.0=py35_0
 cryptography=2.0.3=py35hef72dfd_1
 ctapipe-extra=0.2.11=h1dc6071_0
@@ -121,10 +121,11 @@ pysocks=1.6.7=py35h6aefbb0_1
 pytables=3.4.2=py35hfa98db7_2
 pytest=3.2.1=py35hc97c719_1
 pytest-cache=1.0=py35_0
-pytest-cov=2.5.1=py35h9d7ae03_0
+pytest-cov=2.5.1=py35_0
 pytest-pep8=1.0.6=py35_0
 pytest-xdist=1.17.1=py35_0
 python=3.5.4=he2c66cf_20
+python-coveralls=2.9.0=py35_0
 python-dateutil=2.6.1=py35h90d5b31_1
 pytz=2017.2=py35h9225bff_1
 pywavelets=0.5.2=py35h53ec731_0
