@@ -66,8 +66,8 @@ class TraceConverter:
 
         #preprocess pixels vector
         # truncate at 0, scale by 100
-        pixels_vector[pixels_vector < 0] = 0
-        pixels_vector = np.around(np.multiply(pixels_vector[0],100))
+        pixels_vector = pixels_vector.clip(min=0)
+        pixels_vector = np.around(np.multiply(pixels_vector,100))
 
         if image_exists:
             pixel_index = 0
