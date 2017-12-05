@@ -2,7 +2,7 @@
 """
 Module for main ImageExtractor class and command line tool.
 """
-
+import pkg_resources
 import random
 import argparse
 import pickle as pkl
@@ -43,6 +43,21 @@ class ImageExtractor:
     TEL_NUM_PIXELS = image.TEL_NUM_PIXELS
     IMAGE_SHAPES = image.IMAGE_SHAPES
 
+    METADATA_FIELDS = {
+        "ImageExtractor_ver":"pkg_resources.get_distribution('image-extractor').version",
+        "ctapipe_ver":"pkg_resources.get_distribution('ctapipe').version",
+        "CORSIKA_ver":0,
+        "simtel_ver":0,
+        "prod_site_alt":0,
+        "prod_site_coord": [0,0],
+        "prod_site_B_field": 0,
+        "prod_site_array": 0,
+        "prod_site_subarray": 0,
+        "particle_type": "event.mc.shower_primary_id",
+        "zenith": "event.mcheader.run_array_direction[1]",
+        "azimuth": "event.mcheader.run_array_direction[0]",
+        "spectral_index": 0}
+
     ALLOWED_CUT_PARAMS = {}
     DEFAULT_CUTS_DICT = {}
 
@@ -50,12 +65,12 @@ class ImageExtractor:
                  output_path,
                  ED_cuts_dict=None,
                  storage_mode='tel_type',
-                 tel_type_list=['MSTS'],
-                 img_mode='2D',
+                 tel_type_list=['MSTS','LST'],
+                 img_mode='1D',
                  img_channels=1,
-                 include_timing=False,
+                 include_timing=True,
                  img_scale_factors={'MSTS':1},
-                 img_dtype='uint16',
+                 img_dtypes={'MSTS':'uint16','LST':'uint64'},
                  img_dim_order='channels_last',
                  cuts_dict=DEFAULT_CUTS_DICT):
 
@@ -92,7 +107,7 @@ class ImageExtractor:
         self.include_timing = include_timing
 
         self.img_scale_factors = img_scale_factors
-        self.img_dtype = img_dtype
+        self.img_dtypes = img_dtypes
 
         if img_dim_order in ['channels_first','channels_last']:
             self.img_dim_order = img_dim_order
@@ -100,7 +115,7 @@ class ImageExtractor:
             raise ValueError('Invalid dimension ordering: {}.'.format(img_dim_order))
         
         self.trace_converter= image.TraceConverter(
-            self.img_dtype,
+            self.img_dtypes,
             self.img_dim_order,
             self.img_channels,
             self.img_scale_factors)
@@ -128,17 +143,16 @@ class ImageExtractor:
 
         logger.info("Collecting telescope types...")
 
-        source_temp = hessio_event_source(data_file, max_events=1)
+        event = next(hessio_event_source(data_file,max_events=1))
 
         all_tels = {tel_type:[] for tel_type in self.TEL_TYPES}
 
         dict_to_tel_type = {value: tel_type for tel_type, value in self.TEL_TYPES.items()}
 
-        for event in source_temp:
-            for tel_id in sorted(event.inst.telescope_ids):
-                if round(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value) in dict_to_tel_type:
-                    tel_type = dict_to_tel_type[round(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value)] 
-                    all_tels[tel_type].append(tel_id)
+        for tel_id in sorted(event.inst.telescope_ids):
+            if round(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value) in dict_to_tel_type:
+                tel_type = dict_to_tel_type[round(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value)] 
+                all_tels[tel_type].append(tel_id)
 
         # select telescopes by type
         logger.info("Selected telescope types: [")
@@ -161,6 +175,39 @@ class ImageExtractor:
 
         return selected_tels, total_num_tel_selected
 
+    def write_metadata(self,HDF5_file,data_file):
+
+        logger.info("Checking/writing metadata...")
+
+        event = next(hessio_event_source(data_file))
+
+        attributes = HDF5_file.root._v_attrs
+
+        for field in self.METADATA_FIELDS:
+            if type(self.METADATA_FIELDS[field]) is str:
+                value = eval(self.METADATA_FIELDS[field])
+            else:
+                value = self.METADATA_FIELDS[field]
+            if not attributes.__contains__(field):
+                exec("attributes." + field + " = value")
+            else:
+                if eval("attributes." + field) != value:
+                    raise ValueError("Metadata field {} for current simtel file does not match output file: {} vs {}".format(field,value,eval("attributes."+field)))
+
+        run_file_name = os.path.basename(data_file)
+        if not attributes.__contains__("runlist"):
+            attributes.runlist = [run_file_name]
+        else:
+            runlist = attributes.runlist
+            runlist.append(run_file_name)
+            attributes.runlist = runlist
+
+        if not attributes.__contains__("E_min"):
+            attributes.E_min = 0
+
+        if not attributes.__contains__("E_max"):
+            attributes.E_max = 0
+
     def process_data(self, data_file, max_events):
         """Main method to read a simtel.gz data file, process the event data,
         and write it to a formatted HDF5 data file.
@@ -169,11 +216,13 @@ class ImageExtractor:
 
         f = tables.open_file(self.output_path, mode="a", title="Output File")
 
-        selected_tels, num_tel = self.select_telescopes(data_file)
+        self.write_metadata(f,data_file)
 
+        selected_tels, num_tel = self.select_telescopes(data_file)
+    
         # create and fill telescope information table
-        if not f.__contains__('/Tel_Table'):
-            tel_pos_table = f.create_table(f.root, 'Tel_Table',
+        if not f.__contains__('/Telescope_Info'):
+            tel_pos_table = f.create_table(f.root, 'Telescope_Info',
                                            row_types.Tel,
                                            ("Table of telescope data"))
             tel_row = tel_pos_table.row
@@ -194,8 +243,8 @@ class ImageExtractor:
 
 
         #create event table
-        if not f.__contains__('/Events'):
-            table = f.create_table(f.root, 'Events',
+        if not f.__contains__('/Event_Info'):
+            table = f.create_table(f.root, 'Event_Info',
                                    row_types.Event,
                                    "Table of Event metadata")
            
@@ -211,37 +260,71 @@ class ImageExtractor:
             table2 = f.create_table(f.root, 'temp', descr2,"Table of Events")
             table.attrs._f_copy(table2)
             table.remove()
-            table2.move(f.root, 'Events')
+            table2.move(f.root, 'Event_Info')
 
-        #create image arrays
+        #create image tables
         for tel_type in selected_tels:
             if self.img_mode == '2D':
                 img_width = self.IMAGE_SHAPES[tel_type][0]*self.img_scale_factors[tel_type]
                 img_length = self.IMAGE_SHAPES[tel_type][1]*self.img_scale_factors[tel_type]
     
                 if self.img_dim_order == 'channels_first':
-                    array_shape = (0,self.img_channels,img_width,img_length)
+                    array_shape = (self.img_channels,img_width,img_length)
                 elif self.img_dim_order == 'channels_last':
-                    array_shape = (0,img_width,img_length,self.img_channels)
+                    array_shape = (img_width,img_length,self.img_channels)
+
+                np_type = np.dtype(np.dtype(self.img_dtypes[tel_type]), array_shape)
+                columns_dict = {"image":tables.Col.from_dtype(np_type)}
+
             elif self.img_mode == '1D':
-                if self.img_dim_order == 'channels_first':
-                    array_shape = (0,self.img_channels,self.TEL_NUM_PIXELS[tel_type])
-                elif self.img_dim_order == 'channels_last':
-                    array_shape = (0,self.TEL_NUM_PIXELS[tel_type],self.img_channels)
-           
+                array_shape = (self.TEL_NUM_PIXELS[tel_type],)  
+                np_type = np.dtype((np.dtype(self.img_dtypes[tel_type]), array_shape))
+
+                columns_dict = {"image_charge":tables.Col.from_dtype(np_type)}
+                if self.include_timing:
+                    columns_dict["image_peaks"] = tables.Col.from_dtype(np_type)
+
+            description = type('description', (tables.IsDescription,), columns_dict)
+
             if self.storage_mode == 'tel_type':
                 if not f.__contains__('/' + tel_type):
-                    array = f.create_earray(f.root,tel_type,
-                                            tables.Atom.from_dtype(np.dtype(self.img_dtype)),
-                                            array_shape)
+                    table = f.create_table(f.root,tel_type,description,"Table of {} images".format(tel_type))
+
+                    #append blank image at index 0
+                    image_row = table.row
+                    
+                    if self.img_mode == '2D':
+                        image_row['image'] = self.trace_converter.convert(None,None,tel_type)  
+                    
+                    elif self.img_mode == '1D':
+                        shape = (image.TEL_NUM_PIXELS[tel_type],) 
+                        image_row['image_charge'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
+                        if self.include_timing:
+                            image_row['image_peaks'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
+
+                    image_row.append()
            
             elif self.storage_mode == 'tel_id':
                 for tel_id in selected_tels[tel_type]:
                     if not f.__contains__('T' + str(tel_id)):
-                            array = f.create_earray(f.root,'T'+str(tel_id),
-                                                    tables.Atom.from_dtype(np.dtype(self.img_dtype)),
-                                                    array_shape)
+                        table = f.create_table(f.root,'T'+str(tel_id),description,"Table of T{} images".format(str(tel_id)))
                 
+                        #append blank image at index 0
+                        image_row = table.row
+                        
+                        if self.img_mode == '2D':
+                            image_row['image'] = self.trace_converter.convert(None,None,tel_type)  
+                        
+                        elif self.img_mode == '1D':
+                            shape = (image.TEL_NUM_PIXELS[tel_type],) 
+                            image_row['image_charge'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
+                            if self.include_timing:
+                                image_row['image_peaks'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
+
+                        image_row.append()
+     
+
+
         # specify calibration and other processing options
         cal = CameraCalibrator(None, None)
 
@@ -249,6 +332,9 @@ class ImageExtractor:
 
         event_count = 0
         passing_count = 0
+
+        E_min = float("inf")
+        E_max = -float("inf")
 
         source = hessio_event_source(data_file,allowed_tels=[j for i in selected_tels for j in selected_tels[i]],max_events=max_events)
 
@@ -274,7 +360,7 @@ class ImageExtractor:
      
             cal.calibrate(event)
 
-            table = f.root.Events
+            table = f.root.Event_Info
             event_row = table.row
 
             if self.storage_mode == 'tel_type':
@@ -283,7 +369,7 @@ class ImageExtractor:
                 all_tel_index_vector = []
 
             for tel_type in sorted(selected_tels.keys()):
-                for tel_id in selected_tels[tel_type]:
+                for tel_id in sorted(selected_tels[tel_type]):
                     if self.storage_mode == 'tel_type':
                         index_vector = tel_index_vectors[tel_type]
                     elif self.storage_mode == 'tel_id':
@@ -296,30 +382,26 @@ class ImageExtractor:
                         else:
                             peaks_vector = None
 
-                        if self.img_mode == '2D':
-                            convert_to_image = getattr(self.trace_converter, 'convert_'+tel_type)
-                            image = convert_to_image(pixel_vector, peaks_vector)
-                        elif self.img_mode == '1D':
-                            if self.img_dim_order == 'channels_first':
-                                axis = 0
-                            elif self.img_dim_order == 'channels_last':
-                                axis = 1
-                            if peaks_vector is not None:
-                                image = np.stack([pixel_vector,peaks_vector],axis=axis)
-                            else:
-                                image = np.expand_dims(pixel_vector,axis=axis)
-
                         if self.storage_mode == 'tel_type':
-                            array = eval('f.root.{}'.format(tel_type))
+                            table = eval('f.root.{}'.format(tel_type))
                         elif self.storage_mode == 'tel_id':
-                            array = eval('f.root.T{}'.format(tel_id))
-                        next_index = array.nrows
-                        array.append(np.expand_dims(image,axis=0))
-                        
-                        index_vector.append(next_index)
+                            table = eval('f.root.T{}'.format(tel_id))
+                        next_index = table.nrows
+                        image_row = table.row
 
+                        if self.img_mode == '2D':
+                            image_row['image'] = self.trace_converter.convert(pixel_vector,peaks_vector,tel_type)  
+                        
+                        elif self.img_mode == '1D':
+                            image_row['image_charge'] = pixel_vector
+                            if self.include_timing:
+                                image_row['image_peaks'] = peaks_vector
+
+                        image_row.append()
+                        index_vector.append(next_index)
+                        table.flush()
                     else:
-                        index_vector.append(-1)
+                        index_vector.append(0)
 
             if self.storage_mode == 'tel_type':
                 for tel_type in tel_index_vectors:
@@ -329,7 +411,7 @@ class ImageExtractor:
             
             event_row['event_number'] = event.r0.event_id
             event_row['run_number'] = event.r0.run_id
-            event_row['gamma_hadron_label'] = event.mc.shower_primary_id
+            event_row['particle_type'] = event.mc.shower_primary_id
             event_row['core_x'] = event.mc.core_x.value
             event_row['core_y'] = event.mc.core_y.value
             event_row['h_first_int'] = event.mc.h_first_int.value
@@ -337,8 +419,19 @@ class ImageExtractor:
             event_row['alt'] = event.mc.alt.value
             event_row['az'] = event.mc.az.value
 
+            if event.mc.energy.value > E_max:
+                E_max = event.mc.energy.value
+            if event.mc.energy.value < E_min:
+                E_min = event.mc.energy.value
+
             event_row.append()
             table.flush()
+
+        #Update E_max and E_min metadata fields after checking all events in file
+        if E_max > f.root._v_attrs.E_max:
+            f.root._v_attrs.E_max = E_max
+        if E_min < f.root._v_attrs.E_min:
+            f.root._v_attrs.E_min = E_min
 
         f.close()
 
@@ -449,16 +542,11 @@ if __name__ == '__main__':
         description=("Load image data and event parameters from a simtel file"
                      "into a formatted HDF5 file."))
     parser.add_argument(
-        'data_files',
-        help='wildcard path to input .simtel files')
+        'run_list',
+        help='text file run list containing a list of simtel files to process (1 per line)')
     parser.add_argument(
         'hdf5_path',
         help=('path of output HDF5 file, or currently existing file to append to'))
-    parser.add_argument(
-        '--config_file',
-        help=('configuration file specifying the selected telescope ids '
-              'from simtel file, the desired energy bins, and the correct '
-              'image output dimensions/dtype.'))
     parser.add_argument(
         '--ED_cuts_dict_file',
         help='path of .pkl file containing cuts dictionary from EventDisplay')
@@ -489,11 +577,13 @@ if __name__ == '__main__':
     else:
         ED_cuts_dict = None
 
-    extractor = ImageExtractor(args.hdf5_path,img_mode='2D',ED_cuts_dict=ED_cuts_dict)
+    extractor = ImageExtractor(args.hdf5_path,img_mode='1D',ED_cuts_dict=ED_cuts_dict)
 
-    data_files = glob.glob(args.data_files)
+    with open(args.run_list) as f:
+        run_list = f.readlines()
+        run_list = [x.strip() for x in run_list] 
 
-    for data_file in data_files:
+    for data_file in run_list:
         extractor.process_data(data_file, args.max_events)
 
     if args.shuffle:
