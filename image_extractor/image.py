@@ -2,8 +2,6 @@ import logging
 
 import numpy as np
 
-import image_extractor
-
 TEL_NUM_PIXELS = {'LST':1855,'MSTF':1855, 'MSTN':1764,'MSTS':11328,'SST1':1296, 'SSTA':2368, 'SSTC':2048}
 IMAGE_SHAPES = {'MSTS': (120, 120)}
 
@@ -12,15 +10,15 @@ logger = logging.getLogger(__name__)
 
 class TraceConverter:
 
-    def __init__(self, img_dtype, dim_order, num_channels, scale_factors):
-        self.img_dtype = img_dtype
+    def __init__(self, img_dtypes, dim_order, num_channels, scale_factors):
+        self.img_dtypes = img_dtypes
         self.dim_order = dim_order
         self.num_channels = num_channels
         self.scale_factors = scale_factors
 
         #create injunction tables for each telescope type
         self.injunction_tables = {}
-        self.injunction_tables['MSTS'] = __generate_table_MSTS()
+        self.injunction_tables['MSTS'] = TraceConverter.__generate_table_MSTS()
 
     def convert(self,pixels_vector,peaks_vector,tel_type):
         """
@@ -31,6 +29,7 @@ class TraceConverter:
         image_shape = IMAGE_SHAPES[tel_type]
         scale_factor = self.scale_factors[tel_type]
         injunction_table = self.injunction_tables[tel_type]
+        img_dtype = self.img_dtypes[tel_type]
 
         if self.dim_order == 'channels_first':
             shape = [self.num_channels,
@@ -42,10 +41,10 @@ class TraceConverter:
                     self.num_channels]
     
         if pixels_vector is None:
-            return np.zeros(shape,dtype=self.img_dtype)
+            return np.zeros(shape,dtype=img_dtype)
         else:
             
-            img_array = np.empty(shape,dtype=self.img_dtype)
+            img_array = np.empty(shape,dtype=img_dtype)
 
             #preprocess image vector - truncate at 0, scale by 100, round to integer
             pixels_vector = np.around(np.multiply(pixels_vector.clip(min=0),100))
