@@ -22,7 +22,7 @@ class Event(IsDescription):
         UInt32 placeholder type for the shower event id
     run_number : UInt32Col
         UInt32 placeholder type for the run number
-    gamma_hadron_label : UInt8Col
+    particle_type : UInt8Col
         UInt8 placeholder type for the CORSIKA-simulated primary particle type
         code.
     core_x : Float64Col
@@ -44,11 +44,11 @@ class Event(IsDescription):
     """
     event_number = UInt32Col()
     run_number = UInt32Col()
-    gamma_hadron_label = UInt8Col()
-    core_x = Float64Col()
-    core_y = Float64Col()
-    h_first_int = Float64Col()
-    mc_energy = Float64Col()
+    particle_type = UInt8Col()
+    core_x = Float32Col()
+    core_y = Float32Col()
+    h_first_int = Float32Col()
+    mc_energy = Float32Col()
     az = Float32Col()
     alt = Float32Col()
 
@@ -86,3 +86,4 @@ class Tel(IsDescription):
     run_array_direction = Float32Col(2)
     optical_foclen = Float32Col()
     num_pixels= UInt32Col()
+
