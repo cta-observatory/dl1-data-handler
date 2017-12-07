@@ -427,6 +427,7 @@ class ImageExtractor:
             event_row.append()
             table.flush()
 
+        f.root.Event_Info.flush()
         total_num_events = f.root.Event_Info.nrows
 
         f.close()
