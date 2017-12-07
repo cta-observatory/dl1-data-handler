@@ -125,19 +125,19 @@ for additional scripts in scripts directory:
 To create a HDF5 dataset file out of a collection of .simtel.gz files, run:
 
 ```bash
-image_extractor.py [path_to_simtel_files] [output_file] [--bins_cuts_dict BINS_CUTS_DICT] [--max_events MAX_EVENTS] [--shuffle [SEED]] [--split [SPLIT_LIST]] [--debug]
+image_extractor.py [runlist] [output_file] [--ED_cuts_dict_file ED_CUTS_DICT_FILE] [--max_events MAX_EVENTS] [--shuffle [SEED]] [--split [SPLIT_LIST]] [--debug]
 ```
 on the command line.
 
 ex:
 
 ```bash
-image_extractor.py "/data/simtel/*.simtel.gz" "./dataset.h5" "./configuration_settings.config" "./bins_cuts_dict.pkl" --shuffle --split
+image_extractor.py runlist.txt ./dataset.h5 --ED_cuts_dict_file ./bins_cuts_dict.pkl --debug
 ```
 
-* path_to_simtel_files - The path to .simtel.gz file(s) containing the events which you wish to process. Multiple files should be located in the same directory and indicated using a wildcard.
+* runlist - A list of filepaths (relative or absolute) for the simtel.gz files (one per line) to process. Lines beginning with a '#' are ignored and can be used for comments. 
 * output_file - The path to the HDF5 file into which you wish to write your data.
-* bins_cuts_dict - Optional path to a pickled Python dictionary of a specified format (see prepare_cuts_dict.py) containing information from EventDisplay on which events (run_number,event_number) passed the cuts, what their reconstructed energies are, and which energy bin they are in. This information is prepared in advance using prepare_cuts_dict.py and the settings indicated in the config file.
+* ED_cuts_dict_file - Optional path to a pickled Python dictionary of a specified format (see prepare_cuts_dict.py) containing information from EventDisplay on which events (run_number,event_number) passed the cuts, what their reconstructed energies are, and which energy bin they are in.
 * max_events - Optional argument to specify the maximum number of events to save from the simtel file
 * shuffle [SEED]- Optional flag to randomly shuffle the data in the Events table after writing. Can provide an optional seed value to get a reproduceable result.
 * split [SPLIT_LIST]- Optional flag to split the Events table into separate training/validation/test tables for convenience. Can provide a list (3 arguments) which give the split proportions between train, val, and test. A split proportion of 0 indicates that the corresponding table will not be created. Split proportions must sum to 1.
@@ -161,23 +161,18 @@ from image_extractor import image_extractor
 #max events to read per file
 max_events = 50
 
-#optionally load bins cuts dictionary from file
-bins_cuts_dict = pkl.load(open(args.bins_cuts_dict_file, "rb" ))
-
-#data file
 data_file = "/home/computer/user/data/simtel/test.simtel.gz"
 
 #create an ImageExtractor with default settings
-extractor = image_extractor.ImageExtractor(output_path,ED_cuts_dict=bins_cuts_dict)
+extractor = image_extractor.ImageExtractor(output_path,tel_type_list=['MSTS'])
 
 extractor.process_data(data_file,max_events)
 
-#...
 ```
 
-### Config files and bins_cuts_dict files
+### ED_cuts_dict files
 
-Bins_cuts_dict.pkl files are the result of running the EventDisplay analysis on the simtel files through to the MSCW stage, then applying the cuts specified in the config file on the array/event-level parameters. The default cuts were selected to match those used by the Boosted Decision Tree analysis method for Gamma-Hadron separation currently being used in EventDisplay for VERITAS data. A new one can be created (for example, to match a new set of simtel files) by running the standard ED analysis on all simtel files up to the MSCW stage, then passing the MSCW.root files into prepare_bins_dict.py.
+ED_cuts_dict.pkl files are the result of running the EventDisplay analysis on the simtel files through to the MSCW stage, then applying the cuts specified in the config file on the array/event-level parameters. The default cuts were selected to match those used by the Boosted Decision Tree analysis method for Gamma-Hadron separation currently being used in EventDisplay for VERITAS data. A new one can be created (for example, to match a new set of simtel files) by running the standard ED analysis on all simtel files up to the MSCW stage, then passing the MSCW.root files into prepare_bins_dict.py.
 
 ## Examples/Tips
 
