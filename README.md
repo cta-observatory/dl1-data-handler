@@ -132,7 +132,7 @@ on the command line.
 ex:
 
 ```bash
-image_extractor.py /data/simtel/*.simtel.gz ./dataset.h5 --ED_cuts_dict_file ./bins_cuts_dict.pkl --debug
+image_extractor.py runlist.txt ./dataset.h5 --ED_cuts_dict_file ./bins_cuts_dict.pkl --debug
 ```
 
 * runlist - A list of filepaths (relative or absolute) for the simtel.gz files (one per line) to process. Lines beginning with a '#' are ignored and can be used for comments. 
