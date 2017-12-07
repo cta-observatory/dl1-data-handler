@@ -427,10 +427,12 @@ class ImageExtractor:
             event_row.append()
             table.flush()
 
+        total_num_events = f.root.Event_Info.nrows
+
         f.close()
 
         logger.info("{} events read in file".format(event_count))
-        logger.info("{} total events in output file.".format(f.root.Event_Info.nrows))
+        logger.info("{} total events in output file.".format(total_num_events))
         if self.cuts_dict or self.ED_cuts_dict:
             logger.info("{} events passed cuts/written to file".format(passing_count))
         logger.info("Done!")
