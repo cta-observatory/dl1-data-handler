@@ -430,6 +430,7 @@ class ImageExtractor:
         f.close()
 
         logger.info("{} events read in file".format(event_count))
+        logger.info("{} total events in output file.".format(f.root.Event_Info.nrows))
         if self.cuts_dict or self.ED_cuts_dict:
             logger.info("{} events passed cuts/written to file".format(passing_count))
         logger.info("Done!")
