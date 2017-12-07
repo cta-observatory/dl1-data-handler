@@ -215,27 +215,33 @@ class ImageExtractor:
         self.write_metadata(f,data_file)
 
         selected_tels, num_tel = self.select_telescopes(data_file)
-    
+
+        event = next(hessio_event_source(data_file))
+
         # create and fill telescope information table
         if not f.__contains__('/Telescope_Info'):
-            tel_pos_table = f.create_table(f.root, 'Telescope_Info',
+            tel_table = f.create_table(f.root, 'Telescope_Info',
                                            row_types.Tel,
                                            ("Table of telescope data"))
-            tel_row = tel_pos_table.row
+            tel_row = tel_table.row
 
-            source_temp = hessio_event_source(data_file, max_events=1)
-            for event in source_temp:
-                for tel_type in selected_tels:
-                    for tel_id in selected_tels[tel_type]:
-                        tel_row["tel_id"] = tel_id
-                        tel_row["tel_x"] = event.inst.tel_pos[tel_id].value[0]
-                        tel_row["tel_y"] = event.inst.tel_pos[tel_id].value[1]
-                        tel_row["tel_z"] = event.inst.tel_pos[tel_id].value[2]
-                        tel_row["tel_type"] = tel_type
-                        tel_row["run_array_direction"] = event.mcheader.run_array_direction
-                        tel_row["optical_foclen"] = event.inst.optical_foclen[tel_id].value
-                        tel_row["num_pixels"] = event.inst.num_pixels[tel_id]
-                        tel_row.append()
+            #add units to table attributes
+            random_tel_type = random.choice(list(selected_tels.keys()))
+            random_tel_id = random.choice(selected_tels[random_tel_type])
+            tel_table.attrs.tel_pos_units = str(event.inst.tel_pos[random_tel_id].unit)
+            tel_table.attrs.optical_foclen_units = str(event.inst.optical_foclen[random_tel_id].unit)
+
+            for tel_type in selected_tels:
+                for tel_id in selected_tels[tel_type]:
+                    tel_row["tel_id"] = tel_id
+                    tel_row["tel_x"] = event.inst.tel_pos[tel_id].value[0]
+                    tel_row["tel_y"] = event.inst.tel_pos[tel_id].value[1]
+                    tel_row["tel_z"] = event.inst.tel_pos[tel_id].value[2]
+                    tel_row["tel_type"] = tel_type
+                    tel_row["run_array_direction"] = event.mcheader.run_array_direction
+                    tel_row["optical_foclen"] = event.inst.optical_foclen[tel_id].value
+                    tel_row["num_pixels"] = event.inst.num_pixels[tel_id]
+                    tel_row.append()
 
 
         #create event table
@@ -257,6 +263,12 @@ class ImageExtractor:
             table.attrs._f_copy(table2)
             table.remove()
             table2.move(f.root, 'Event_Info')
+
+            #add units to table attributes
+            table2.attrs.core_pos_units = str(event.mc.core_x.unit)
+            table2.attrs.h_first_int_units = str(event.mc.h_first_int.unit)
+            table2.attrs.mc_energy_units = str(event.mc.energy.unit)
+            table2.attrs.alt_az_units = str(event.mc.alt.unit)
 
         #create image tables
         for tel_type in selected_tels:
