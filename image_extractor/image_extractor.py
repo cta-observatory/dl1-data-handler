@@ -44,19 +44,21 @@ class ImageExtractor:
     IMAGE_SHAPES = image.IMAGE_SHAPES
 
     METADATA_FIELDS = {
-        "ImageExtractor_ver":"pkg_resources.get_distribution('image-extractor').version",
-        "ctapipe_ver":"pkg_resources.get_distribution('ctapipe').version",
-        "CORSIKA_ver":0,
-        "simtel_ver":0,
-        "prod_site_alt":0,
-        "prod_site_coord": [0,0],
-        "prod_site_B_field": 0,
-        "prod_site_array": 0,
-        "prod_site_subarray": 0,
-        "particle_type": "event.mc.shower_primary_id",
-        "zenith": "event.mcheader.run_array_direction[1]",
-        "azimuth": "event.mcheader.run_array_direction[0]",
-        "spectral_index": 0}
+        "ImageExtractor_ver": ("pkg_resources.get_distribution('image-extractor').version",),
+        "ctapipe_ver": ("pkg_resources.get_distribution('ctapipe').version",),
+        "CORSIKA_ver": None,
+        "simtel_ver": None,
+        "prod_site_alt": None,
+        "prod_site_coord": None,
+        "prod_site_B_field": None,
+        "prod_site_array": None,
+        "prod_site_subarray": None,
+        "particle_type": ("event.mc.shower_primary_id",),
+        "zenith": ("event.mcheader.run_array_direction[1]",),
+        "azimuth": ("event.mcheader.run_array_direction[0]",),
+        "spectral_index": None,
+        "E_min": None,
+        "E_max": None}
 
     ALLOWED_CUT_PARAMS = {}
     DEFAULT_CUTS_DICT = {}
@@ -65,12 +67,12 @@ class ImageExtractor:
                  output_path,
                  ED_cuts_dict=None,
                  storage_mode='tel_type',
-                 tel_type_list=['MSTS','LST'],
+                 tel_type_list=['MSTS','LST','MSTF','MSTN','MSTS','SST1','SSTA','SSTC'],
                  img_mode='1D',
                  img_channels=1,
                  include_timing=True,
                  img_scale_factors={'MSTS':1},
-                 img_dtypes={'MSTS':'uint16','LST':'uint64'},
+                 img_dtypes={'MSTS':'float32','LST':'float32'},
                  img_dim_order='channels_last',
                  cuts_dict=DEFAULT_CUTS_DICT):
 
@@ -184,8 +186,8 @@ class ImageExtractor:
         attributes = HDF5_file.root._v_attrs
 
         for field in self.METADATA_FIELDS:
-            if type(self.METADATA_FIELDS[field]) is str:
-                value = eval(self.METADATA_FIELDS[field])
+            if isinstance(self.METADATA_FIELDS[field],tuple):
+                value = eval(self.METADATA_FIELDS[field][0])
             else:
                 value = self.METADATA_FIELDS[field]
             if not attributes.__contains__(field):
@@ -194,19 +196,13 @@ class ImageExtractor:
                 if eval("attributes." + field) != value:
                     raise ValueError("Metadata field {} for current simtel file does not match output file: {} vs {}".format(field,value,eval("attributes."+field)))
 
-        run_file_name = os.path.basename(data_file)
+        run_file_path = os.path.abspath(data_file)
         if not attributes.__contains__("runlist"):
-            attributes.runlist = [run_file_name]
+            attributes.runlist = [run_file_path]
         else:
             runlist = attributes.runlist
-            runlist.append(run_file_name)
+            runlist.append(run_file_path)
             attributes.runlist = runlist
-
-        if not attributes.__contains__("E_min"):
-            attributes.E_min = 0
-
-        if not attributes.__contains__("E_max"):
-            attributes.E_max = 0
 
     def process_data(self, data_file, max_events):
         """Main method to read a simtel.gz data file, process the event data,
@@ -282,7 +278,7 @@ class ImageExtractor:
 
                 columns_dict = {"image_charge":tables.Col.from_dtype(np_type)}
                 if self.include_timing:
-                    columns_dict["image_peaks"] = tables.Col.from_dtype(np_type)
+                    columns_dict["image_peak_times"] = tables.Col.from_dtype(np_type)
 
             description = type('description', (tables.IsDescription,), columns_dict)
 
@@ -300,9 +296,10 @@ class ImageExtractor:
                         shape = (image.TEL_NUM_PIXELS[tel_type],) 
                         image_row['image_charge'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
                         if self.include_timing:
-                            image_row['image_peaks'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
+                            image_row['image_peak_times'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
 
                     image_row.append()
+                    table.flush()
            
             elif self.storage_mode == 'tel_id':
                 for tel_id in selected_tels[tel_type]:
@@ -319,11 +316,10 @@ class ImageExtractor:
                             shape = (image.TEL_NUM_PIXELS[tel_type],) 
                             image_row['image_charge'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
                             if self.include_timing:
-                                image_row['image_peaks'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
+                                image_row['image_peak_times'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
 
                         image_row.append()
-     
-
+                        table.flush()
 
         # specify calibration and other processing options
         cal = CameraCalibrator(None, None)
@@ -332,9 +328,6 @@ class ImageExtractor:
 
         event_count = 0
         passing_count = 0
-
-        E_min = float("inf")
-        E_max = -float("inf")
 
         source = hessio_event_source(data_file,allowed_tels=[j for i in selected_tels for j in selected_tels[i]],max_events=max_events)
 
@@ -368,7 +361,7 @@ class ImageExtractor:
             elif self.storage_mode == 'tel_id':
                 all_tel_index_vector = []
 
-            for tel_type in sorted(selected_tels.keys()):
+            for tel_type in selected_tels.keys():
                 for tel_id in sorted(selected_tels[tel_type]):
                     if self.storage_mode == 'tel_type':
                         index_vector = tel_index_vectors[tel_type]
@@ -395,7 +388,7 @@ class ImageExtractor:
                         elif self.img_mode == '1D':
                             image_row['image_charge'] = pixel_vector
                             if self.include_timing:
-                                image_row['image_peaks'] = peaks_vector
+                                image_row['image_peak_times'] = peaks_vector
 
                         image_row.append()
                         index_vector.append(next_index)
@@ -411,7 +404,7 @@ class ImageExtractor:
             
             event_row['event_number'] = event.r0.event_id
             event_row['run_number'] = event.r0.run_id
-            event_row['particle_type'] = event.mc.shower_primary_id
+            event_row['particle_id'] = event.mc.shower_primary_id
             event_row['core_x'] = event.mc.core_x.value
             event_row['core_y'] = event.mc.core_y.value
             event_row['h_first_int'] = event.mc.h_first_int.value
@@ -419,19 +412,8 @@ class ImageExtractor:
             event_row['alt'] = event.mc.alt.value
             event_row['az'] = event.mc.az.value
 
-            if event.mc.energy.value > E_max:
-                E_max = event.mc.energy.value
-            if event.mc.energy.value < E_min:
-                E_min = event.mc.energy.value
-
             event_row.append()
             table.flush()
-
-        #Update E_max and E_min metadata fields after checking all events in file
-        if E_max > f.root._v_attrs.E_max:
-            f.root._v_attrs.E_max = E_max
-        if E_min < f.root._v_attrs.E_min:
-            f.root._v_attrs.E_min = E_min
 
         f.close()
 
@@ -577,11 +559,14 @@ if __name__ == '__main__':
     else:
         ED_cuts_dict = None
 
-    extractor = ImageExtractor(args.hdf5_path,img_mode='1D',ED_cuts_dict=ED_cuts_dict)
+    extractor = ImageExtractor(args.hdf5_path,tel_type_list=['MSTS','LST'])
 
+    run_list = []
     with open(args.run_list) as f:
-        run_list = f.readlines()
-        run_list = [x.strip() for x in run_list] 
+        for line in f:
+            line = line.strip()
+            if line and line[0] != "#":
+                run_list.append(line)
 
     for data_file in run_list:
         extractor.process_data(data_file, args.max_events)
