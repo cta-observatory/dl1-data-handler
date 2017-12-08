@@ -282,13 +282,13 @@ class ImageExtractor:
                     array_shape = (img_width,img_length,self.img_channels)
 
                 np_type = np.dtype(np.dtype(self.img_dtypes[tel_type]), array_shape)
-                columns_dict = {"image":tables.Col.from_dtype(np_type)}
+                columns_dict = {"image":tables.Col.from_dtype(np_type),"event_index":tables.Int32Col()}
 
             elif self.img_mode == '1D':
                 array_shape = (self.TEL_NUM_PIXELS[tel_type],)  
                 np_type = np.dtype((np.dtype(self.img_dtypes[tel_type]), array_shape))
 
-                columns_dict = {"image_charge":tables.Col.from_dtype(np_type)}
+                columns_dict = {"image_charge":tables.Col.from_dtype(np_type),"event_index":tables.Int32Col()}
                 if self.include_timing:
                     columns_dict["image_peak_times"] = tables.Col.from_dtype(np_type)
 
@@ -307,6 +307,7 @@ class ImageExtractor:
                     elif self.img_mode == '1D':
                         shape = (image.TEL_NUM_PIXELS[tel_type],) 
                         image_row['image_charge'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
+                        image_row['event_index'] = -1
                         if self.include_timing:
                             image_row['image_peak_times'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
 
@@ -327,6 +328,7 @@ class ImageExtractor:
                         elif self.img_mode == '1D':
                             shape = (image.TEL_NUM_PIXELS[tel_type],) 
                             image_row['image_charge'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
+                            image_row['event_index'] = -1
                             if self.include_timing:
                                 image_row['image_peak_times'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
 
@@ -366,7 +368,9 @@ class ImageExtractor:
             cal.calibrate(event)
 
             table = f.root.Event_Info
+            table.flush()
             event_row = table.row
+            event_index = table.nrows
 
             if self.storage_mode == 'tel_type':
                 tel_index_vectors = {tel_type:[] for tel_type in selected_tels}
@@ -396,11 +400,13 @@ class ImageExtractor:
 
                         if self.img_mode == '2D':
                             image_row['image'] = self.trace_converter.convert(pixel_vector,peaks_vector,tel_type)  
-                        
+
                         elif self.img_mode == '1D':
                             image_row['image_charge'] = pixel_vector
                             if self.include_timing:
                                 image_row['image_peak_times'] = peaks_vector
+
+                        image_row["event_index"] = event_index
 
                         image_row.append()
                         index_vector.append(next_index)
@@ -584,7 +590,10 @@ if __name__ == '__main__':
             if line and line[0] != "#":
                 run_list.append(line)
 
-    for data_file in run_list:
+    logger.info("Number of data files in runlist: {}".format(len(run_list)))
+
+    for i,data_file in enumerate(run_list):
+        logger.info("Processing file {}/{}".format(i,len(run_list)))
         extractor.process_data(data_file, args.max_events)
 
     if args.shuffle:
