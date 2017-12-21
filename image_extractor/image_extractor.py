@@ -56,6 +56,7 @@ class ImageExtractor:
         "particle_type": ("event.mc.shower_primary_id",),
         "zenith": ("event.mcheader.run_array_direction[1]",),
         "azimuth": ("event.mcheader.run_array_direction[0]",),
+        "view_cone": None,
         "spectral_index": None,
         "E_min": None,
         "E_max": None}
@@ -67,12 +68,13 @@ class ImageExtractor:
                  output_path,
                  ED_cuts_dict=None,
                  storage_mode='tel_type',
-                 tel_type_list=['MSTS','LST','MSTF','MSTN','MSTS','SST1','SSTA','SSTC'],
+                 tel_type_list=['LST','MSTF','MSTN','MSTS','SST1','SSTA','SSTC'],
                  img_mode='1D',
                  img_channels=1,
                  include_timing=True,
                  img_scale_factors={'MSTS':1},
-                 img_dtypes={'MSTS':'float32','LST':'float32'},
+                 img_dtypes={'LST':'float32','MSTS':'float32','MSTF':'float32','MSTN':'float32','SST1':'float32',
+                             'SSTA':'float32','SSTC':'float32',},
                  img_dim_order='channels_last',
                  cuts_dict=DEFAULT_CUTS_DICT):
 
@@ -218,48 +220,77 @@ class ImageExtractor:
 
         event = next(hessio_event_source(data_file))
 
-        # create and fill telescope information table
-        if not f.__contains__('/Telescope_Info'):
-            tel_table = f.create_table(f.root, 'Telescope_Info',
-                                           row_types.Tel,
-                                           ("Table of telescope data"))
-            tel_row = tel_table.row
+        # create and fill array information table
+        if not f.__contains__('/Array_Info'):
+            arr_table = f.create_table(f.root, 'Array_Info',
+                                       row_types.Array,
+                                       ("Table of array data"))
 
-            #add units to table attributes
-            random_tel_type = random.choice(list(selected_tels.keys()))
-            random_tel_id = random.choice(selected_tels[random_tel_type])
-            tel_table.attrs.tel_pos_units = str(event.inst.tel_pos[random_tel_id].unit)
-            tel_table.attrs.optical_foclen_units = str(event.inst.optical_foclen[random_tel_id].unit)
+            arr_row = arr_table.row
 
             for tel_type in selected_tels:
                 for tel_id in selected_tels[tel_type]:
-                    tel_row["tel_id"] = tel_id
-                    tel_row["tel_x"] = event.inst.tel_pos[tel_id].value[0]
-                    tel_row["tel_y"] = event.inst.tel_pos[tel_id].value[1]
-                    tel_row["tel_z"] = event.inst.tel_pos[tel_id].value[2]
-                    tel_row["tel_type"] = tel_type
-                    tel_row["run_array_direction"] = event.mcheader.run_array_direction
-                    tel_row["optical_foclen"] = event.inst.optical_foclen[tel_id].value
-                    tel_row["num_pixels"] = event.inst.num_pixels[tel_id]
-                    tel_row.append()
+                    arr_row["tel_id"] = tel_id
+                    arr_row["tel_x"] = event.inst.tel_pos[tel_id].value[0]
+                    arr_row["tel_y"] = event.inst.tel_pos[tel_id].value[1]
+                    arr_row["tel_z"] = event.inst.tel_pos[tel_id].value[2]
+                    arr_row["tel_type"] = tel_type
+                    arr_row["run_array_direction"] = event.mcheader.run_array_direction
+                    arr_row.append()
 
+        # create and fill telescope information table
+        if not f.__contains__('/Telescope_Info'):
+            tel_table = f.create_table(f.root, 'Telescope_Info',
+                                       row_types.Tel,
+                                       ("Table of telescope data"))
+
+            descr = tel_table.description._v_colobjects
+            descr2 = descr.copy()
+
+            max_npix = self.TEL_NUM_PIXELS[max(self.TEL_NUM_PIXELS, key=self.TEL_NUM_PIXELS.get)]
+            descr2["pixel_pos"] = tables.Float32Col(shape=(2, max_npix))
+
+            tel_table2 = f.create_table(f.root, 'temp', descr2, "Table of telescope data")
+            tel_table.attrs._f_copy(tel_table2)
+            tel_table.remove()
+            tel_table2.move(f.root, 'Telescope_Info')
+
+            tel_row = tel_table2.row
+
+            # add units to table attributes
+            random_tel_type = random.choice(list(selected_tels.keys()))
+            random_tel_id = random.choice(selected_tels[random_tel_type])
+            tel_table2.attrs.tel_pos_units = str(event.inst.tel_pos[random_tel_id].unit)
+            tel_table2.attrs.optical_foclen_units = str(event.inst.optical_foclen[random_tel_id].unit)
+
+            for tel_type in selected_tels:
+                random_tel_id = random.choice(selected_tels[tel_type])
+                tel_row["tel_type"] = tel_type
+                tel_row["optical_foclen"] = event.inst.optical_foclen[random_tel_id].value
+                tel_row["num_pixels"] = event.inst.num_pixels[random_tel_id]
+                posx = np.hstack([event.inst.pixel_pos[random_tel_id][0].value,
+                np.zeros(max_npix - len(event.inst.pixel_pos[random_tel_id][0].value))])
+                posy = np.hstack([event.inst.pixel_pos[random_tel_id][1].value,
+                np.zeros(max_npix - len(event.inst.pixel_pos[random_tel_id][1].value))])
+                tel_row["pixel_pos"] = [posx, posy]
+                tel_row.append()
 
         #create event table
         if not f.__contains__('/Event_Info'):
             table = f.create_table(f.root, 'Event_Info',
                                    row_types.Event,
                                    "Table of Event metadata")
-           
+
             descr = table.description._v_colobjects
             descr2 = descr.copy()
 
             if self.storage_mode == 'tel_type':
                 for tel_type in selected_tels:
-                    descr2[tel_type+'_indices'] = tables.Int32Col(shape=(len(selected_tels[tel_type])))
+                    descr2[tel_type + '_indices'] = tables.Int32Col(shape=(len(selected_tels[tel_type])))
             elif self.storage_mode == 'tel_id':
                 descr2["indices"] = tables.Int32Col(shape=(num_tel))
 
-            table2 = f.create_table(f.root, 'temp', descr2,"Table of Events")
+            table2 = f.create_table(f.root, 'temp', descr2, "Table of Events")
             table.attrs._f_copy(table2)
             table.remove()
             table2.move(f.root, 'Event_Info')
@@ -581,7 +612,7 @@ if __name__ == '__main__':
     else:
         ED_cuts_dict = None
 
-    extractor = ImageExtractor(args.hdf5_path,tel_type_list=['MSTS','LST'])
+    extractor = ImageExtractor(args.hdf5_path)
 
     run_list = []
     with open(args.run_list) as f:
@@ -593,7 +624,7 @@ if __name__ == '__main__':
     logger.info("Number of data files in runlist: {}".format(len(run_list)))
 
     for i,data_file in enumerate(run_list):
-        logger.info("Processing file {}/{}".format(i,len(run_list)))
+        logger.info("Processing file {}/{}".format(i+1,len(run_list)))
         extractor.process_data(data_file, args.max_events)
 
     if args.shuffle:
