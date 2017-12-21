@@ -56,6 +56,7 @@ class ImageExtractor:
         "particle_type": ("event.mc.shower_primary_id",),
         "zenith": ("event.mcheader.run_array_direction[1]",),
         "azimuth": ("event.mcheader.run_array_direction[0]",),
+        "view_cone": None,
         "spectral_index": None,
         "E_min": None,
         "E_max": None}
