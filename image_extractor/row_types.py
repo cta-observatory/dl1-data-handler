@@ -52,9 +52,33 @@ class Event(IsDescription):
     az = Float32Col()
     alt = Float32Col()
 
+
 class Tel(IsDescription):
     """Row descriptor class for Pytables telescope data table.
-    
+
+    Contains parameter information for each selected telescope
+    in the data.
+
+    Attributes
+    ----------
+    tel_type : StringCol
+        String placeholder type for the telescope type name (i.e. 'LST')
+    optical_foclen: Float32Col
+        Float32 placeholder type for telescope's focal length
+    num_pixels: UInt32Col
+        UInt32 placeholder type for telescope's number of pixels
+    pixel_pos: Float32Col
+        Float32Col placeholder type for pixel's coordinates
+    """
+
+    tel_type = StringCol(8)
+    optical_foclen = Float32Col()
+    num_pixels = UInt32Col()
+    pixel_pos = Float32Col(2)
+
+class Array(IsDescription):
+    """Row descriptor class for Pytables array data table.
+
     Contains parameter information for each selected telescope
     in the data.
 
@@ -84,6 +108,5 @@ class Tel(IsDescription):
     tel_z = Float32Col()
     tel_type = StringCol(8)
     run_array_direction = Float32Col(2)
-    optical_foclen = Float32Col()
-    num_pixels= UInt32Col()
+
 
