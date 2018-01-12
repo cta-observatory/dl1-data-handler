@@ -30,16 +30,20 @@ parser.add_argument(
     'config',
     help='configuration file')
 parser.add_argument(
-        "--debug",
-        help="print debug/logger messages",
-        action="store_true")
+        "--out",
+        help="set output path")
 parser.add_argument(
         "--keep_merged",
         help="do not delete merged simtel files",
         action="store_true")
 parser.add_argument(
-        "--out",
-        help="set output path")
+        "--debug",
+        help="print debug/logger messages",
+        action="store_true")
+parser.add_argument(
+        "--info_only",
+        help="print dataset summary only, then quit (data won't be processed)",
+        action="store_true")
 
 args = parser.parse_args()
 
@@ -53,11 +57,9 @@ if args.out:
 else:
     outpath='.'
 
-logger.info('Reading configuration file')
-
 config = configparser.ConfigParser()
-print(args.config)
 if os.path.isfile(args.config):
+    logger.info('Reading configuration from {}'.format(args.config))
     config.read(args.config)
     hessiosys = config['DEFAULT']['hessiosys']
     merge_map = config['DEFAULT']['merge_map']
@@ -68,14 +70,14 @@ else:
     print('Config file {} not found'.format(args.config))
     sys.exit(1)
 
-logger.info('Reading list and finding matched runs')
+logger.info('Reading list and finding matched runs in:\n{}'.format(args.simtel_list))
 
 with open(args.simtel_list,'r') as f:
     nonsct_list=[]
     sct_list=[]
     matched_list=[]
     for line in f:
-        if 'SCT' in line:
+        if 'SCT' in os.path.basename(line):
             sct_list.append(line.rstrip())
         else:
             nonsct_list.append(line.rstrip())
@@ -85,10 +87,13 @@ with open(args.simtel_list,'r') as f:
             if sct_file.split('run')[1].split('___cta')[0] == run:
                 matched_list.append([nonsct_file,sct_file,run])
 
-logger.info('{} non-SCT runs in list'.format(len(sct_list)))
+logger.info('{} non-SCT runs in list'.format(len(nonsct_list)))
 logger.info('{} SCT runs in list'.format(len(sct_list)))
-logger.info('{} matching runs'.format(len(sct_list)))
+logger.info('{} matching runs'.format(len(matched_list)))
 
+if args.info_only:
+    sys.exit(0)
+ 
 def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]
