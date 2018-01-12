@@ -22,7 +22,9 @@ import row_types
 logger = logging.getLogger(__name__)
 
 class ImageExtractor:
-    """Class to handle reading in simtel files and writing to HDF5.
+    """
+
+    Class to handle reading in simtel files and writing to HDF5.
 
     Requires an output file path (.h5) to write/append to, and a
     pickled bins cuts dictionary to apply bins and cuts.
@@ -74,7 +76,7 @@ class ImageExtractor:
                  include_timing=True,
                  img_scale_factors={'MSTS':1},
                  img_dtypes={'LST':'float32','MSTS':'float32','MSTF':'float32','MSTN':'float32','SST1':'float32',
-                             'SSTA':'float32','SSTC':'float32',},
+                 'SSTA':'float32','SSTC':'float32',},
                  img_dim_order='channels_last',
                  cuts_dict=DEFAULT_CUTS_DICT):
 
@@ -196,17 +198,18 @@ class ImageExtractor:
                 exec("attributes." + field + " = value")
             else:
                 if eval("attributes." + field) != value:
-                    raise ValueError("Metadata field {} for current simtel file does not match output file: {} vs {}".format(field,value,eval("attributes."+field)))
+                    raise ValueError("Metadata field {} for current simtel file does not match output file: {} vs {}"\
+                                     .format(field,value,eval("attributes."+field)))
 
-        run_file_path = os.path.abspath(data_file)
+        run_file_name = os.path.basename(data_file)
         if not attributes.__contains__("runlist"):
-            attributes.runlist = [run_file_path]
+            attributes.runlist = [run_file_name]
         else:
             runlist = attributes.runlist
-            runlist.append(run_file_path)
+            runlist.append(run_file_name)
             attributes.runlist = runlist
 
-    def process_data(self, data_file, max_events):
+    def process_data(self, data_file, max_events=None):
         """Main method to read a simtel.gz data file, process the event data,
         and write it to a formatted HDF5 data file.
         """
@@ -374,7 +377,8 @@ class ImageExtractor:
         event_count = 0
         passing_count = 0
 
-        source = hessio_event_source(data_file,allowed_tels=[j for i in selected_tels for j in selected_tels[i]],max_events=max_events)
+        source = hessio_event_source(data_file,allowed_tels=[j for i in selected_tels for j in selected_tels[i]],
+                                     max_events=max_events)
 
         for event in source:
             event_count += 1
