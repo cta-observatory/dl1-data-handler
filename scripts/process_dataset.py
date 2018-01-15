@@ -99,12 +99,12 @@ def chunks(l, n):
         yield l[i:i + n]
 
 matched_list = sorted(matched_list, key=lambda x: int(x[2]))
-matched_list_split = chunks(matched_list,srun_size)
+matched_list_split = list(chunks(matched_list,srun_size))
 
 for srun, matched_sublist in enumerate(matched_list_split):
     ts0 = time.time()
-    logger.info('Processing super-run {} of {} ({:.1f}%)'.format(srun+1, len(matched_list),
-                                                                100 * (srun + 1) / len(matched_list)))
+    logger.info('Processing super-run {} of {} ({:.1f}%)'.format(srun+1, len(matched_list_split),
+                                                                100 * (srun + 1) / len(matched_list_split)))
     if srun_size == 1:
         iefile = matched_sublist[0][0].split('/')[-1].replace("merged", "HB9").replace("simtel.gz", "h5")
         iefile = '{}/{}'.format(outpath,iefile)
