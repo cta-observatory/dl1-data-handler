@@ -2,7 +2,7 @@ import logging
 
 import numpy as np
 
-TEL_NUM_PIXELS = {'LST':1855,'MSTF':1855, 'MSTN':1764,'MSTS':11328,'SST1':1296, 'SSTA':2368, 'SSTC':2048}
+TEL_NUM_PIXELS = {'LST':1855,'MSTF':1764, 'MSTN':1855,'MSTS':11328,'SST1':1296, 'SSTA':2368, 'SSTC':2048}
 IMAGE_SHAPES = {'MSTS': (120, 120)}
 
 logger = logging.getLogger(__name__)

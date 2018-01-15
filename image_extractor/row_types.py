@@ -63,8 +63,6 @@ class Tel(IsDescription):
     ----------
     tel_type : StringCol
         String placeholder type for the telescope type name (i.e. 'LST')
-    optical_foclen: Float32Col
-        Float32 placeholder type for telescope's focal length
     num_pixels: UInt32Col
         UInt32 placeholder type for telescope's number of pixels
     pixel_pos: Float32Col
@@ -72,7 +70,6 @@ class Tel(IsDescription):
     """
 
     tel_type = StringCol(8)
-    optical_foclen = Float32Col()
     num_pixels = UInt32Col()
     pixel_pos = Float32Col(2)
 
@@ -108,5 +105,3 @@ class Array(IsDescription):
     tel_z = Float32Col()
     tel_type = StringCol(8)
     run_array_direction = Float32Col(2)
-
-
