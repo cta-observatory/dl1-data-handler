@@ -41,7 +41,8 @@ class ImageExtractor:
 
     """
 
-    TEL_TYPES = {'LST':51940, 'MSTF':29680, 'MSTN':28224, 'MSTS':63282, 'SST1':7258, 'SSTA':5091, 'SSTC':4676}
+    TEL_TYPES = {'LST':'LST-LSTCam', 'MSTF':'MST-FlashCam', 'MSTN':'MST-NectarCam', 'MSTS':'MSTSCT-SCTCam',
+                 'SST1':'SST1M-DigiCam', 'SSTA':'SSTASTRI-ASTRICam', 'SSTC':'SSTGCT-CHEC'}
     TEL_NUM_PIXELS = image.TEL_NUM_PIXELS
     IMAGE_SHAPES = image.IMAGE_SHAPES
 
@@ -155,9 +156,12 @@ class ImageExtractor:
 
         dict_to_tel_type = {value: tel_type for tel_type, value in self.TEL_TYPES.items()}
 
-        for tel_id in sorted(event.inst.telescope_ids):
-            if round(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value) in dict_to_tel_type:
-                tel_type = dict_to_tel_type[round(event.inst.num_pixels[tel_id]*event.inst.optical_foclen[tel_id].value)] 
+        for tel_id in sorted(list(event.inst.subarray.tel_id.tolist())):
+            tel_optcam = '{}{}-{}'.format(event.inst.subarray.tel[tel_id].optics.tel_type,
+                                          event.inst.subarray.tel[tel_id].optics.tel_subtype,
+                                          event.inst.subarray.tel[tel_id].camera.cam_id)
+            if tel_optcam in dict_to_tel_type:
+                tel_type = dict_to_tel_type[tel_optcam]
                 all_tels[tel_type].append(tel_id)
 
         # select telescopes by type
@@ -234,9 +238,9 @@ class ImageExtractor:
             for tel_type in selected_tels:
                 for tel_id in selected_tels[tel_type]:
                     arr_row["tel_id"] = tel_id
-                    arr_row["tel_x"] = event.inst.tel_pos[tel_id].value[0]
-                    arr_row["tel_y"] = event.inst.tel_pos[tel_id].value[1]
-                    arr_row["tel_z"] = event.inst.tel_pos[tel_id].value[2]
+                    arr_row["tel_x"] = event.inst.subarray.positions[tel_id].value[0]
+                    arr_row["tel_y"] = event.inst.subarray.positions[tel_id].value[1]
+                    arr_row["tel_z"] = event.inst.subarray.positions[tel_id].value[2]
                     arr_row["tel_type"] = tel_type
                     arr_row["run_array_direction"] = event.mcheader.run_array_direction
                     arr_row.append()
@@ -263,18 +267,16 @@ class ImageExtractor:
             # add units to table attributes
             random_tel_type = random.choice(list(selected_tels.keys()))
             random_tel_id = random.choice(selected_tels[random_tel_type])
-            tel_table2.attrs.tel_pos_units = str(event.inst.tel_pos[random_tel_id].unit)
-            tel_table2.attrs.optical_foclen_units = str(event.inst.optical_foclen[random_tel_id].unit)
+            tel_table2.attrs.tel_pos_units = str(event.inst.subarray.positions[random_tel_id].unit)
 
             for tel_type in selected_tels:
                 random_tel_id = random.choice(selected_tels[tel_type])
                 tel_row["tel_type"] = tel_type
-                tel_row["optical_foclen"] = event.inst.optical_foclen[random_tel_id].value
-                tel_row["num_pixels"] = event.inst.num_pixels[random_tel_id]
-                posx = np.hstack([event.inst.pixel_pos[random_tel_id][0].value,
-                np.zeros(max_npix - len(event.inst.pixel_pos[random_tel_id][0].value))])
-                posy = np.hstack([event.inst.pixel_pos[random_tel_id][1].value,
-                np.zeros(max_npix - len(event.inst.pixel_pos[random_tel_id][1].value))])
+                tel_row["num_pixels"] = len(event.inst.subarray.tel[random_tel_id].camera.pix_id)
+                posx = np.hstack([event.inst.subarray.tel[random_tel_id].camera.pix_x.value,
+                                  np.zeros(max_npix - len(event.inst.subarray.tel[random_tel_id].camera.pix_x))])
+                posy = np.hstack([event.inst.subarray.tel[random_tel_id].camera.pix_y.value,
+                                  np.zeros(max_npix - len(event.inst.subarray.tel[random_tel_id].camera.pix_y))])
                 tel_row["pixel_pos"] = [posx, posy]
                 tel_row.append()
 
@@ -420,7 +422,8 @@ class ImageExtractor:
                         index_vector = all_tel_index_vector
                     
                     if tel_id in event.r0.tels_with_data:
-                        pixel_vector = event.dl1.tel[tel_id].image[0] 
+                        pixel_vector = event.dl1.tel[tel_id].image[0]
+                        logger.debug('Storing image from tel_type {} ({} pixels)'.format(tel_type,len(pixel_vector)))
                         if self.include_timing:
                             peaks_vector = event.dl1.tel[tel_id].peakpos[0]
                         else:
@@ -590,8 +593,12 @@ if __name__ == '__main__':
         '--ED_cuts_dict_file',
         help='path of .pkl file containing cuts dictionary from EventDisplay')
     parser.add_argument(
+        "--info",
+        help="print info messages",
+        action="store_true")
+    parser.add_argument(
         "--debug",
-        help="print debug/logger messages",
+        help="print debug messages",
         action="store_true")
     parser.add_argument(
         "--max_events",
@@ -609,6 +616,8 @@ if __name__ == '__main__':
 
     if args.debug:
         logger.setLevel(logging.DEBUG)
+    elif args.info:
+        logger.setLevel(logging.INFO)
 
     # load bins cuts dictionary from file
     if args.ED_cuts_dict_file is not None:
