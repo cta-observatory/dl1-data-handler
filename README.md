@@ -3,14 +3,16 @@
 ![build status](https://travis-ci.org/bryankim96/image-extractor.svg?branch=master) [![Coverage Status](https://coveralls.io/repos/github/bryankim96/image-extractor/badge.svg?branch=master)](https://coveralls.io/github/bryankim96/image-extractor?branch=master) [![Code Health](https://landscape.io/github/bryankim96/image-extractor/master/landscape.svg?style=flat)](https://landscape.io/github/bryankim96/image-extractor/master)
 
 
-Package for loading simtel data files, processing and calibrating the event data, and writing the processed data to a custom Pytables HDF5 format. Created for the testing of new machine learning and other analysis techniques for the
+Package for loading simtel data files, processing and calibrating the event data, and writing the processed data to a custom PyTables HDF5 format. Created for the testing of new machine learning and other analysis techniques for the
 [Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") collaboration. Built using Pytables and ctapipe.
 
 Currently under development, intended for internal use only.
 
-## Installation
+## Installation in Anaconda (Recommended)
 
 The following installation method (for Linux) is recommended:
+
+### Installing Anaconda
 
 First, install the Anaconda Python distribution (Python 3.6), which can be found [here](https://www.anaconda.com/download/).
 
@@ -18,7 +20,7 @@ Clone the repository (or fork and clone if you wish to develop) into a local dir
 
 ```bash
 cd software
-git clone https://github.com/bryankim96/image-extractor.git
+git clone https://github.com/cta-observatory/image-extractor.git
 cd image-extractor
 ```
 
@@ -28,9 +30,9 @@ Create a new Anaconda environment (defaults to Python 3.6), installing all of th
 conda create -n [ENV_NAME] --file requirements.txt -c cta-observatory -c conda-forge -c openastronomy
 ```
 
-### Install the bleeding edge version of ctapipe:
+### Installing ctapipe from source
 
-NOTE: As of v0.2.1, the conda package version of ctapipe appears to be lagging somewhat behind the development version and is missing key features which are used by image\_extractor. As a result, it is necessary (as of now) to install ctapipe from source. This is slightly messier and more time-consuming than the conda installation. 
+NOTE: As of v0.5.1, the conda package version of ctapipe appears to be lagging somewhat behind the development version and is missing key features which are used by ImageExtractor. As a result, it is necessary to install ctapipe from source. To do this:
 
 Clone the ctapipe repository (or fork and clone if you wish to develop) into a local directory of your choice.
 
@@ -70,20 +72,11 @@ source activate [ENV_NAME]
 python setup.py install
 ```
 
-If both packages are showing up correctly, you should now be able to run image\_extractor.py or any of the other scripts from the command line in your environment.
+If both packages are showing up correctly, you should now be able to run/import image\_extractor.py or any of the other scripts/modules from the command line in your environment.
 
-### Package Installation
+### Installing ImageExtractor using pip
 
-Finally, you can install image-extractor as a package so that you can import and use it just like any other Python package.
-
-To install image-extractor as a package in your main Python installation:
-
-```bash
-cd image-extractor
-pip install . 
-```
-
-To install image-extractor as a package in your Anaconda environment:
+Finally, you can install ImageExtractor using pip.
 
 ```bash
 source activate [ENV_NAME]
@@ -100,6 +93,10 @@ The path to the environment directory for the environment you wish to install in
 conda env list
 ```
 
+## Installation in Python (Not recommended):
+
+The same installation procedure can be done in a non-Anaconda version of Python, however this is not recommended due to the small chance of dependency issues or other bugs. Alternatively, the installation can be done in a virtualenv environment.
+
 ## Dependencies
 
 See requirements.txt for the full list of dependencies.
@@ -108,8 +105,8 @@ The main dependencies are:
 
 for image_extractor:
 
-* Pytables
-* Numpy
+* PyTables
+* NumPy
 * ctapipe
 
 for additional scripts in scripts directory:
@@ -143,15 +140,15 @@ image_extractor.py runlist.txt ./dataset.h5 --ED_cuts_dict_file ./bins_cuts_dict
 * split [SPLIT_LIST]- Optional flag to split the Events table into separate training/validation/test tables for convenience. Can provide a list (3 arguments) which give the split proportions between train, val, and test. A split proportion of 0 indicates that the corresponding table will not be created. Split proportions must sum to 1.
 * debug - Optional flag to print additional debug information.
 
-NOTE: The shuffle and split options are primarily for convenience when using the data files for training convolutional neural networks. It is unlikely they will be included as part of the final standard data format.
+NOTE: The shuffle and split flags as well as other non-default ImageExtractor constructor options are not currently being maintained as carefully as they are not part of the standard CTA ML data format. Use at your own risk!
 
 NOTE: The split option is currently set to use a hardcoded default split setting (0.9 training, 0.1 validation). This can be modified in the script if desired.
 
 NOTE: The splitting and shuffling handled by the split and shuffle options are NOT done in-place, so they require a temporary disk space overhead beyond the normal final size of the output .h5 file. Because only the Events tables are copied/duplicated and the majority of the final file size is in the telescope arrays, this overhead is likely insignificant for the 'mapped' storage format. However, it is much larger for the 'all' storage format, as the telescope images are stored directly in the Event tables and are therefore duplicated temporarily. Also, it is worth noting that this overhead becomes larger in absolute terms as the absolute size of the output files becomes larger.
 
-### From a Python script:
+### In a Python script:
 
-If the package was installed locally as described above, you can import classes from it and use them directly in a Python script.
+If the package was installed with pip as described above, you can import and use it in Python like:
 
 ex:
 
