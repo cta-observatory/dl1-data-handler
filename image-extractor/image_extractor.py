@@ -90,7 +90,7 @@ class ImageExtractor:
 
         self.ED_cuts_dict = ED_cuts_dict
 
-        if storage_mode in ['tel_type', 'tel_id']:
+        if storage_mode in ['tel_type','tel_id']:
             self.storage_mode = storage_mode
         else:
             raise ValueError('Invalid storage mode: {}.'.format(storage_mode))
@@ -120,7 +120,7 @@ class ImageExtractor:
         else:
             raise ValueError('Invalid dimension ordering: {}.'.format(img_dim_order))
 
-        self.trace_converter = image.TraceConverter(
+        self.trace_converter= image.TraceConverter(
             self.img_dtypes,
             self.img_dim_order,
             self.img_channels,
@@ -135,7 +135,7 @@ class ImageExtractor:
         Parameters
         ----------
         data_file: str
-            The string path (relative or absolute) to the input simtel.gz 
+            The string path (relative or absolute) to the input simtel.gz
             file.
 
         Returns
@@ -308,8 +308,8 @@ class ImageExtractor:
         # create image tables
         for tel_type in selected_tels:
             if self.img_mode == '2D':
-                img_width = self.IMAGE_SHAPES[tel_type][0] * self.img_scale_factors[tel_type]
-                img_length = self.IMAGE_SHAPES[tel_type][1] * self.img_scale_factors[tel_type]
+                img_width = self.IMAGE_SHAPES[tel_type][0]*self.img_scale_factors[tel_type]
+                img_length = self.IMAGE_SHAPES[tel_type][1]*self.img_scale_factors[tel_type]
 
                 if self.img_dim_order == 'channels_first':
                     array_shape = (self.img_channels, img_width, img_length)
@@ -337,11 +337,11 @@ class ImageExtractor:
                     image_row = table.row
 
                     if self.img_mode == '2D':
-                        image_row['image'] = self.trace_converter.convert(None, None, tel_type)
+                        image_row['image'] = self.trace_converter.convert(None,None,tel_type)
 
                     elif self.img_mode == '1D':
                         shape = (image.TEL_NUM_PIXELS[tel_type],)
-                        image_row['image_charge'] = np.zeros(shape, dtype=self.img_dtypes[tel_type])
+                        image_row['image_charge'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
                         image_row['event_index'] = -1
                         if self.include_timing:
                             image_row['image_peak_times'] = np.zeros(shape, dtype=self.img_dtypes[tel_type])
@@ -352,18 +352,17 @@ class ImageExtractor:
             elif self.storage_mode == 'tel_id':
                 for tel_id in selected_tels[tel_type]:
                     if not f.__contains__('T' + str(tel_id)):
-                        table = f.create_table(f.root, 'T' + str(tel_id), description,
-                                               "Table of T{} images".format(str(tel_id)))
+                        table = f.create_table(f.root,'T'+str(tel_id),description,"Table of T{} images".format(str(tel_id)))
 
-                        # append blank image at index 0
+                        #append blank image at index 0
                         image_row = table.row
 
                         if self.img_mode == '2D':
-                            image_row['image'] = self.trace_converter.convert(None, None, tel_type)
+                            image_row['image'] = self.trace_converter.convert(None,None,tel_type)
 
                         elif self.img_mode == '1D':
                             shape = (image.TEL_NUM_PIXELS[tel_type],)
-                            image_row['image_charge'] = np.zeros(shape, dtype=self.img_dtypes[tel_type])
+                            image_row['image_charge'] = np.zeros(shape,dtype=self.img_dtypes[tel_type])
                             image_row['event_index'] = -1
                             if self.include_timing:
                                 image_row['image_peak_times'] = np.zeros(shape, dtype=self.img_dtypes[tel_type])
@@ -438,7 +437,7 @@ class ImageExtractor:
                         image_row = table.row
 
                         if self.img_mode == '2D':
-                            image_row['image'] = self.trace_converter.convert(pixel_vector, peaks_vector, tel_type)
+                            image_row['image'] = self.trace_converter.convert(pixel_vector,peaks_vector,tel_type)
 
                         elif self.img_mode == '1D':
                             image_row['image_charge'] = pixel_vector
@@ -460,7 +459,7 @@ class ImageExtractor:
                 event_row['indices'] = all_tel_index_vector
 
             event_row['event_number'] = event.r0.event_id
-            event_row['run_number'] = event.r0.run_id
+            event_row['run_number'] = event.r0.obs_id
             event_row['particle_id'] = event.mc.shower_primary_id
             event_row['core_x'] = event.mc.core_x.value
             event_row['core_y'] = event.mc.core_y.value
