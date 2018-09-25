@@ -40,8 +40,8 @@ class ImageExtractor:
 
     """
 
-    TEL_TYPES = {'LSTCam': 'LSTCam', 'FlashCam': 'FlashCam', 'NectarCam': 'NectarCam', 'SCTCam': 'SCTCam',
-                 'DigiCam': 'DigiCam', 'ASTRICam': 'ASTRICam', 'CHEC': 'CHEC'}
+    TEL_TYPES = ['LSTCam', 'FlashCam', 'NectarCam', 'SCTCam', 'DigiCam',
+                 'ASTRICam', 'CHEC']
     TEL_NUM_PIXELS = image.TEL_NUM_PIXELS
     IMAGE_SHAPES = image.IMAGE_SHAPES
 
@@ -157,14 +157,11 @@ class ImageExtractor:
 
         all_tels = {tel_type: [] for tel_type in self.TEL_TYPES}
 
-        dict_to_tel_type = {value: tel_type for tel_type, value in self.TEL_TYPES.items()}
-
         for tel_id in sorted(list(event.inst.subarray.tel_id.tolist())):
             tel_optcam = '{}{}-{}'.format(event.inst.subarray.tel[tel_id].optics.tel_type,
                                           event.inst.subarray.tel[tel_id].optics.tel_subtype,
                                           event.inst.subarray.tel[tel_id].camera.cam_id)
-            if tel_optcam in dict_to_tel_type:
-                tel_type = dict_to_tel_type[tel_optcam]
+            if tel_optcam in all_tels:
                 all_tels[tel_type].append(tel_id)
 
         # select telescopes by type
