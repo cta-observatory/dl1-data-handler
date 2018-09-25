@@ -78,7 +78,9 @@ class ImageExtractor:
             img_dtypes={'LSTCam': 'float32', 'NectarCam': 'float32', 'FlashCam': 'float32', 'SCTCam': 'float32',
                         'DigiCam': 'float32', 'ASTRICam': 'float32', 'CHEC': 'float32', },
             img_dim_order='channels_last',
-            cuts_dict=DEFAULT_CUTS_DICT):
+            cuts_dict=DEFAULT_CUTS_DICT,
+            comp_lib='lzo',
+            comp_lvl=1):
 
         """Constructor for ImageExtractor
         """
@@ -128,6 +130,8 @@ class ImageExtractor:
 
         self.cuts_dict = cuts_dict
 
+        self.filters = tables.Filters(complevel=comp_lvl, complib=comp_lib)
+
     def select_telescopes(self, data_file):
         """Method to read telescope info from a given simtel file
         and select the desired telescopes indicated by self.tel_type_mode.
@@ -135,7 +139,7 @@ class ImageExtractor:
         Parameters
         ----------
         data_file: str
-            The string path (relative or absolute) to the input simtel.gz 
+            The string path (relative or absolute) to the input simtel.gz
             file.
 
         Returns
@@ -228,9 +232,11 @@ class ImageExtractor:
 
         # create and fill array information table
         if not f.__contains__('/Array_Info'):
-            arr_table = f.create_table(f.root, 'Array_Info',
-                                       row_types.Array,
-                                       ("Table of array data"))
+            arr_table = f.create_table(f.root,
+                            'Array_Info',
+                            row_types.Array,
+                            ("Table of array data"),
+                            filters=self.filters)
 
             arr_row = arr_table.row
 
@@ -246,9 +252,11 @@ class ImageExtractor:
 
         # create and fill telescope information table
         if not f.__contains__('/Telescope_Info'):
-            tel_table = f.create_table(f.root, 'Telescope_Info',
-                                       row_types.Tel,
-                                       ("Table of telescope data"))
+            tel_table = f.create_table(f.root,
+                            'Telescope_Info',
+                            row_types.Tel,
+                            ("Table of telescope data"),
+                            filters=self.filters)
 
             descr = tel_table.description._v_colobjects
             descr2 = descr.copy()
@@ -256,7 +264,12 @@ class ImageExtractor:
             max_npix = self.TEL_NUM_PIXELS[max(self.TEL_NUM_PIXELS, key=self.TEL_NUM_PIXELS.get)]
             descr2["pixel_pos"] = tables.Float32Col(shape=(2, max_npix))
 
-            tel_table2 = f.create_table(f.root, 'temp', descr2, "Table of telescope data")
+            tel_table2 = f.create_table(
+                    f.root,
+                    'temp',
+                    descr2,
+                    "Table of telescope data",
+                    filters=self.filters)
             tel_table.attrs._f_copy(tel_table2)
             tel_table.remove()
             tel_table2.move(f.root, 'Telescope_Info')
@@ -281,9 +294,11 @@ class ImageExtractor:
 
         # create event table
         if not f.__contains__('/Event_Info'):
-            table = f.create_table(f.root, 'Event_Info',
-                                   row_types.Event,
-                                   "Table of Event metadata")
+            table = f.create_table(f.root,
+                    'Event_Info',
+                    row_types.Event,
+                    "Table of Event metadata",
+                    filters=self.filters)
 
             descr = table.description._v_colobjects
             descr2 = descr.copy()
@@ -294,7 +309,12 @@ class ImageExtractor:
             elif self.storage_mode == 'tel_id':
                 descr2["indices"] = tables.Int32Col(shape=(num_tel))
 
-            table2 = f.create_table(f.root, 'temp', descr2, "Table of Events")
+            table2 = f.create_table(
+                    f.root,
+                    'temp',
+                    descr2,
+                    "Table of Events",
+                    filters=self.filters)
             table.attrs._f_copy(table2)
             table.remove()
             table2.move(f.root, 'Event_Info')
@@ -331,7 +351,12 @@ class ImageExtractor:
 
             if self.storage_mode == 'tel_type':
                 if not f.__contains__('/' + tel_type):
-                    table = f.create_table(f.root, tel_type, description, "Table of {} images".format(tel_type))
+                    table = f.create_table(
+                            f.root,
+                            tel_type,
+                            description,
+                            "Table of {} images".format(tel_type),
+                            filters=self.filters)
 
                     # append blank image at index 0
                     image_row = table.row
@@ -352,8 +377,11 @@ class ImageExtractor:
             elif self.storage_mode == 'tel_id':
                 for tel_id in selected_tels[tel_type]:
                     if not f.__contains__('T' + str(tel_id)):
-                        table = f.create_table(f.root, 'T' + str(tel_id), description,
-                                               "Table of T{} images".format(str(tel_id)))
+                        table = f.create_table(f.root,
+                                'T' + str(tel_id),
+                                description,
+                                "Table of T{} images".format(str(tel_id))
+                                filters=self.filters)
 
                         # append blank image at index 0
                         image_row = table.row
@@ -522,7 +550,8 @@ class ImageExtractor:
             f.root,
             'Events_temp',
             descr,
-            "Table of events")
+            "Table of events",
+            filters=self.filters)
 
         for i in range(num_events):
             table_new.append([tuple(table[new_indices[i]])])
@@ -561,7 +590,8 @@ class ImageExtractor:
                     descr,
                     "Table of " +
                     split_names[j] +
-                    " Events")
+                    " Events",
+                    filters=self.filters)
 
                 split_fraction = splits[j]
 
