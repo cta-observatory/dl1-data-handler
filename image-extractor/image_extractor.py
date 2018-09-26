@@ -80,7 +80,19 @@ class ImageExtractor:
             img_dim_order='channels_last',
             cuts_dict=DEFAULT_CUTS_DICT,
             comp_lib='lzo',
-            comp_lvl=1):
+            comp_lvl=1,
+            expected_tel_types=10,
+            expected_tels=300,
+            expected_events=10000,
+            expected_images_per_event={
+                'LSTCam': 3,
+                'NectarCam': 4,
+                'FlashCam': 4,
+                'SCTCam': 4,
+                'DigiCam': 10,
+                'ASTRICam': 10,
+                'CHEC': 10,
+            }):
 
         """Constructor for ImageExtractor
         """
@@ -132,6 +144,11 @@ class ImageExtractor:
 
         self.filters = tables.Filters(complevel=comp_lvl, complib=comp_lib)
 
+        self.expected_tel_types = expected_tel_types
+        self.expected_tels = expected_tels
+        self.expected_events = expected_events
+        self.expected_images_per_event = expected_images_per_event
+
     def select_telescopes(self, data_file):
         """Method to read telescope info from a given simtel file
         and select the desired telescopes indicated by self.tel_type_mode.
@@ -155,14 +172,14 @@ class ImageExtractor:
 
         event = next(hessio_event_source(data_file, max_events=1))
 
-        all_tels = {tel_type: [] for tel_type in self.TEL_TYPES}
+        self.self.all_tels = {tel_type: [] for tel_type in self.TEL_TYPES}
 
         for tel_id in sorted(list(event.inst.subarray.tel_id.tolist())):
             tel_optcam = '{}{}-{}'.format(event.inst.subarray.tel[tel_id].optics.tel_type,
                                           event.inst.subarray.tel[tel_id].optics.tel_subtype,
                                           event.inst.subarray.tel[tel_id].camera.cam_id)
-            if tel_optcam in all_tels:
-                all_tels[tel_type].append(tel_id)
+            if tel_optcam in self.all_tels:
+                self.all_tels[tel_type].append(tel_id)
 
         # select telescopes by type
         logger.info("Selected telescope types: [")
@@ -170,16 +187,16 @@ class ImageExtractor:
             logger.info("{},".format(tel_type))
         logger.info("]")
 
-        selected_tels = {tel_type: all_tels[tel_type] for tel_type in self.tel_type_list}
+        selected_tels = {tel_type: self.all_tels[tel_type] for tel_type in self.tel_type_list}
 
         total_num_tel_selected = 0
-        for tel_type in all_tels:
+        for tel_type in self.all_tels:
             if tel_type in selected_tels:
                 num_tel_selected = len(selected_tels[tel_type])
             else:
                 num_tel_selected = 0
             logger.info(tel_type + ": " + str(num_tel_selected) +
-                        " out of " + str(len(all_tels[tel_type])) +
+                        " out of " + str(len(self.all_tels[tel_type])) +
                         " telescopes selected.")
             total_num_tel_selected += num_tel_selected
 
@@ -233,7 +250,8 @@ class ImageExtractor:
                             'Array_Info',
                             row_types.Array,
                             ("Table of array data"),
-                            filters=self.filters)
+                            filters=self.filters,
+                            expected_rows=self.expected_tels)
 
             arr_row = arr_table.row
 
@@ -253,7 +271,8 @@ class ImageExtractor:
                             'Telescope_Info',
                             row_types.Tel,
                             ("Table of telescope data"),
-                            filters=self.filters)
+                            filters=self.filters,
+                            expected_rows=self.expected_tel_types)
 
             descr = tel_table.description._v_colobjects
             descr2 = descr.copy()
@@ -266,7 +285,8 @@ class ImageExtractor:
                     'temp',
                     descr2,
                     "Table of telescope data",
-                    filters=self.filters)
+                    filters=self.filters,
+                    expected_rows=self.expected_tel_types)
             tel_table.attrs._f_copy(tel_table2)
             tel_table.remove()
             tel_table2.move(f.root, 'Telescope_Info')
@@ -295,7 +315,8 @@ class ImageExtractor:
                     'Event_Info',
                     row_types.Event,
                     "Table of Event metadata",
-                    filters=self.filters)
+                    filters=self.filters,
+                    expected_rows=self.expected_events)
 
             descr = table.description._v_colobjects
             descr2 = descr.copy()
@@ -311,7 +332,8 @@ class ImageExtractor:
                     'temp',
                     descr2,
                     "Table of Events",
-                    filters=self.filters)
+                    filters=self.filters,
+                    expected_rows=self.expected_events)
             table.attrs._f_copy(table2)
             table.remove()
             table2.move(f.root, 'Event_Info')
@@ -353,7 +375,8 @@ class ImageExtractor:
                             tel_type,
                             description,
                             "Table of {} images".format(tel_type),
-                            filters=self.filters)
+                            filters=self.filters,
+                            expected_rows=self.expected_images_per_event[tel_type]*self.expected_events)
 
                     # append blank image at index 0
                     image_row = table.row
@@ -378,7 +401,8 @@ class ImageExtractor:
                                 'T' + str(tel_id),
                                 description,
                                 "Table of T{} images".format(str(tel_id))
-                                filters=self.filters)
+                                filters=self.filters,
+                                expected_rows=self.expected_images_per_event[tel_type]*self.expected_events/len(self.all_tels[tel_type]))
 
                         # append blank image at index 0
                         image_row = table.row
@@ -548,7 +572,8 @@ class ImageExtractor:
             'Events_temp',
             descr,
             "Table of events",
-            filters=self.filters)
+            filters=self.filters,
+            expected_rows=self.expected_events)
 
         for i in range(num_events):
             table_new.append([tuple(table[new_indices[i]])])
@@ -588,7 +613,8 @@ class ImageExtractor:
                     "Table of " +
                     split_names[j] +
                     " Events",
-                    filters=self.filters)
+                    filters=self.filters,
+                    expected_rows=self.expected_events*splits[j])
 
                 split_fraction = splits[j]
 
