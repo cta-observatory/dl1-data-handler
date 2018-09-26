@@ -8,6 +8,7 @@ import pickle as pkl
 import logging
 import os
 import math
+import yaml
 
 import numpy as np
 import tables
@@ -83,15 +84,15 @@ class ImageExtractor:
             comp_lvl=1,
             expected_tel_types=10,
             expected_tels=300,
-            expected_events=10000,
+            expected_events=7000,
             expected_images_per_event={
-                'LSTCam': 3,
-                'NectarCam': 4,
-                'FlashCam': 4,
-                'SCTCam': 4,
-                'DigiCam': 10,
-                'ASTRICam': 10,
-                'CHEC': 10,
+                'LSTCam': 0.5,
+                'NectarCam': 2.0,
+                'FlashCam': 2.0,
+                'SCTCam': 1.5,
+                'DigiCam': 1.25,
+                'ASTRICam': 1.25,
+                'CHEC': 1.25,
             }):
 
         """Constructor for ImageExtractor
@@ -643,7 +644,10 @@ if __name__ == '__main__':
         help='text file run list containing a list of simtel files to process (1 per line)')
     parser.add_argument(
         'hdf5_path',
-        help=('path of output HDF5 file, or currently existing file to append to'))
+        help='path of output HDF5 file, or currently existing file to append to')
+    parser.add_argument(
+        '--config_file_path',
+        help='path of configuration file for settings')
     parser.add_argument(
         '--ED_cuts_dict_file',
         help='path of .pkl file containing cuts dictionary from EventDisplay')
@@ -675,13 +679,18 @@ if __name__ == '__main__':
     elif args.info:
         logger.setLevel(logging.INFO)
 
-    # load bins cuts dictionary from file
-    if args.ED_cuts_dict_file is not None:
-        ED_cuts_dict = pkl.load(open(args.ED_cuts_dict_file, "rb"))
-    else:
-        ED_cuts_dict = None
+    # load options from config file
+    if args.config_file_path is not None:
+        config = yaml.load(args.config_file_path)
+        options = {**x for x in config.values()}
 
-    extractor = ImageExtractor(args.hdf5_path)
+        if options['ED_cuts_dict'] is not None:
+            options['ED_cuts_dict'] = pkl.load(open(options['ED_cuts_dict'], "rb"))
+
+        extractor = ImageExtractor(args.hdf5_path, **options)
+    else:
+        # default arguments
+        extractor = ImageExtractor(args.hdf5_path)
 
     run_list = []
     with open(args.run_list) as f:
