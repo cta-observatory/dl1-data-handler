@@ -1,7 +1,7 @@
 """Module for custom PyTables row classes.
 
 The row classes below define the structure of the tables in
-the output file. 
+the output file.
 
 """
 
@@ -12,10 +12,10 @@ from tables import (IsDescription, UInt32Col, UInt8Col,
 class Event(IsDescription):
 
     """Row descriptor class for Pytables event table.
-    
+
     Contains event-level parameters, mostly from Monte Carlo simulation
     parameters.
-    
+
     Attributes
     ----------
     event_number : UInt32Col
@@ -99,7 +99,7 @@ class Array(IsDescription):
         a given run (az,alt)
     """
 
-    tel_id = UInt8Col()
+    tel_id = UInt16Col()
     tel_x = Float32Col()
     tel_y = Float32Col()
     tel_z = Float32Col()
