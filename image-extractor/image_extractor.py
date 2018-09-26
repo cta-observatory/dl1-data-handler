@@ -47,22 +47,23 @@ class ImageExtractor:
     IMAGE_SHAPES = image.IMAGE_SHAPES
 
     METADATA_FIELDS = {
-        "ImageExtractor_ver": ("pkg_resources.get_distribution('image-extractor').version",),
-        "ctapipe_ver": ("pkg_resources.get_distribution('ctapipe').version",),
-        "CORSIKA_ver": None,
-        "simtel_ver": None,
-        "prod_site_alt": None,
-        "prod_site_coord": None,
-        "prod_site_B_field": None,
-        "prod_site_array": None,
-        "prod_site_subarray": None,
-        "particle_type": ("event.mc.shower_primary_id",),
-        "zenith": ("event.mcheader.run_array_direction[1]",),
-        "azimuth": ("event.mcheader.run_array_direction[0]",),
+        "ImageExtractor_ver": "pkg_resources.get_distribution('image-extractor').version",
+        "ctapipe_ver": "pkg_resources.get_distribution('ctapipe').version",
+        "CORSIKA_ver": "event.mcheader.corsika_version",
+        "simtel_ver": "event.mcheader.simtel_version",
+        "prod_site_alt": "event.mcheader.prod_site_alt",
+        "prod_site_coord": "event.mcheader.prod_site_coord",
+        "prod_site_B_field": "event.mcheader.prod_site_B_total",
+        "prod_site_array": "event.mcheader.prod_site_array",
+        "prod_site_subarray": "event.mcheader.prod_site_subarray",
+        "particle_type": "event.mc.shower_primary_id",
+        "zenith": "event.mcheader.run_array_direction[1]",
+        "azimuth": "event.mcheader.run_array_direction[0]",
         "view_cone": None,
-        "spectral_index": None,
-        "E_min": None,
-        "E_max": None}
+        "spectral_index": "event.mcheader.spectral_index",
+        "E_min": "event.mcheader.energy_range_min",
+        "E_max": "event.mcheader.energy_range_min",
+        }
 
     ALLOWED_CUT_PARAMS = {}
     DEFAULT_CUTS_DICT = {}
@@ -212,14 +213,13 @@ class ImageExtractor:
         attributes = HDF5_file.root._v_attrs
 
         for field in self.METADATA_FIELDS:
-            if isinstance(self.METADATA_FIELDS[field], tuple):
-                value = eval(self.METADATA_FIELDS[field][0])
-            else:
-                value = self.METADATA_FIELDS[field]
+            value = eval(self.METADATA_FIELDS[field]) if field else None
+
+            # If not present in HDF5 file header, add attribute. Else, compare for equality
             if not attributes.__contains__(field):
-                exec("attributes." + field + " = value")
+                attributes[field] = value
             else:
-                if eval("attributes." + field) != value:
+                if attributes[field] != value:
                     raise ValueError("Metadata field {} for current simtel file does not match output file: {} vs {}" \
                                      .format(field, value, eval("attributes." + field)))
 
