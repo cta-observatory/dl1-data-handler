@@ -42,9 +42,9 @@ class ImageExtractor:
 
     """
 
-    TEL_TYPES = ['LSTCam', 'FlashCam', 'NectarCam', 'SCTCam', 'DigiCam',
-                 'ASTRICam', 'CHEC']
-    TEL_NUM_PIXELS = image.TEL_NUM_PIXELS
+    OPTICS_TYPES = ['{}-{}'.format(v[0], v[1]) for v in ctapipe.instrument.optics._FOCLEN_TO_TEL_INFO.values()]
+    CAM_TYPES = [v[2] for v in ctapipe.instrument.camera._CAMERA_GEOMETRY_TABLE.values()]
+    CAM_NUM_PIXELS = {cam_name: ctapipe.instrument.camera.from_name(cam_name).n_pixels for cam_name in CAM_TYPES}
     IMAGE_SHAPES = image.IMAGE_SHAPES
 
     METADATA_FIELDS = {
@@ -113,8 +113,11 @@ class ImageExtractor:
             raise ValueError('Invalid storage mode: {}.'.format(storage_mode))
 
         for tel_type in tel_type_list:
-            if tel_type not in self.TEL_TYPES:
-                raise ValueError('Invalid telescope type: {}.'.format(tel_type))
+            optics_type, cam_type = tel_type.split(':')
+            if optics_type not in self.OPTICS_TYPES:
+                raise ValueError('Invalid optics type: {}.'.format(tel_type))
+            if cam_type not in self.CAM_TYPES:
+                raise ValueError('Invalid camera type: {}.'.format(cam_type))
         self.tel_type_list = tel_type_list
 
         if img_mode in ['1D', '2D']:
@@ -175,14 +178,7 @@ class ImageExtractor:
 
         event = next(ctapipe.io.event_source(data_file, max_events=1))
 
-        self.self.all_tels = {tel_type: [] for tel_type in self.TEL_TYPES}
-
-        for tel_id in sorted(list(event.inst.subarray.tel_id.tolist())):
-            tel_optcam = '{}{}-{}'.format(event.inst.subarray.tel[tel_id].optics.tel_type,
-                                          event.inst.subarray.tel[tel_id].optics.tel_subtype,
-                                          event.inst.subarray.tel[tel_id].camera.cam_id)
-            if tel_optcam in self.all_tels:
-                self.all_tels[tel_type].append(tel_id)
+        self.all_tels = {tel_type: sorted(event.inst.subarray.get_tel_ids_for_type(tel_type)) for tel_type in event.inst.subarray.telescope_types}
 
         # select telescopes by type
         logger.info("Selected telescope types: [")
@@ -190,7 +186,12 @@ class ImageExtractor:
             logger.info("{},".format(tel_type))
         logger.info("]")
 
-        selected_tels = {tel_type: self.all_tels[tel_type] for tel_type in self.tel_type_list}
+        selected_tels = {}
+        for tel_type in self.tel_type_list:
+            if tel_type not in event.inst.subarray.telescope_types:
+                logger.warning('Telescope type {} not found in data. Ignoring...'.format(tel_type))
+            else:
+                selected_tels[tel_type] = self.all_tels[tel_type]
 
         total_num_tel_selected = 0
         for tel_type in self.all_tels:
