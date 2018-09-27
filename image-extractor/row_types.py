@@ -5,7 +5,7 @@ the output file.
 
 """
 
-from tables import (IsDescription, UInt32Col, UInt16Col, UInt8Col,
+from tables import (IsDescription, UInt32Col, UInt8Col,
                     Float64Col, Float32Col, StringCol)
 
 
