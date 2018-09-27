@@ -4,6 +4,8 @@ import numpy as np
 
 IMAGE_SHAPES = {'SCTCam': (120, 120)}
 
+DEFAULT_IMG_DTYPE = 'float32'
+
 logger = logging.getLogger(__name__)
 
 class TraceConverter:
@@ -27,7 +29,7 @@ class TraceConverter:
         image_shape = IMAGE_SHAPES[tel_type]
         scale_factor = self.scale_factors[tel_type]
         injunction_table = self.injunction_tables[tel_type]
-        img_dtype = self.img_dtypes[tel_type]
+        img_dtype = self.img_dtypes.get(tel_type, DEFAULT_IMG_DTYPE)
 
         if self.dim_order == 'channels_first':
             shape = [self.num_channels,
