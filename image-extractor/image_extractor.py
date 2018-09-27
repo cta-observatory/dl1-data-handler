@@ -2,6 +2,7 @@
 """
 Module for main ImageExtractor class and command line tool.
 """
+import pkg_resources
 import random
 import argparse
 import pickle as pkl
@@ -12,8 +13,8 @@ import yaml
 
 import numpy as np
 import tables
-from ctapipe.io.hessio import hessio_event_source
-from ctapipe.calib import pedestals, CameraCalibrator
+
+import ctapipe
 
 import image
 import row_types
@@ -41,28 +42,28 @@ class ImageExtractor:
 
     """
 
-    TEL_TYPES = ['LSTCam', 'FlashCam', 'NectarCam', 'SCTCam', 'DigiCam',
-                 'ASTRICam', 'CHEC']
-    TEL_NUM_PIXELS = image.TEL_NUM_PIXELS
+
+    TEL_TYPES = ctapipe.instrument.
+    TEL_TYPES = image.TEL_TYPES
+    CAM_TYPES = {v[2] for v in ctapipe.instrument.camera._CAMERA_GEOMETRY_TABLE.values()}
+    CAM_NUM_PIXELS = {cam_name: ctapipe.instrument.camera.from_name(cam_name).n_pixels for cam_name in CAM_TYPES}
     IMAGE_SHAPES = image.IMAGE_SHAPES
 
     METADATA_FIELDS = {
-        "ImageExtractor_ver": "pkg_resources.get_distribution('image-extractor').version",
-        "ctapipe_ver": "pkg_resources.get_distribution('ctapipe').version",
-        "CORSIKA_ver": "event.mcheader.corsika_version",
-        "simtel_ver": "event.mcheader.simtel_version",
-        "prod_site_alt": "event.mcheader.prod_site_alt",
-        "prod_site_coord": "event.mcheader.prod_site_coord",
-        "prod_site_B_field": "event.mcheader.prod_site_B_total",
-        "prod_site_array": "event.mcheader.prod_site_array",
-        "prod_site_subarray": "event.mcheader.prod_site_subarray",
+        "CORSIKA_ver": "mcheader.corsika_version",
+        "simtel_ver": "mcheader.simtel_version",
+        "prod_site_alt": "mcheader.prod_site_alt",
+        "prod_site_coord": "mcheader.prod_site_coord",
+        "prod_site_B_field": "mcheader.prod_site_B_total",
+        "prod_site_array": "mcheader.prod_site_array",
+        "prod_site_subarray": "mcheader.prod_site_subarray",
         "particle_type": "event.mc.shower_primary_id",
-        "zenith": "event.mcheader.run_array_direction[1]",
-        "azimuth": "event.mcheader.run_array_direction[0]",
+        "zenith": "mcheader.run_array_direction[1]",
+        "azimuth": "mcheader.run_array_direction[0]",
         "view_cone": None,
-        "spectral_index": "event.mcheader.spectral_index",
-        "E_min": "event.mcheader.energy_range_min",
-        "E_max": "event.mcheader.energy_range_min",
+        "spectral_index": "mcheader.spectral_index",
+        "E_min": "mcheader.energy_range_min",
+        "E_max": "mcheader.energy_range_min",
         }
 
     ALLOWED_CUT_PARAMS = {}
@@ -72,7 +73,7 @@ class ImageExtractor:
             output_path,
             ED_cuts_dict=None,
             storage_mode='tel_type',
-            tel_type_list=['LSTCam', 'FlashCam', 'NectarCam', 'SCTCam', 'DigiCam', 'ASTRICam', 'CHEC'],
+            tel_type_list=['LST:LSTCam', 'MST:FlashCam', 'MST:NectarCam', 'MST-SCT:SCTCam', 'SST:DigiCam', 'SST:ASTRICam', 'SST:CHEC'],
             img_mode='1D',
             img_channels=1,
             include_timing=True,
@@ -87,13 +88,13 @@ class ImageExtractor:
             expected_tels=300,
             expected_events=7000,
             expected_images_per_event={
-                'LSTCam': 0.5,
-                'NectarCam': 2.0,
-                'FlashCam': 2.0,
-                'SCTCam': 1.5,
-                'DigiCam': 1.25,
-                'ASTRICam': 1.25,
-                'CHEC': 1.25,
+                'LST:LSTCam': 0.5,
+                'MST:NectarCam': 2.0,
+                'MST:FlashCam': 2.0,
+                'MST-SCT:SCTCam': 1.5,
+                'SST:DigiCam': 1.25,
+                'SST:ASTRICam': 1.25,
+                'SST:CHEC': 1.25,
             }):
 
         """Constructor for ImageExtractor
@@ -172,16 +173,9 @@ class ImageExtractor:
 
         logger.info("Collecting telescope types...")
 
-        event = next(hessio_event_source(data_file, max_events=1))
+        event = next(ctapipe.io.event_source(data_file, max_events=1))
 
-        self.self.all_tels = {tel_type: [] for tel_type in self.TEL_TYPES}
-
-        for tel_id in sorted(list(event.inst.subarray.tel_id.tolist())):
-            tel_optcam = '{}{}-{}'.format(event.inst.subarray.tel[tel_id].optics.tel_type,
-                                          event.inst.subarray.tel[tel_id].optics.tel_subtype,
-                                          event.inst.subarray.tel[tel_id].camera.cam_id)
-            if tel_optcam in self.all_tels:
-                self.all_tels[tel_type].append(tel_id)
+        self.all_tels = {tel_type: sorted(event.inst.subarray.get_tel_ids_for_type(tel_type)) for tel_type in event.inst.subarray.telescope_types}
 
         # select telescopes by type
         logger.info("Selected telescope types: [")
@@ -189,7 +183,12 @@ class ImageExtractor:
             logger.info("{},".format(tel_type))
         logger.info("]")
 
-        selected_tels = {tel_type: self.all_tels[tel_type] for tel_type in self.tel_type_list}
+        selected_tels = {}
+        for tel_type in self.tel_type_list:
+            if tel_type not in event.inst.subarray.telescope_types:
+                logger.warning('Telescope type {} not found in data. Ignoring...'.format(tel_type)) 
+            else:
+                selected_tels[tel_type] = self.all_tels[tel_type]
 
         total_num_tel_selected = 0
         for tel_type in self.all_tels:
@@ -208,20 +207,28 @@ class ImageExtractor:
 
         logger.info("Checking/writing metadata...")
 
-        event = next(hessio_event_source(data_file))
+        event = next(ctapipe.io.event_source(data_file))
 
         attributes = HDF5_file.root._v_attrs
 
-        for field in self.METADATA_FIELDS:
-            value = eval(self.METADATA_FIELDS[field]) if field else None
+        # Add major software versions
+        attributes['image_extractor_ver'] = pkg_resources.get_distribution('image-extractor').version
+        attributes['ctapipe_ver'] = pkg_resources.get_distribution('ctapipe').version
 
-            # If not present in HDF5 file header, add attribute. Else, compare for equality
-            if not attributes.__contains__(field):
-                attributes[field] = value
-            else:
-                if attributes[field] != value:
-                    raise ValueError("Metadata field {} for current simtel file does not match output file: {} vs {}" \
-                                     .format(field, value, eval("attributes." + field)))
+        # Add shower metadata fields
+        for field in self.METADATA_FIELDS:
+            try:
+                value = getattr(event, field) if field else None
+
+                # If not present in HDF5 file header, add attribute. Else, compare for equality
+                if not attributes.__contains__(field):
+                    attributes[field] = value
+                else:
+                    if attributes[field] != value:
+                        raise ValueError("Metadata field {} for current simtel file does not match output file: {} vs {}" \
+                                         .format(field, value, eval("attributes." + field)))
+            except:
+                pass
 
         run_file_name = os.path.basename(data_file)
         if not attributes.__contains__("runlist"):
@@ -243,7 +250,7 @@ class ImageExtractor:
 
         selected_tels, num_tel = self.select_telescopes(data_file)
 
-        event = next(hessio_event_source(data_file))
+        event = next(ctapipe.io.event_source(data_file))
 
         # create and fill array information table
         if not f.__contains__('/Array_Info'):
@@ -252,7 +259,7 @@ class ImageExtractor:
                             row_types.Array,
                             ("Table of array data"),
                             filters=self.filters,
-                            expected_rows=self.expected_tels)
+                            expectedrows=self.expected_tels)
 
             arr_row = arr_table.row
 
@@ -273,12 +280,12 @@ class ImageExtractor:
                             row_types.Tel,
                             ("Table of telescope data"),
                             filters=self.filters,
-                            expected_rows=self.expected_tel_types)
+                            expectedrows=self.expected_tel_types)
 
             descr = tel_table.description._v_colobjects
             descr2 = descr.copy()
 
-            max_npix = self.TEL_NUM_PIXELS[max(self.TEL_NUM_PIXELS, key=self.TEL_NUM_PIXELS.get)]
+            max_npix = self.CAM_NUM_PIXELS[max(self.CAM_NUM_PIXELS, key=self.CAM_NUM_PIXELS.get)]
             descr2["pixel_pos"] = tables.Float32Col(shape=(2, max_npix))
 
             tel_table2 = f.create_table(
@@ -287,7 +294,7 @@ class ImageExtractor:
                     descr2,
                     "Table of telescope data",
                     filters=self.filters,
-                    expected_rows=self.expected_tel_types)
+                    expectedrows=self.expected_tel_types)
             tel_table.attrs._f_copy(tel_table2)
             tel_table.remove()
             tel_table2.move(f.root, 'Telescope_Info')
@@ -296,6 +303,7 @@ class ImageExtractor:
 
             # add units to table attributes
             random_tel_type = random.choice(list(selected_tels.keys()))
+            print(selected_tels)
             random_tel_id = random.choice(selected_tels[random_tel_type])
             tel_table2.attrs.tel_pos_units = str(event.inst.subarray.positions[random_tel_id].unit)
 
@@ -317,7 +325,7 @@ class ImageExtractor:
                     row_types.Event,
                     "Table of Event metadata",
                     filters=self.filters,
-                    expected_rows=self.expected_events)
+                    expectedrows=self.expected_events)
 
             descr = table.description._v_colobjects
             descr2 = descr.copy()
@@ -334,7 +342,7 @@ class ImageExtractor:
                     descr2,
                     "Table of Events",
                     filters=self.filters,
-                    expected_rows=self.expected_events)
+                    expectedrows=self.expected_events)
             table.attrs._f_copy(table2)
             table.remove()
             table2.move(f.root, 'Event_Info')
@@ -360,8 +368,8 @@ class ImageExtractor:
                 columns_dict = {"image": tables.Col.from_dtype(np_type), "event_index": tables.Int32Col()}
 
             elif self.img_mode == '1D':
-                array_shape = (self.TEL_NUM_PIXELS[tel_type],)
-                np_type = np.dtype((np.dtype(self.img_dtypes[tel_type]), array_shape))
+                array_shape = (self.CAM_NUM_PIXELS[tel_type.split(':')[1]],)
+                np_type = np.dtype((np.dtype(self.img_dtypes[tel_type.split(':')[1]]), array_shape))
 
                 columns_dict = {"image_charge": tables.Col.from_dtype(np_type), "event_index": tables.Int32Col()}
                 if self.include_timing:
@@ -377,7 +385,7 @@ class ImageExtractor:
                             description,
                             "Table of {} images".format(tel_type),
                             filters=self.filters,
-                            expected_rows=self.expected_images_per_event[tel_type]*self.expected_events)
+                            expectedrows=self.expected_images_per_event[tel_type]*self.expected_events)
 
                     # append blank image at index 0
                     image_row = table.row
@@ -386,11 +394,11 @@ class ImageExtractor:
                         image_row['image'] = self.trace_converter.convert(None, None, tel_type)
 
                     elif self.img_mode == '1D':
-                        shape = (image.TEL_NUM_PIXELS[tel_type],)
-                        image_row['image_charge'] = np.zeros(shape, dtype=self.img_dtypes[tel_type])
+                        shape = (image.CAM_NUM_PIXELS[tel_type.split(':')[1]],)
+                        image_row['image_charge'] = np.zeros(shape, dtype=self.img_dtypes[tel_type.split(':')[1]])
                         image_row['event_index'] = -1
                         if self.include_timing:
-                            image_row['image_peak_times'] = np.zeros(shape, dtype=self.img_dtypes[tel_type])
+                            image_row['image_peak_times'] = np.zeros(shape, dtype=self.img_dtypes[tel_type.split(':')[1]])
 
                     image_row.append()
                     table.flush()
@@ -401,9 +409,9 @@ class ImageExtractor:
                         table = f.create_table(f.root,
                                 'T' + str(tel_id),
                                 description,
-                                "Table of T{} images".format(str(tel_id))
+                                "Table of T{} images".format(str(tel_id)),
                                 filters=self.filters,
-                                expected_rows=self.expected_images_per_event[tel_type]*self.expected_events/len(self.all_tels[tel_type]))
+                                expectedrows=self.expected_images_per_event[tel_type]*self.expected_events/len(self.all_tels[tel_type]))
 
                         # append blank image at index 0
                         image_row = table.row
@@ -412,7 +420,7 @@ class ImageExtractor:
                             image_row['image'] = self.trace_converter.convert(None, None, tel_type)
 
                         elif self.img_mode == '1D':
-                            shape = (image.TEL_NUM_PIXELS[tel_type],)
+                            shape = (image.CAM_NUM_PIXELS[tel_type.split(':')[1]],)
                             image_row['image_charge'] = np.zeros(shape, dtype=self.img_dtypes[tel_type])
                             image_row['event_index'] = -1
                             if self.include_timing:
@@ -429,7 +437,7 @@ class ImageExtractor:
         event_count = 0
         passing_count = 0
 
-        source = hessio_event_source(data_file, allowed_tels=[j for i in selected_tels for j in selected_tels[i]],
+        source = event_source(data_file, allowed_tels=[j for i in selected_tels for j in selected_tels[i]],
                                      max_events=max_events)
 
         for event in source:
@@ -481,9 +489,9 @@ class ImageExtractor:
                             peaks_vector = None
 
                         if self.storage_mode == 'tel_type':
-                            table = eval('f.root.{}'.format(tel_type))
+                            table = getattr(f.root, tel_type)
                         elif self.storage_mode == 'tel_id':
-                            table = eval('f.root.T{}'.format(tel_id))
+                            table = getattr(f.root, 'T{}'.format(tel_id))
                         next_index = table.nrows
                         image_row = table.row
 
@@ -510,7 +518,7 @@ class ImageExtractor:
                 event_row['indices'] = all_tel_index_vector
 
             event_row['event_number'] = event.r0.event_id
-            event_row['run_number'] = event.r0.run_id
+            event_row['run_number'] = event.r0.obs_id
             event_row['particle_id'] = event.mc.shower_primary_id
             event_row['core_x'] = event.mc.core_x.value
             event_row['core_y'] = event.mc.core_y.value
@@ -574,7 +582,7 @@ class ImageExtractor:
             descr,
             "Table of events",
             filters=self.filters,
-            expected_rows=self.expected_events)
+            expectedrows=self.expected_events)
 
         for i in range(num_events):
             table_new.append([tuple(table[new_indices[i]])])
@@ -615,7 +623,7 @@ class ImageExtractor:
                     split_names[j] +
                     " Events",
                     filters=self.filters,
-                    expected_rows=self.expected_events*splits[j])
+                    expectedrows=self.expected_events*splits[j])
 
                 split_fraction = splits[j]
 
@@ -681,9 +689,10 @@ if __name__ == '__main__':
 
     # load options from config file
     if args.config_file_path is not None:
-        config = yaml.load(args.config_file_path)
-        options = {**x for x in config.values()}
-
+        with open(args.config_file_path, 'r') as config_file: 
+            config = yaml.load(config_file)
+        options = {k: v for x in config.values() for k, v in x.items()}
+        
         if options['ED_cuts_dict'] is not None:
             options['ED_cuts_dict'] = pkl.load(open(options['ED_cuts_dict'], "rb"))
 
