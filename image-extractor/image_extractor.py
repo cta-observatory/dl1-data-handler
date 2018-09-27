@@ -67,6 +67,8 @@ class ImageExtractor:
     ALLOWED_CUT_PARAMS = {}
     DEFAULT_CUTS_DICT = {}
 
+    DEFAULT_IMGS_PER_EVENT = 1.0
+
     def __init__(self,
             output_path,
             ED_cuts_dict=None,
@@ -379,13 +381,19 @@ class ImageExtractor:
 
             if self.storage_mode == 'tel_type':
                 if not f.__contains__('/' + tel_type):
+
+                    if tel_type in self.expected_images_per_event:
+                        expected_rows = self.expected_images_per_event[tel_type] * self.expected_events
+                    else:
+                        expected_rows = DEFAULT_IMGS_PER_EVENT * self.expected_events
+
                     table = f.create_table(
                             f.root,
                             tel_type,
                             description,
                             "Table of {} images".format(tel_type),
                             filters=self.filters,
-                            expected_rows=self.expected_images_per_event[tel_type]*self.expected_events)
+                            expected_rows=expected_rows)
 
                     # append blank image at index 0
                     image_row = table.row
@@ -406,12 +414,18 @@ class ImageExtractor:
             elif self.storage_mode == 'tel_id':
                 for tel_id in selected_tels[tel_type]:
                     if not f.__contains__('T' + str(tel_id)):
+
+                        if tel_type in self.expected_images_per_event:
+                            expected_rows = self.expected_images_per_event[tel_type] * self.expected_events / len(self.all_tels[tel_type])
+                        else:
+                            expected_rows = DEFAULT_IMGS_PER_EVENT * self.expected_events / len(self.all_tels[tel_type])
+
                         table = f.create_table(f.root,
                                 'T' + str(tel_id),
                                 description,
                                 "Table of T{} images".format(str(tel_id))
                                 filters=self.filters,
-                                expected_rows=self.expected_images_per_event[tel_type]*self.expected_events/len(self.all_tels[tel_type]))
+                                expected_rows=expected_rows)
 
                         # append blank image at index 0
                         image_row = table.row
