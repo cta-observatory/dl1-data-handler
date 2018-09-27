@@ -73,13 +73,13 @@ class ImageExtractor:
             output_path,
             ED_cuts_dict=None,
             storage_mode='tel_type',
-            tel_type_list=['LSTCam', 'FlashCam', 'NectarCam', 'SCTCam', 'DigiCam', 'ASTRICam', 'CHEC'],
+            tel_type_list=['LST:LSTCam', 'MST:FlashCam', 'MST:NectarCam', 'MST-SCT:SCTCam', 'SST:DigiCam', 'SST:ASTRICam', 'SST:CHEC'],
             img_mode='1D',
             img_channels=1,
             include_timing=True,
             img_scale_factors={'NectarCam': 1},
             img_dtypes={'LSTCam': 'float32', 'NectarCam': 'float32', 'FlashCam': 'float32', 'SCTCam': 'float32',
-                        'DigiCam': 'float32', 'ASTRICam': 'float32', 'CHEC': 'float32', },
+                        'DigiCam': 'float32', 'ASTRICam': 'float32', 'CHEC': 'float32'},
             img_dim_order='channels_last',
             cuts_dict=DEFAULT_CUTS_DICT,
             comp_lib='lzo',
@@ -88,14 +88,14 @@ class ImageExtractor:
             expected_tels=300,
             expected_events=7000,
             expected_images_per_event={
-                'LSTCam': 0.5,
-                'NectarCam': 2.0,
-                'FlashCam': 2.0,
-                'SCTCam': 1.5,
-                'DigiCam': 1.25,
-                'ASTRICam': 1.25,
-                'CHEC': 1.25,
-            }):
+                'LST:LSTCam': 0.5,
+                'MST:NectarCam': 2.0,
+                'MST:FlashCam': 2.0,
+                'MST-SCT:SCTCam': 1.5,
+                'SST:DigiCam': 1.25,
+                'SST:ASTRICam': 1.25,
+                'SST:CHEC': 1.25,
+            },
 
         """Constructor for ImageExtractor
         """
