@@ -96,6 +96,18 @@ class ImageExtractor:
                 'SST:ASTRICam': 1.25,
                 'SST:CHEC': 1.25,
             },
+            index_columns=[
+            ('/Event_Info', 'mc_energy'),
+            ('/Event_Info', 'alt'),
+            ('/Event_Info', 'az'),
+            ('/LST:LSTCam', 'event_index'),
+            ('/MST:NectarCam', 'event_index'),
+            ('/MST:FlashCam', 'event_index'),
+            ('/MST-SCT:SCTCam', 'event_index'),
+            ('/SST:DigiCam', 'event_index'),
+            ('/SST:ASTRICam', 'event_index'),
+            ('/SST:CHEC', 'event_index')
+            ]):
 
         """Constructor for ImageExtractor
         """
@@ -546,6 +558,11 @@ class ImageExtractor:
 
         f.root.Event_Info.flush()
         total_num_events = f.root.Event_Info.nrows
+
+        # Add all indexes
+        for location, col_name in self.indexes:
+            table = f.get_node(location, classname=tables.Table)
+            table.cols._f_col(col_name).create_index()
 
         f.close()
 
