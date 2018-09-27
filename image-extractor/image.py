@@ -2,11 +2,9 @@ import logging
 
 import numpy as np
 
-TEL_NUM_PIXELS = {'LST':1855,'MSTF':1764, 'MSTN':1855,'MSTS':11328,'SST1':1296, 'SSTA':2368, 'SSTC':2048}
-IMAGE_SHAPES = {'MSTS': (120, 120)}
+IMAGE_SHAPES = {'SCTCam': (120, 120)}
 
 logger = logging.getLogger(__name__)
-
 
 class TraceConverter:
 
@@ -18,14 +16,14 @@ class TraceConverter:
 
         #create injunction tables for each telescope type
         self.injunction_tables = {}
-        self.injunction_tables['MSTS'] = TraceConverter.__generate_table_MSTS()
+        self.injunction_tables['SCTCam'] = TraceConverter.__generate_table_SCTCam()
 
     def convert(self,pixels_vector,peaks_vector,tel_type):
         """
         Converter from ctapipe image pixel vector,
         peak position vector to numpy array format.
         """
-        
+
         image_shape = IMAGE_SHAPES[tel_type]
         scale_factor = self.scale_factors[tel_type]
         injunction_table = self.injunction_tables[tel_type]
@@ -73,15 +71,15 @@ class TraceConverter:
                         img_array[0,x,y] = charge
                     elif self.dim_order == 'channels_last':
                         img_array[x,y,0] = charge
- 
+
             return img_array
 
     @staticmethod
-    def __generate_table_MSTS():
+    def __generate_table_SCTCam():
         """
-        Function returning MSTS injunction table
+        Function returning SCTCam injunction table
         """
-        
+
         ROWS = 15
         MODULE_DIM = (8, 8)
         MODULE_SIZE = MODULE_DIM[0] * MODULE_DIM[1]
@@ -103,16 +101,14 @@ class TraceConverter:
             5]
 
         # counting from the bottom row, left to right
-        MODULE_START_POSITIONS = [(((IMAGE_SHAPES['MSTS'][0] - MODULES_PER_ROW[j] *
+        MODULE_START_POSITIONS = [(((IMAGE_SHAPES['SCTCam'][0] - MODULES_PER_ROW[j] *
                                      MODULE_DIM[0]) / 2) +
                                    (MODULE_DIM[0] * i), j * MODULE_DIM[1])
                                   for j in range(ROWS)
                                   for i in range(MODULES_PER_ROW[j])]
 
-        injunction_table = [(int(x_0 + int(i / MODULE_DIM[0])),y_0 + i % MODULE_DIM[1]) 
+        injunction_table = [(int(x_0 + int(i / MODULE_DIM[0])),y_0 + i % MODULE_DIM[1])
                             for (x_0,y_0) in MODULE_START_POSITIONS
                             for i in range(MODULE_SIZE)]
 
         return injunction_table
-
-
