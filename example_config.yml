@@ -1,13 +1,13 @@
 General:
   storage_mode: 'tel_type'
   tel_type_list:
-    - 'LST:LSTCam'
-    - 'MST:FlashCam'
-    - 'MST:NectarCam'
-    - 'MST-SCT:SCTCam'
-    - 'SST:DigiCam'
-    - 'SST:ASTRICam'
-    - 'SST:CHEC'
+    - 'LSTCam'
+    - 'FlashCam'
+    - 'NectarCam'
+    - 'SCTCam'
+    - 'DigiCam'
+    - 'ASTRICam'
+    - 'CHEC'
 
 Image:
   img_mode: '1D'
@@ -38,10 +38,10 @@ Chunking:
   expected_tels: 300
   expected_events: 10000
   expected_images_per_event:
-      'LST:LSTCam': 0.5
-      'MST:NectarCam': 2.0
-      'MST:FlashCam': 2.0
-      'MST-SCT:SCTCam': 1.5
-      'SST:DigiCam': 1.25
-      'SST:ASTRICam': 1.25
-      'SST:CHEC': 1.25
+      'LSTCam': 0.5
+      'NectarCam': 2.0
+      'FlashCam': 2.0
+      'SCTCam': 1.5
+      'DigiCam': 1.25
+      'ASTRICam': 1.25
+      'CHEC': 1.25
