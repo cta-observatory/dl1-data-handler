@@ -2,6 +2,7 @@
 """
 Module for main ImageExtractor class and command line tool.
 """
+import pkg_resources
 import random
 import argparse
 import pickle as pkl
