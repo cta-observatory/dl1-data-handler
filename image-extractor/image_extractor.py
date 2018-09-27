@@ -48,23 +48,21 @@ class ImageExtractor:
     IMAGE_SHAPES = image.IMAGE_SHAPES
 
     METADATA_FIELDS = {
-        "ImageExtractor_ver": "pkg_resources.get_distribution('image-extractor').version",
-        "ctapipe_ver": "pkg_resources.get_distribution('ctapipe').version",
-        "CORSIKA_ver": "event.mcheader.corsika_version",
-        "simtel_ver": "event.mcheader.simtel_version",
-        "prod_site_alt": "event.mcheader.prod_site_alt",
-        "prod_site_coord": "event.mcheader.prod_site_coord",
-        "prod_site_B_field": "event.mcheader.prod_site_B_total",
-        "prod_site_array": "event.mcheader.prod_site_array",
-        "prod_site_subarray": "event.mcheader.prod_site_subarray",
+        "CORSIKA_ver": "mcheader.corsika_version",
+        "simtel_ver": "mcheader.simtel_version",
+        "prod_site_alt": "mcheader.prod_site_alt",
+        "prod_site_coord": "mcheader.prod_site_coord",
+        "prod_site_B_field": "mcheader.prod_site_B_total",
+        "prod_site_array": "mcheader.prod_site_array",
+        "prod_site_subarray": "mcheader.prod_site_subarray",
         "particle_type": "event.mc.shower_primary_id",
-        "zenith": "event.mcheader.run_array_direction[1]",
-        "azimuth": "event.mcheader.run_array_direction[0]",
+        "zenith": "mcheader.run_array_direction[1]",
+        "azimuth": "mcheader.run_array_direction[0]",
         "view_cone": None,
-        "spectral_index": "event.mcheader.spectral_index",
-        "E_min": "event.mcheader.energy_range_min",
-        "E_max": "event.mcheader.energy_range_min",
-        }
+        "spectral_index": "mcheader.spectral_index",
+        "E_min": "mcheader.energy_range_min",
+        "E_max": "mcheader.energy_range_min",
+    }
 
     ALLOWED_CUT_PARAMS = {}
     DEFAULT_CUTS_DICT = {}
@@ -214,16 +212,24 @@ class ImageExtractor:
 
         attributes = HDF5_file.root._v_attrs
 
-        for field in self.METADATA_FIELDS:
-            value = eval(self.METADATA_FIELDS[field]) if field else None
+        # Add major software versions
+        attributes['image_extractor_ver'] = pkg_resources.get_distribution('image-extractor').version
+        attributes['ctapipe_ver'] = pkg_resources.get_distribution('ctapipe').version
 
-            # If not present in HDF5 file header, add attribute. Else, compare for equality
-            if not attributes.__contains__(field):
-                attributes[field] = value
-            else:
-                if attributes[field] != value:
-                    raise ValueError("Metadata field {} for current simtel file does not match output file: {} vs {}" \
-                                     .format(field, value, eval("attributes." + field)))
+        # Add shower metadata fields
+        for field in self.METADATA_FIELDS:
+            try:
+                value = getattr(event, field) if field else None
+
+                # If not present in HDF5 file header, add attribute. Else, compare for equality
+                if not attributes.__contains__(field):
+                    attributes[field] = value
+                else:
+                    if attributes[field] != value:
+                        raise ValueError("Metadata field {} for current simtel file does not match output file: {} vs {}" \
+                                         .format(field, value, eval("attributes." + field)))
+            except:
+                pass
 
         run_file_name = os.path.basename(data_file)
         if not attributes.__contains__("runlist"):
