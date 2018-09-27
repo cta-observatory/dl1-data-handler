@@ -2,8 +2,7 @@ import logging
 
 import numpy as np
 
-TEL_NUM_PIXELS = {'LST':1855,'MSTF':1764, 'MSTN':1855,'MSTS':11328,'SST1':1296, 'SSTA':2368, 'SSTC':2048}
-IMAGE_SHAPES = {'MSTS': (120, 120)}
+IMAGE_SHAPES = {'SCTCam': (120, 120)}
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,7 @@ class TraceConverter:
 
         #create injunction tables for each telescope type
         self.injunction_tables = {}
-        self.injunction_tables['MSTS'] = TraceConverter.__generate_table_MSTS()
+        self.injunction_tables['SCTCam'] = TraceConverter.__generate_table_MSTS()
 
     def convert(self,pixels_vector,peaks_vector,tel_type):
         """
@@ -103,7 +102,7 @@ class TraceConverter:
             5]
 
         # counting from the bottom row, left to right
-        MODULE_START_POSITIONS = [(((IMAGE_SHAPES['MSTS'][0] - MODULES_PER_ROW[j] *
+        MODULE_START_POSITIONS = [(((IMAGE_SHAPES['SCTCam'][0] - MODULES_PER_ROW[j] *
                                      MODULE_DIM[0]) / 2) +
                                    (MODULE_DIM[0] * i), j * MODULE_DIM[1])
                                   for j in range(ROWS)
