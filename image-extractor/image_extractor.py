@@ -13,8 +13,8 @@ import yaml
 
 import numpy as np
 import tables
-from ctapipe.io.hessio import hessio_event_source
-from ctapipe.calib import pedestals, CameraCalibrator
+
+import ctapipe
 
 import image
 import row_types
@@ -173,7 +173,7 @@ class ImageExtractor:
 
         logger.info("Collecting telescope types...")
 
-        event = next(hessio_event_source(data_file, max_events=1))
+        event = next(ctapipe.io.event_source(data_file, max_events=1))
 
         self.self.all_tels = {tel_type: [] for tel_type in self.TEL_TYPES}
 
@@ -209,7 +209,7 @@ class ImageExtractor:
 
         logger.info("Checking/writing metadata...")
 
-        event = next(hessio_event_source(data_file))
+        event = next(ctapipe.io.event_source(data_file))
 
         attributes = HDF5_file.root._v_attrs
 
@@ -244,7 +244,7 @@ class ImageExtractor:
 
         selected_tels, num_tel = self.select_telescopes(data_file)
 
-        event = next(hessio_event_source(data_file))
+        event = next(ctapipe.io.event_source(data_file))
 
         # create and fill array information table
         if not f.__contains__('/Array_Info'):
@@ -430,7 +430,7 @@ class ImageExtractor:
         event_count = 0
         passing_count = 0
 
-        source = hessio_event_source(data_file, allowed_tels=[j for i in selected_tels for j in selected_tels[i]],
+        source = ctapipe.io.event_source(data_file, allowed_tels=[j for i in selected_tels for j in selected_tels[i]],
                                      max_events=max_events)
 
         for event in source:
