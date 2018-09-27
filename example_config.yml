@@ -45,3 +45,16 @@ Chunking:
       'DigiCam': 1.25
       'ASTRICam': 1.25
       'CHEC': 1.25
+
+Indexes:
+  index_columns:
+     - ['/Event_Info', 'mc_energy']
+     - ['/Event_Info', 'alt']
+     - ['/Event_Info', 'az']
+     - ['/LST:LSTCam', 'event_index']
+     - ['/MST:NectarCam', 'event_index']
+     - ['/MST:FlashCam', 'event_index']
+     - ['/MST-SCT:SCTCam', 'event_index']
+     - ['/SST:DigiCam', 'event_index']
+     - ['/SST:ASTRICam', 'event_index']
+     - ['/SST:CHEC', 'event_index']
