@@ -2,6 +2,10 @@ import logging
 
 import numpy as np
 
+import ctapipe.instrument
+
+CAM_TYPES = [v[1] for v in ctapipe.instrument.camera._CAMERA_GEOMETRY_TABLE.values()]
+CAM_NUM_PIXELS = {cam_name: len(ctapipe.instrument.camera.CameraGeometry.from_name(cam_name).pix_x) for cam_name in CAM_TYPES}
 IMAGE_SHAPES = {'SCTCam': (120, 120)}
 
 DEFAULT_IMG_DTYPE = 'float32'
@@ -20,16 +24,16 @@ class TraceConverter:
         self.injunction_tables = {}
         self.injunction_tables['SCTCam'] = TraceConverter.__generate_table_SCTCam()
 
-    def convert(self,pixels_vector,peaks_vector,tel_type):
+    def convert(self,pixels_vector,peaks_vector,cam_type):
         """
         Converter from ctapipe image pixel vector,
         peak position vector to numpy array format.
         """
 
-        image_shape = IMAGE_SHAPES[tel_type]
-        scale_factor = self.scale_factors[tel_type]
-        injunction_table = self.injunction_tables[tel_type]
-        img_dtype = self.img_dtypes.get(tel_type, DEFAULT_IMG_DTYPE)
+        image_shape = IMAGE_SHAPES[cam_type]
+        scale_factor = self.scale_factors[cam_type]
+        injunction_table = self.injunction_tables[cam_type]
+        img_dtype = self.img_dtypes.get(cam_type, DEFAULT_IMG_DTYPE)
 
         if self.dim_order == 'channels_first':
             shape = [self.num_channels,
@@ -39,18 +43,18 @@ class TraceConverter:
             shape = [image_shape[0] * scale_factor,
                     image_shape[1] * scale_factor,
                     self.num_channels]
-    
+
         if pixels_vector is None:
             return np.zeros(shape,dtype=img_dtype)
         else:
-            
+
             img_array = np.empty(shape,dtype=img_dtype)
 
             #preprocess image vector - truncate at 0, scale by 100, round to integer
             pixels_vector = np.around(np.multiply(pixels_vector.clip(min=0),100))
 
-            if len(pixels_vector) != TEL_NUM_PIXELS[tel_type]:
-                raise ValueError("Size of image vector does not match telescope type: {} {}".format(len(pixels_vector),TEL_NUM_PIXELS[tel_type]))
+            if len(pixels_vector) != CAM_NUM_PIXELS[cam_type]:
+                raise ValueError("Size of image vector does not match telescope type: {} {}".format(len(pixels_vector),CAM_NUM_PIXELS[cam_type]))
 
             if peaks_vector is not None:
                 if len(pixels_vector) != len(peaks_vector):
