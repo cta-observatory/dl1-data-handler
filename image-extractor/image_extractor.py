@@ -123,7 +123,7 @@ class ImageExtractor:
 
         self.ED_cuts_dict = ED_cuts_dict
 
-        if storage_mode in ['tel_type', 'tel_id']:
+        if storage_mode in ['tel_type','tel_id']:
             self.storage_mode = storage_mode
         else:
             raise ValueError('Invalid storage mode: {}.'.format(storage_mode))
@@ -156,7 +156,7 @@ class ImageExtractor:
         else:
             raise ValueError('Invalid dimension ordering: {}.'.format(img_dim_order))
 
-        self.trace_converter = image.TraceConverter(
+        self.trace_converter= image.TraceConverter(
             self.img_dtypes,
             self.img_dim_order,
             self.img_channels,
@@ -563,7 +563,7 @@ class ImageExtractor:
 
                     event_row.append()
                     table.flush()
-
+                    
                 f.root.Event_Info.flush()
                 total_num_events = f.root.Event_Info.nrows
 
@@ -574,6 +574,7 @@ class ImageExtractor:
                         table.cols._f_col(col_name).create_index()
                     except:
                         pass
+
 
                 f.close()
 
