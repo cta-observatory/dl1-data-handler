@@ -265,312 +265,308 @@ class ImageExtractor:
         """
         logger.info("Preparing HDF5 file structure...")
 
-        f = tables.open_file(self.output_path, mode="a", title="Output File")
+        with tables.open_file(self.output_path, mode="a", title="Output File") as f:
+            try:
 
-        self.write_metadata(f, data_file)
+                self.write_metadata(f, data_file)
 
-        selected_tels, num_tel = self.select_telescopes(data_file)
+                selected_tels, num_tel = self.select_telescopes(data_file)
 
-        event = next(ctapipe.io.event_source(data_file))
+                event = next(iter(ctapipe.io.event_source(data_file)))
 
-        # create and fill array information table
-        if not f.__contains__('/Array_Info'):
-            arr_table = f.create_table(f.root,
-                            'Array_Info',
-                            row_types.Array,
-                            ("Table of array data"),
-                            filters=self.filters,
-                            expected_rows=self.expected_tels)
+                # create and fill array information table
+                if not f.__contains__('/Array_Info'):
+                    arr_table = f.create_table(f.root,
+                                    'Array_Info',
+                                    row_types.Array,
+                                    ("Table of array data"),
+                                    filters=self.filters,
+                                    expectedrows=self.expected_tels)
 
-            arr_row = arr_table.row
+                    arr_row = arr_table.row
 
-            for tel_type in selected_tels:
-                for tel_id in selected_tels[tel_type]:
-                    arr_row["tel_id"] = tel_id
-                    arr_row["tel_x"] = event.inst.subarray.positions[tel_id].value[0]
-                    arr_row["tel_y"] = event.inst.subarray.positions[tel_id].value[1]
-                    arr_row["tel_z"] = event.inst.subarray.positions[tel_id].value[2]
-                    arr_row["tel_type"] = tel_type
-                    arr_row["run_array_direction"] = event.mcheader.run_array_direction
-                    arr_row.append()
+                    for tel_type in selected_tels:
+                        for tel_id in selected_tels[tel_type]:
+                            arr_row["tel_id"] = tel_id
+                            arr_row["tel_x"] = event.inst.subarray.positions[tel_id].value[0]
+                            arr_row["tel_y"] = event.inst.subarray.positions[tel_id].value[1]
+                            arr_row["tel_z"] = event.inst.subarray.positions[tel_id].value[2]
+                            arr_row["tel_type"] = tel_type
+                            arr_row["run_array_direction"] = event.mcheader.run_array_direction
+                            arr_row.append()
 
-        # create and fill telescope information table
-        if not f.__contains__('/Telescope_Info'):
-            tel_table = f.create_table(f.root,
-                            'Telescope_Info',
-                            row_types.Tel,
-                            ("Table of telescope data"),
-                            filters=self.filters,
-                            expected_rows=self.expected_tel_types)
+                # create and fill telescope information table
+                if not f.__contains__('/Telescope_Info'):
+                    tel_table = f.create_table(f.root,
+                                    'Telescope_Info',
+                                    row_types.Tel,
+                                    ("Table of telescope data"),
+                                    filters=self.filters,
+                                    expectedrows=self.expected_tel_types)
 
-            descr = tel_table.description._v_colobjects
-            descr2 = descr.copy()
+                    descr = tel_table.description._v_colobjects
+                    descr2 = descr.copy()
 
-            max_npix = self.TEL_NUM_PIXELS[max(self.TEL_NUM_PIXELS, key=self.TEL_NUM_PIXELS.get)]
-            descr2["pixel_pos"] = tables.Float32Col(shape=(2, max_npix))
+                    max_npix = self.CAM_NUM_PIXELS[max(self.CAM_NUM_PIXELS, key=self.CAM_NUM_PIXELS.get)]
+                    descr2["pixel_pos"] = tables.Float32Col(shape=(2, max_npix))
 
-            tel_table2 = f.create_table(
-                    f.root,
-                    'temp',
-                    descr2,
-                    "Table of telescope data",
-                    filters=self.filters,
-                    expected_rows=self.expected_tel_types)
-            tel_table.attrs._f_copy(tel_table2)
-            tel_table.remove()
-            tel_table2.move(f.root, 'Telescope_Info')
-
-            tel_row = tel_table2.row
-
-            # add units to table attributes
-            random_tel_type = random.choice(list(selected_tels.keys()))
-            random_tel_id = random.choice(selected_tels[random_tel_type])
-            tel_table2.attrs.tel_pos_units = str(event.inst.subarray.positions[random_tel_id].unit)
-
-            for tel_type in selected_tels:
-                random_tel_id = random.choice(selected_tels[tel_type])
-                tel_row["tel_type"] = tel_type
-                tel_row["num_pixels"] = len(event.inst.subarray.tel[random_tel_id].camera.pix_id)
-                posx = np.hstack([event.inst.subarray.tel[random_tel_id].camera.pix_x.value,
-                                  np.zeros(max_npix - len(event.inst.subarray.tel[random_tel_id].camera.pix_x))])
-                posy = np.hstack([event.inst.subarray.tel[random_tel_id].camera.pix_y.value,
-                                  np.zeros(max_npix - len(event.inst.subarray.tel[random_tel_id].camera.pix_y))])
-                tel_row["pixel_pos"] = [posx, posy]
-                tel_row.append()
-
-        # create event table
-        if not f.__contains__('/Event_Info'):
-            table = f.create_table(f.root,
-                    'Event_Info',
-                    row_types.Event,
-                    "Table of Event metadata",
-                    filters=self.filters,
-                    expected_rows=self.expected_events)
-
-            descr = table.description._v_colobjects
-            descr2 = descr.copy()
-
-            if self.storage_mode == 'tel_type':
-                for tel_type in selected_tels:
-                    descr2[tel_type + '_indices'] = tables.Int32Col(shape=(len(selected_tels[tel_type])))
-            elif self.storage_mode == 'tel_id':
-                descr2["indices"] = tables.Int32Col(shape=(num_tel))
-
-            table2 = f.create_table(
-                    f.root,
-                    'temp',
-                    descr2,
-                    "Table of Events",
-                    filters=self.filters,
-                    expected_rows=self.expected_events)
-            table.attrs._f_copy(table2)
-            table.remove()
-            table2.move(f.root, 'Event_Info')
-
-            # add units to table attributes
-            table2.attrs.core_pos_units = str(event.mc.core_x.unit)
-            table2.attrs.h_first_int_units = str(event.mc.h_first_int.unit)
-            table2.attrs.mc_energy_units = str(event.mc.energy.unit)
-            table2.attrs.alt_az_units = str(event.mc.alt.unit)
-
-        # create image tables
-        for tel_type in selected_tels:
-            if self.img_mode == '2D':
-                img_width = self.IMAGE_SHAPES[tel_type][0] * self.img_scale_factors[tel_type]
-                img_length = self.IMAGE_SHAPES[tel_type][1] * self.img_scale_factors[tel_type]
-
-                if self.img_dim_order == 'channels_first':
-                    array_shape = (self.img_channels, img_width, img_length)
-                elif self.img_dim_order == 'channels_last':
-                    array_shape = (img_width, img_length, self.img_channels)
-
-                np_type = np.dtype(np.dtype(self.img_dtypes[tel_type]), array_shape)
-                columns_dict = {"image": tables.Col.from_dtype(np_type), "event_index": tables.Int32Col()}
-
-            elif self.img_mode == '1D':
-                array_shape = (self.TEL_NUM_PIXELS[tel_type],)
-                np_type = np.dtype((np.dtype(self.img_dtypes[tel_type]), array_shape))
-
-                columns_dict = {"image_charge": tables.Col.from_dtype(np_type), "event_index": tables.Int32Col()}
-                if self.include_timing:
-                    columns_dict["image_peak_times"] = tables.Col.from_dtype(np_type)
-
-            description = type('description', (tables.IsDescription,), columns_dict)
-
-            if self.storage_mode == 'tel_type':
-                if not f.__contains__('/' + tel_type):
-
-                    if tel_type in self.expected_images_per_event:
-                        expected_rows = self.expected_images_per_event[tel_type] * self.expected_events
-                    else:
-                        expected_rows = DEFAULT_IMGS_PER_EVENT * self.expected_events
-
-                    table = f.create_table(
+                    tel_table2 = f.create_table(
                             f.root,
-                            tel_type,
-                            description,
-                            "Table of {} images".format(tel_type),
+                            'temp',
+                            descr2,
+                            "Table of telescope data",
                             filters=self.filters,
-                            expected_rows=expected_rows)
+                            expectedrows=self.expected_tel_types)
+                    tel_table.attrs._f_copy(tel_table2)
+                    tel_table.remove()
+                    tel_table2.move(f.root, 'Telescope_Info')
 
-                    # append blank image at index 0
-                    image_row = table.row
+                    tel_row = tel_table2.row
 
+                    # add units to table attributes
+                    random_tel_type = random.choice(list(selected_tels.keys()))
+                    random_tel_id = random.choice(selected_tels[random_tel_type])
+                    tel_table2.attrs.tel_pos_units = str(event.inst.subarray.positions[random_tel_id].unit)
+
+                    for tel_type in selected_tels:
+                        random_tel_id = random.choice(selected_tels[tel_type])
+                        tel_row["tel_type"] = tel_type
+                        tel_row["num_pixels"] = len(event.inst.subarray.tel[random_tel_id].camera.pix_id)
+                        posx = np.hstack([event.inst.subarray.tel[random_tel_id].camera.pix_x.value,
+                                          np.zeros(max_npix - len(event.inst.subarray.tel[random_tel_id].camera.pix_x))])
+                        posy = np.hstack([event.inst.subarray.tel[random_tel_id].camera.pix_y.value,
+                                          np.zeros(max_npix - len(event.inst.subarray.tel[random_tel_id].camera.pix_y))])
+                        tel_row["pixel_pos"] = [posx, posy]
+                        tel_row.append()
+
+                # create event table
+                if not f.__contains__('/Event_Info'):
+                    table = f.create_table(f.root,
+                            'Event_Info',
+                            row_types.Event,
+                            "Table of Event metadata",
+                            filters=self.filters,
+                            expectedrows=self.expected_events)
+
+                    descr = table.description._v_colobjects
+                    descr2 = descr.copy()
+
+                    if self.storage_mode == 'tel_type':
+                        for tel_type in selected_tels:
+                            descr2[tel_type + '_indices'] = tables.Int32Col(shape=(len(selected_tels[tel_type])))
+                    elif self.storage_mode == 'tel_id':
+                        descr2["indices"] = tables.Int32Col(shape=(num_tel))
+
+                    table2 = f.create_table(
+                            f.root,
+                            'temp',
+                            descr2,
+                            "Table of Events",
+                            filters=self.filters,
+                            expectedrows=self.expected_events)
+                    table.attrs._f_copy(table2)
+                    table.remove()
+                    table2.move(f.root, 'Event_Info')
+
+                    # add units to table attributes
+                    table2.attrs.core_pos_units = str(event.mc.core_x.unit)
+                    table2.attrs.h_first_int_units = str(event.mc.h_first_int.unit)
+                    table2.attrs.mc_energy_units = str(event.mc.energy.unit)
+                    table2.attrs.alt_az_units = str(event.mc.alt.unit)
+
+                # create image tables
+                for tel_type in selected_tels:
+                    cam_type = tel_type.split(':')[1]
                     if self.img_mode == '2D':
-                        image_row['image'] = self.trace_converter.convert(None, None, tel_type)
+                        img_width = self.IMAGE_SHAPES[cam_type][0] * self.img_scale_factors[cam_type]
+                        img_length = self.IMAGE_SHAPES[cam_type][1] * self.img_scale_factors[cam_type]
+
+                        if self.img_dim_order == 'channels_first':
+                            array_shape = (self.img_channels, img_width, img_length)
+                        elif self.img_dim_order == 'channels_last':
+                            array_shape = (img_width, img_length, self.img_channels)
+
+                        np_type = np.dtype(np.dtype(self.img_dtypes[cam_type]), array_shape)
+                        columns_dict = {"image": tables.Col.from_dtype(np_type), "event_index": tables.Int32Col()}
 
                     elif self.img_mode == '1D':
-                        shape = (image.TEL_NUM_PIXELS[tel_type],)
-                        image_row['image_charge'] = np.zeros(shape, dtype=self.img_dtypes[tel_type])
-                        image_row['event_index'] = -1
-                        if self.include_timing:
-                            image_row['image_peak_times'] = np.zeros(shape, dtype=self.img_dtypes[tel_type])
+                        array_shape = (self.CAM_NUM_PIXELS[cam_type],)
+                        np_type = np.dtype((np.dtype(self.img_dtypes[cam_type]), array_shape))
 
-                    image_row.append()
+                        columns_dict = {"image_charge": tables.Col.from_dtype(np_type), "event_index": tables.Int32Col()}
+                        if self.include_timing:
+                            columns_dict["image_peak_times"] = tables.Col.from_dtype(np_type)
+
+                    description = type('description', (tables.IsDescription,), columns_dict)
+
+                    if self.storage_mode == 'tel_type':
+                        if not f.__contains__('/' + tel_type):
+
+                            if tel_type in self.expected_images_per_event:
+                                expected_rows = self.expected_images_per_event[tel_type] * self.expected_events
+                            else:
+                                expected_rows = DEFAULT_IMGS_PER_EVENT * self.expected_events
+
+                            table = f.create_table(
+                                    f.root,
+                                    tel_type,
+                                    description,
+                                    "Table of {} images".format(tel_type),
+                                    filters=self.filters,
+                                    expectedrows=expected_rows)
+
+                            # append blank image at index 0
+                            image_row = table.row
+
+                            if self.img_mode == '2D':
+                                image_row['image'] = self.trace_converter.convert(None, None, cam_type)
+
+                            elif self.img_mode == '1D':
+                                shape = (image.CAM_NUM_PIXELS[cam_type],)
+                                image_row['image_charge'] = np.zeros(shape, dtype=self.img_dtypes[cam_type])
+                                image_row['event_index'] = -1
+                                if self.include_timing:
+                                    image_row['image_peak_times'] = np.zeros(shape, dtype=self.img_dtypes[cam_type])
+
+                            image_row.append()
+                            table.flush()
+
+                    elif self.storage_mode == 'tel_id':
+                        for tel_id in selected_tels[tel_type]:
+                            if not f.__contains__('T' + str(tel_id)):
+
+                                if tel_type in self.expected_images_per_event:
+                                    expected_rows = self.expected_images_per_event[tel_type] * self.expected_events / len(self.all_tels[tel_type])
+                                else:
+                                    expected_rows = DEFAULT_IMGS_PER_EVENT * self.expected_events / len(self.all_tels[tel_type])
+
+                                table = f.create_table(f.root,
+                                        'T' + str(tel_id),
+                                        description,
+                                        "Table of T{} images".format(str(tel_id)),
+                                        filters=self.filters,
+                                        expectedrows=expected_rows)
+
+                                # append blank image at index 0
+                                image_row = table.row
+
+                                if self.img_mode == '2D':
+                                    image_row['image'] = self.trace_converter.convert(None, None, cam_type)
+
+                                elif self.img_mode == '1D':
+                                    shape = (image.CAM_NUM_PIXELS[tel_type],)
+                                    image_row['image_charge'] = np.zeros(shape, dtype=self.img_dtypes[cam_type])
+                                    image_row['event_index'] = -1
+                                    if self.include_timing:
+                                        image_row['image_peak_times'] = np.zeros(shape, dtype=self.img_dtypes[cam_type])
+
+                                image_row.append()
+                                table.flush()
+
+                # specify calibration and other processing options
+                cal = ctapipe.calib.CameraCalibrator(None, None)
+
+                logger.info("Processing events...")
+
+                event_count = 0
+                passing_count = 0
+
+                source = ctapipe.io.event_source(data_file, allowed_tels=[j for i in selected_tels for j in selected_tels[i]],
+                                             max_events=max_events)
+
+                for event in source:
+                    event_count += 1
+
+                    if self.cuts_dict:
+                        if self.ED_cuts_dict is not None:
+                            logger.warning(
+                                'Warning: Both ED_cuts_dict and cuts dictionary found. Using cuts dictionary instead.')
+
+                        if test_cuts(event, cuts_dict):
+                            passing_count += 1
+                        else:
+                            continue
+                    else:
+                        if self.ED_cuts_dict is not None:
+                            if (event.r0.run_id, event.r0.event_id) in self.ED_cuts_dict:
+                                bin_number, reconstructed_energy = self.ED_cuts_dict[
+                                    (event.r0.run_id, event.r0.event_id)]
+                                passing_count += 1
+                            else:
+                                continue
+
+                    cal.calibrate(event)
+
+                    table = f.root.Event_Info
+                    table.flush()
+                    event_row = table.row
+                    event_index = table.nrows
+
+                    if self.storage_mode == 'tel_type':
+                        tel_index_vectors = {tel_type: [] for tel_type in selected_tels}
+                    elif self.storage_mode == 'tel_id':
+                        all_tel_index_vector = []
+
+                    for tel_type in selected_tels.keys():
+                        for tel_id in sorted(selected_tels[tel_type]):
+                            if self.storage_mode == 'tel_type':
+                                index_vector = tel_index_vectors[tel_type]
+                            elif self.storage_mode == 'tel_id':
+                                index_vector = all_tel_index_vector
+
+                            if tel_id in event.r0.tels_with_data:
+                                pixel_vector = event.dl1.tel[tel_id].image[0]
+                                logger.debug('Storing image from tel_type {} ({} pixels)'.format(tel_type, len(pixel_vector)))
+                                if self.include_timing:
+                                    peaks_vector = event.dl1.tel[tel_id].peakpos[0]
+                                else:
+                                    peaks_vector = None
+
+                                if self.storage_mode == 'tel_type':
+                                    table = f.get_node('/' + tel_type, classname='Table')
+                                elif self.storage_mode == 'tel_id':
+                                    table = f.get_node('/T' + str(tel_id) , classname='Table')
+                                next_index = table.nrows
+                                image_row = table.row
+
+                                if self.img_mode == '2D':
+                                    image_row['image'] = self.trace_converter.convert(pixel_vector, peaks_vector, cam_type)
+
+                                elif self.img_mode == '1D':
+                                    image_row['image_charge'] = pixel_vector
+                                    if self.include_timing:
+                                        image_row['image_peak_times'] = peaks_vector
+
+                                image_row["event_index"] = event_index
+
+                                image_row.append()
+                                index_vector.append(next_index)
+                                table.flush()
+                            else:
+                                index_vector.append(0)
+
+                    if self.storage_mode == 'tel_type':
+                        for tel_type in tel_index_vectors:
+                            event_row[tel_type + '_indices'] = tel_index_vectors[tel_type]
+                    elif self.storage_mode == 'tel_id':
+                        event_row['indices'] = all_tel_index_vector
+
+                    event_row['event_number'] = event.r0.event_id
+                    event_row['run_number'] = event.r0.obs_id
+                    event_row['particle_id'] = event.mc.shower_primary_id
+                    event_row['core_x'] = event.mc.core_x.value
+                    event_row['core_y'] = event.mc.core_y.value
+                    event_row['h_first_int'] = event.mc.h_first_int.value
+                    event_row['mc_energy'] = event.mc.energy.value
+                    event_row['alt'] = event.mc.alt.value
+                    event_row['az'] = event.mc.az.value
+
+                    event_row.append()
                     table.flush()
 
-            elif self.storage_mode == 'tel_id':
-                for tel_id in selected_tels[tel_type]:
-                    if not f.__contains__('T' + str(tel_id)):
+                f.root.Event_Info.flush()
+                total_num_events = f.root.Event_Info.nrows
 
-                        if tel_type in self.expected_images_per_event:
-                            expected_rows = self.expected_images_per_event[tel_type] * self.expected_events / len(self.all_tels[tel_type])
-                        else:
-                            expected_rows = DEFAULT_IMGS_PER_EVENT * self.expected_events / len(self.all_tels[tel_type])
-
-                        table = f.create_table(f.root,
-                                'T' + str(tel_id),
-                                description,
-                                "Table of T{} images".format(str(tel_id))
-                                filters=self.filters,
-                                expected_rows=expected_rows)
-
-                        # append blank image at index 0
-                        image_row = table.row
-
-                        if self.img_mode == '2D':
-                            image_row['image'] = self.trace_converter.convert(None, None, tel_type)
-
-                        elif self.img_mode == '1D':
-                            shape = (image.TEL_NUM_PIXELS[tel_type],)
-                            image_row['image_charge'] = np.zeros(shape, dtype=self.img_dtypes[tel_type])
-                            image_row['event_index'] = -1
-                            if self.include_timing:
-                                image_row['image_peak_times'] = np.zeros(shape, dtype=self.img_dtypes[tel_type])
-
-                        image_row.append()
-                        table.flush()
-
-        # specify calibration and other processing options
-        cal = CameraCalibrator(None, None)
-
-        logger.info("Processing events...")
-
-        event_count = 0
-        passing_count = 0
-
-        source = ctapipe.io.event_source(data_file, allowed_tels=[j for i in selected_tels for j in selected_tels[i]],
-                                     max_events=max_events)
-
-        for event in source:
-            event_count += 1
-
-            if self.cuts_dict:
-                if self.ED_cuts_dict is not None:
-                    logger.warning(
-                        'Warning: Both ED_cuts_dict and cuts dictionary found. Using cuts dictionary instead.')
-
-                if test_cuts(event, cuts_dict):
-                    passing_count += 1
-                else:
-                    continue
-            else:
-                if self.ED_cuts_dict is not None:
-                    if (event.r0.run_id, event.r0.event_id) in self.ED_cuts_dict:
-                        bin_number, reconstructed_energy = self.ED_cuts_dict[
-                            (event.r0.run_id, event.r0.event_id)]
-                        passing_count += 1
-                    else:
-                        continue
-
-            cal.calibrate(event)
-
-            table = f.root.Event_Info
-            table.flush()
-            event_row = table.row
-            event_index = table.nrows
-
-            if self.storage_mode == 'tel_type':
-                tel_index_vectors = {tel_type: [] for tel_type in selected_tels}
-            elif self.storage_mode == 'tel_id':
-                all_tel_index_vector = []
-
-            for tel_type in selected_tels.keys():
-                for tel_id in sorted(selected_tels[tel_type]):
-                    if self.storage_mode == 'tel_type':
-                        index_vector = tel_index_vectors[tel_type]
-                    elif self.storage_mode == 'tel_id':
-                        index_vector = all_tel_index_vector
-
-                    if tel_id in event.r0.tels_with_data:
-                        pixel_vector = event.dl1.tel[tel_id].image[0]
-                        logger.debug('Storing image from tel_type {} ({} pixels)'.format(tel_type, len(pixel_vector)))
-                        if self.include_timing:
-                            peaks_vector = event.dl1.tel[tel_id].peakpos[0]
-                        else:
-                            peaks_vector = None
-
-                        if self.storage_mode == 'tel_type':
-                            table = eval('f.root.{}'.format(tel_type))
-                        elif self.storage_mode == 'tel_id':
-                            table = eval('f.root.T{}'.format(tel_id))
-                        next_index = table.nrows
-                        image_row = table.row
-
-                        if self.img_mode == '2D':
-                            image_row['image'] = self.trace_converter.convert(pixel_vector, peaks_vector, tel_type)
-
-                        elif self.img_mode == '1D':
-                            image_row['image_charge'] = pixel_vector
-                            if self.include_timing:
-                                image_row['image_peak_times'] = peaks_vector
-
-                        image_row["event_index"] = event_index
-
-                        image_row.append()
-                        index_vector.append(next_index)
-                        table.flush()
-                    else:
-                        index_vector.append(0)
-
-            if self.storage_mode == 'tel_type':
-                for tel_type in tel_index_vectors:
-                    event_row[tel_type + '_indices'] = tel_index_vectors[tel_type]
-            elif self.storage_mode == 'tel_id':
-                event_row['indices'] = all_tel_index_vector
-
-            event_row['event_number'] = event.r0.event_id
-            event_row['run_number'] = event.r0.run_id
-            event_row['particle_id'] = event.mc.shower_primary_id
-            event_row['core_x'] = event.mc.core_x.value
-            event_row['core_y'] = event.mc.core_y.value
-            event_row['h_first_int'] = event.mc.h_first_int.value
-            event_row['mc_energy'] = event.mc.energy.value
-            event_row['alt'] = event.mc.alt.value
-            event_row['az'] = event.mc.az.value
-
-            event_row.append()
-            table.flush()
-
-        f.root.Event_Info.flush()
-        total_num_events = f.root.Event_Info.nrows
-
-        # Add all indexes
-        for location, col_name in self.indexes:
-            table = f.get_node(location, classname=tables.Table)
-            table.cols._f_col(col_name).create_index()
-
-        f.close()
                 # Add all indexes
                 for location, col_name in self.index_columns:
                     try:
@@ -579,11 +575,16 @@ class ImageExtractor:
                     except:
                         pass
 
-        logger.info("{} events read in file".format(event_count))
-        logger.info("{} total events in output file.".format(total_num_events))
-        if self.cuts_dict or self.ED_cuts_dict:
-            logger.info("{} events passed cuts/written to file".format(passing_count))
-        logger.info("Done!")
+                f.close()
+
+                logger.info("{} events read in file".format(event_count))
+                logger.info("{} total events in output file.".format(total_num_events))
+                if self.cuts_dict or self.ED_cuts_dict:
+                    logger.info("{} events passed cuts/written to file".format(passing_count))
+                logger.info("Done!")
+            except:
+                os.remove(self.output_path)
+                raise
 
     def set_cuts(self, cuts_dict):
         for i in cuts_dict:
