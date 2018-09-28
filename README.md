@@ -16,13 +16,13 @@ The following installation method (for Linux) is recommended:
 
 Image-extractor v0.6.0 is available as a conda package here: https://anaconda.org/bryankim96/image-extractor.
 
-To install, simply run:
+To install, simply create a conda environment (install requirements using environment.yml) and run:
 
 ```bash
 conda install -c bryankim96 image-extractor 
 ```
 
-You can verify that ctapipe was installed correctly by running:
+You can verify that image-extractor was installed correctly by running:
 
 ```bash
 conda list
