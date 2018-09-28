@@ -14,7 +14,9 @@ import yaml
 import numpy as np
 import tables
 
-import ctapipe
+import ctapipe.instrument
+import ctapipe.io
+import ctapipe.calib
 
 import image
 import row_types
@@ -166,6 +168,8 @@ class ImageExtractor:
         self.expected_tels = expected_tels
         self.expected_events = expected_events
         self.expected_images_per_event = expected_images_per_event
+
+        self.index_columns = index_columns
 
     def select_telescopes(self, data_file):
         """Method to read telescope info from a given simtel file
@@ -565,6 +569,13 @@ class ImageExtractor:
             table.cols._f_col(col_name).create_index()
 
         f.close()
+                # Add all indexes
+                for location, col_name in self.index_columns:
+                    try:
+                        table = f.get_node(location, classname='Table')
+                        table.cols._f_col(col_name).create_index()
+                    except:
+                        pass
 
         logger.info("{} events read in file".format(event_count))
         logger.info("{} total events in output file.".format(total_num_events))
