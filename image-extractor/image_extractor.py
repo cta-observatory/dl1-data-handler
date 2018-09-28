@@ -192,7 +192,7 @@ class ImageExtractor:
 
         logger.info("Collecting telescope types...")
 
-        event = next(ctapipe.io.event_source(data_file, max_events=1))
+        event = next(iter(ctapipe.io.event_source(data_file)))
 
         self.all_tels = {tel_type: sorted(event.inst.subarray.get_tel_ids_for_type(tel_type)) for tel_type in event.inst.subarray.telescope_types}
 
@@ -226,7 +226,7 @@ class ImageExtractor:
 
         logger.info("Checking/writing metadata...")
 
-        event = next(ctapipe.io.event_source(data_file))
+        event = next(iter(ctapipe.io.event_source(data_file)))
 
         attributes = HDF5_file.root._v_attrs
 
