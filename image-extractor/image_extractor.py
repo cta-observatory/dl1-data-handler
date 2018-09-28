@@ -44,9 +44,11 @@ class ImageExtractor:
 
     """
 
-    OPTICS_TYPES = ['{}-{}'.format(v[0], v[1]) for v in ctapipe.instrument.optics._FOCLEN_TO_TEL_INFO.values()]
-    CAM_TYPES = [v[2] for v in ctapipe.instrument.camera._CAMERA_GEOMETRY_TABLE.values()]
-    CAM_NUM_PIXELS = {cam_name: ctapipe.instrument.camera.from_name(cam_name).n_pixels for cam_name in CAM_TYPES}
+    OPTICS_TYPES =  set(['{}-{}'.format(v[0], v[1]) if v[1] else v[0]
+        for v in ctapipe.instrument.optics._FOCLEN_TO_TEL_INFO.values()]
+        + [v[0] for v in ctapipe.instrument.optics._FOCLEN_TO_TEL_INFO.values()])
+    CAM_TYPES = image.CAM_TYPES
+    CAM_NUM_PIXELS = image.CAM_NUM_PIXELS
     IMAGE_SHAPES = image.IMAGE_SHAPES
 
     METADATA_FIELDS = {
@@ -127,11 +129,11 @@ class ImageExtractor:
             raise ValueError('Invalid storage mode: {}.'.format(storage_mode))
 
         for tel_type in tel_type_list:
-            optics_type, cam_type = tel_type.split(':')
+            optics_type, cam_type = tel_type.split(":")
             if optics_type not in self.OPTICS_TYPES:
-                raise ValueError('Invalid optics type: {}.'.format(tel_type))
+                raise ValueError('Invalid optics type: {}'.format(optics_type))
             if cam_type not in self.CAM_TYPES:
-                raise ValueError('Invalid camera type: {}.'.format(cam_type))
+                raise ValueError('Invalid camera type: {}'.format(cam_type))
         self.tel_type_list = tel_type_list
 
         if img_mode in ['1D', '2D']:
