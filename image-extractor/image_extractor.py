@@ -247,7 +247,7 @@ class ImageExtractor:
                 else:
                     if attributes[field] != value:
                         raise ValueError("Metadata field {} for current simtel file does not match output file: {} vs {}" \
-                                         .format(field, value, eval("attributes." + field)))
+                                         .format(field, value, attributes[field]))
             except:
                 pass
 
@@ -626,7 +626,7 @@ class ImageExtractor:
             descr,
             "Table of events",
             filters=self.filters,
-            expected_rows=self.expected_events)
+            expectedrows=self.expected_events)
 
         for i in range(num_events):
             table_new.append([tuple(table[new_indices[i]])])
@@ -667,7 +667,7 @@ class ImageExtractor:
                     split_names[j] +
                     " Events",
                     filters=self.filters,
-                    expected_rows=self.expected_events*splits[j])
+                    expectedrows=self.expected_events*splits[j])
 
                 split_fraction = splits[j]
 
@@ -733,8 +733,9 @@ if __name__ == '__main__':
 
     # load options from config file
     if args.config_file_path is not None:
-        config = yaml.load(args.config_file_path)
-        options = {**x for x in config.values()}
+        with open(args.config_file_path, 'r') as config_file:
+            config = yaml.load(config_file)
+        options = {k: v for x in config.values() for k, v in x.items()}
 
         if options['ED_cuts_dict'] is not None:
             options['ED_cuts_dict'] = pkl.load(open(options['ED_cuts_dict'], "rb"))
