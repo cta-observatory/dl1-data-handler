@@ -8,50 +8,18 @@ Package for loading simtel data files, processing and calibrating the event data
 
 Currently under development, intended for internal use only.
 
-## Installation in Anaconda (Recommended)
+## Installation with Conda (Recommended)
 
 The following installation method (for Linux) is recommended:
 
 ### Installing Anaconda
 
-First, install the Anaconda Python distribution (Python 3.6), which can be found [here](https://www.anaconda.com/download/).
+Image-extractor v0.6.0 is available as a conda package here: https://anaconda.org/bryankim96/image-extractor.
 
-Clone the repository (or fork and clone if you wish to develop) into a local directory of your choice.
-
-```bash
-cd software
-git clone https://github.com/cta-observatory/image-extractor.git
-cd image-extractor
-```
-
-Create a new Anaconda environment (defaults to Python 3.6), installing all of the dependencies using requirements.txt.
+To install, simply run:
 
 ```bash
-conda create -n [ENV_NAME] --file requirements.txt -c cta-observatory -c conda-forge -c openastronomy
-```
-
-### Installing ctapipe from source
-
-NOTE: As of v0.5.1, the conda package version of ctapipe appears to be lagging somewhat behind the development version and is missing key features which are used by ImageExtractor. As a result, it is necessary to install ctapipe from source. To do this:
-
-Clone the ctapipe repository (or fork and clone if you wish to develop) into a local directory of your choice.
-
-```bash
-cd software
-git clone https://github.com/cta-observatory/ctapipe.git
-cd ctapipe
-```
-
-Activate the Anaconda environment you set up earlier:
-
-```bash
-source activate [ENV_NAME]
-```
-
-Then to install, simply run:
-
-```bash
-python setup.py install
+conda install -c bryankim96 image-extractor 
 ```
 
 You can verify that ctapipe was installed correctly by running:
@@ -60,19 +28,7 @@ You can verify that ctapipe was installed correctly by running:
 conda list
 ```
 
-and looking for ctapipe.
-
-Do the same for ctapipe-extra (a repository containing additional resources for ctapipe):
-
-```bash
-cd software
-git clone https://github.com/cta-observatory/ctapipe-extra.git
-cd ctapipe-extra
-source activate [ENV_NAME]
-python setup.py install
-```
-
-If both packages are showing up correctly, you should now be able to run/import image\_extractor.py or any of the other scripts/modules from the command line in your environment.
+and looking for image-extractor.
 
 ### Installing ImageExtractor using pip
 
@@ -93,18 +49,15 @@ The path to the environment directory for the environment you wish to install in
 conda env list
 ```
 
-## Installation in Python (Not recommended):
-
-The same installation procedure can be done in a non-Anaconda version of Python, however this is not recommended due to the small chance of dependency issues or other bugs. Alternatively, the installation can be done in a virtualenv environment.
-
 ## Dependencies
 
-See requirements.txt for the full list of dependencies.
+See requirements.txt or environment.yml for the full list of dependencies.
 
 The main dependencies are:
 
 for image_extractor:
 
+* Python 3 (3.6)
 * PyTables
 * NumPy
 * ctapipe
@@ -122,18 +75,19 @@ for additional scripts in scripts directory:
 To create a HDF5 dataset file out of a collection of .simtel.gz files, run:
 
 ```bash
-image_extractor.py [runlist] [output_file] [--ED_cuts_dict_file ED_CUTS_DICT_FILE] [--max_events MAX_EVENTS] [--shuffle [SEED]] [--split [SPLIT_LIST]] [--debug]
+image_extractor.py [runlist] [output_file] [--config_file_path CONFIG_FILE_PATH] [--ED_cuts_dict_file ED_CUTS_DICT_FILE] [--max_events MAX_EVENTS] [--shuffle [SEED]] [--split [SPLIT_LIST]] [--debug]
 ```
 on the command line.
 
 ex:
 
 ```bash
-image_extractor.py runlist.txt ./dataset.h5 --ED_cuts_dict_file ./bins_cuts_dict.pkl --debug
+image_extractor.py runlist.txt ./dataset.h5 --config_file_path ../example_config.yml --ED_cuts_dict_file ./bins_cuts_dict.pkl --debug
 ```
 
-* runlist - A list of filepaths (relative or absolute) for the simtel.gz files (one per line) to process. Lines beginning with a '#' are ignored and can be used for comments. 
+* runlist - A text file list of filepaths (relative or absolute) for the simtel.gz files (one per line) to process. Lines beginning with a '#' are ignored and can be used for comments. 
 * output_file - The path to the HDF5 file into which you wish to write your data.
+* config_file_path - The path to a YAML configuration file. If not provided, default settings will be used for all options. An example config file is provided in example_config.yml.
 * ED_cuts_dict_file - Optional path to a pickled Python dictionary of a specified format (see prepare_cuts_dict.py) containing information from EventDisplay on which events (run_number,event_number) passed the cuts, what their reconstructed energies are, and which energy bin they are in.
 * max_events - Optional argument to specify the maximum number of events to save from the simtel file
 * shuffle [SEED]- Optional flag to randomly shuffle the data in the Events table after writing. Can provide an optional seed value to get a reproduceable result.
@@ -161,7 +115,7 @@ max_events = 50
 data_file = "/home/computer/user/data/simtel/test.simtel.gz"
 
 #create an ImageExtractor with default settings
-extractor = image_extractor.ImageExtractor(output_path,tel_type_list=['MSTS'])
+extractor = image_extractor.ImageExtractor(output_path,tel_type_list=['MST-SCT:SCTCam'])
 
 extractor.process_data(data_file,max_events)
 
@@ -178,7 +132,6 @@ ED_cuts_dict.pkl files are the result of running the EventDisplay analysis on th
 ## Known Issues/Troubleshooting
 
 * ViTables PyQt5 dependency confict (pip vs. conda): [relevent issue thread](https://github.com/ContinuumIO/anaconda-issues/issues/1554)
-* Conda version of ctapipe does not support most recent features. Use dev version instead: [installation instructions](https://cta-observatory.github.io/ctapipe/getting_started/index.html#get-the-ctapipe-software)
 
 ## Links
 
