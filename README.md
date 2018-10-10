@@ -8,6 +8,10 @@ Package for loading simtel data files, processing and calibrating the event data
 
 Currently under development, intended for internal use only.
 
+## Data Format
+
+ImageExtractor implements a standardized format for storing simulated CTA event data into Pytables files. See the wiki page [here](https://github.com/cta-observatory/image-extractor/wiki/CTA-ML-Data-Format) for a detailed description of this data format and an FAQ. 
+
 ## Installation with Conda (Recommended)
 
 The following installation method (for Linux) is recommended:
