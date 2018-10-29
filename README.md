@@ -12,11 +12,11 @@ Currently under development, intended for internal use only.
 
 ImageExtractor implements a standardized format for storing simulated CTA event data into Pytables files. See the wiki page [here](https://github.com/cta-observatory/image-extractor/wiki/CTA-ML-Data-Format) for a detailed description of this data format and an FAQ. 
 
-## Installation with Conda (Recommended)
+## Installation
 
 The following installation method (for Linux) is recommended:
 
-### Installing Anaconda
+### Installing with Anaconda
 
 Image-extractor v0.6.0 is available as a conda package here: https://anaconda.org/bryankim96/image-extractor.
 
@@ -34,15 +34,20 @@ conda list
 
 and looking for image-extractor.
 
-### Installing ImageExtractor using pip
+### Installing ImageExtractor from source with pip
 
-Finally, you can install ImageExtractor using pip.
+Alternatively, you can install ImageExtractor using pip after cloning the repository:
+
+```bash
+git clone https://github.com/cta-observatory/image-extractor.git
+cd image-extractor
+```
+
+To install into a conda environment:
 
 ```bash
 source activate [ENV_NAME]
 conda install pip
-
-cd image-extractor
 /path/to/anaconda/install/envs/[ENV_NAME]/bin/pip install .
 ```
 where /path/to/anaconda/install is the path to your anaconda installation directory and ENV\_NAME is the name of your environment.
@@ -51,6 +56,14 @@ The path to the environment directory for the environment you wish to install in
 
 ```bash
 conda env list
+```
+
+To install into a virtualenv environment:
+
+```bash
+virtualenv /path/to/ENV
+source /path/to/ENV/bin/activate
+pip install .
 ```
 
 ## Dependencies
