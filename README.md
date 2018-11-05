@@ -3,14 +3,14 @@
 [![build status](https://travis-ci.org/cta-observatory/image-extractor.svg?branch=master)](https://travis-ci.org/cta-observatory/image-extractor.svg?branch=master)[![Coverage Status](https://coveralls.io/repos/github/cta-observatory/image-extractor/badge.svg?branch=master)](https://coveralls.io/github/cta-observatory/image-extractor?branch=master) [![Code Health](https://landscape.io/github/cta-observatory/image-extractor/master/landscape.svg?style=flat)](https://landscape.io/github/cta-observatory/image-extractor/master)
 
 
-Package for loading simtel data files, processing and calibrating the event data, and writing the processed data to a custom PyTables HDF5 format. Created for the testing of new machine learning and other analysis techniques for the
+Package for loading simtel data files, processing and calibrating the event data using ctapipe to DL1, and writing the processed data to a standardized PyTables HDF5 format. Created for the testing of new machine learning and other analysis techniques for the
 [Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") collaboration. Built using Pytables and ctapipe.
 
 Currently under development, intended for internal use only.
 
 ## Data Format
 
-ImageExtractor implements a standardized format for storing simulated CTA event data into Pytables files. See the wiki page [here](https://github.com/cta-observatory/image-extractor/wiki/CTA-ML-Data-Format) for a detailed description of this data format and an FAQ. 
+ImageExtractor implements a standardized format for storing simulated CTA DL1 event data into Pytables files. See the wiki page [here](https://github.com/cta-observatory/image-extractor/wiki/CTA-ML-Data-Format) for a detailed description of this data format and an FAQ. 
 
 ## Installation
 
