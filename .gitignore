@@ -5,5 +5,4 @@
 *.png
 *.h5
 *.simtel.gz
-
-
+dl1-data-handler/__pycache__
