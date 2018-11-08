@@ -9,7 +9,6 @@ cycler==0.10.0
 Cython==0.28.5
 dask==0.19.2
 decorator==4.3.0
-image-extractor==0.5.1
 imageio==2.3.0
 iminuit==1.2
 ipython-genutils==0.2.0
