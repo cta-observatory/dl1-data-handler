@@ -1,12 +1,14 @@
-# ImageExtractor
+# DL1 Data Handler
 
 [![build status](https://travis-ci.org/cta-observatory/image-extractor.svg?branch=master)](https://travis-ci.org/cta-observatory/image-extractor.svg?branch=master)[![Coverage Status](https://coveralls.io/repos/github/cta-observatory/image-extractor/badge.svg?branch=master)](https://coveralls.io/github/cta-observatory/image-extractor?branch=master) [![Code Health](https://landscape.io/github/cta-observatory/image-extractor/master/landscape.svg?style=flat)](https://landscape.io/github/cta-observatory/image-extractor/master)
 
+A package of utilities for writing, reading, and applying image processing to [Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") dl1 data (calibrated images) in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data. 
 
-Package for loading simtel data files, processing and calibrating the event data using ctapipe to DL1, and writing the processed data to a standardized PyTables HDF5 format. Created for the testing of new machine learning and other analysis techniques for the
-[Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") collaboration. Built using Pytables and ctapipe.
+Currently supports for data in the CTA pyhessio simtel_array format, with the possibility of supporting other IACT data formats in the future. Built using ctapipe and PyTables.
 
-Currently under development, intended for internal use only.
+Previously named image-extractor (v0.1.0 - v0.6.0). Currently under development, intended for internal use only.
+
+# ImageExtractor Documentation (v0.6.0) - Deprecated
 
 ## Data Format
 
