@@ -88,14 +88,14 @@ for dl1-data-writer:
 To process data files into a desired format:
 
 ```bash
-dl1-data-writer.py [runlist] [--config_file CONFIG_FILE_PATH] [--output_dir OUTPUT_DIR] [--debug]
+dl1_data_writer.py [runlist] [--config_file CONFIG_FILE_PATH] [--output_dir OUTPUT_DIR] [--debug]
 ```
 on the command line.
 
 ex:
 
 ```bash
-dl1-data-writer.py runlist.yml --config_file example_config.yml --debug
+dl1_data_writer.py runlist.yml --config_file example_config.yml --debug
 ```
 
 * runlist - A YAML file containing groups of input files to load data from and output files to write to. See example runlist for format.
@@ -110,7 +110,7 @@ If the package was installed with pip as described above, you can import and use
 ex:
 
 ```python
-from dl1-data-handler import dl1-data-writer
+from dl1_data_handler import dl1_data_writer
 
 event_source_class = MyEventSourceClass
 event_source_settings = {'setting1': 'value1'}
@@ -122,7 +122,7 @@ def my_cut_function(event):
     # custom cut logic here
     return True
 
-data_writer = dl1-data-writer.DL1DataWriter(event_source_class=event_source_class, 
+data_writer = dl1_data_writer.DL1DataWriter(event_source_class=event_source_class, 
     event_source_settings=event_source_settings, 
     data_dumper_class=data_dumper_class, 
     data_dumper_settings=dumper_settings, 
