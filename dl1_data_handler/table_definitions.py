@@ -44,6 +44,7 @@ class EventTableRow(IsDescription):
     core_x = Float32Col()
     core_y = Float32Col()
     h_first_int = Float32Col()
+    x_max = Float32Col()
     mc_energy = Float32Col()
     az = Float32Col()
     alt = Float32Col()

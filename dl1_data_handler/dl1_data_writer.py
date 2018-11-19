@@ -200,7 +200,6 @@ class CTAMLDataDumper(DL1DataDumper):
 
             # Add a column field for the pixel position map
             tel_table_description.columns['pixel_positions'] = tables.Float32Col(shape=(max_npix, 2))
-            #tel_table_description.pixel_positions = property(tables.Float32Col(shape=(max_npix, 2)))
 
             # Create telescope information table
             tel_table = self.file.create_table(
@@ -286,7 +285,7 @@ class CTAMLDataDumper(DL1DataDumper):
 
             for tel_type in event_container.inst.subarray.telescope_types:
                 event_table_description.columns[tel_type + '_indices'] = tables.UInt32Col(shape=(len(event_container.inst.subarray.get_tel_ids_for_type(tel_type))))
-                #setattr(event_table_description, tel_type + '_indices', property(tables.UInt32Col(shape=(len(event_container.inst.subarray.get_tel_ids_for_type[tel_type])))))
+                event_table_description.columns[tel_type + '_multiplicity'] = tables.UInt32Col()
 
             event_table = self.file.create_table(self.file.root,
                     'Events',
@@ -355,6 +354,7 @@ class CTAMLDataDumper(DL1DataDumper):
             event_row['core_x'] = event_container.mc.core_x.value
             event_row['core_y'] = event_container.mc.core_y.value
             event_row['h_first_int'] = event_container.mc.h_first_int.value
+            event_row['x_max'] = event_container.mc.x_max.value
             event_row['mc_energy'] = event_container.mc.energy.value
             event_row['alt'] = event_container.mc.alt.value
             event_row['az'] = event_container.mc.az.value
@@ -388,6 +388,7 @@ class CTAMLDataDumper(DL1DataDumper):
 
         for tel_type in image_index_vectors:
             event_row[tel_type + '_indices'] = image_index_vectors[tel_type]
+            event_row[tel_type + '_multiplicity'] = sum(index > 0 for index in image_index_vectors[tel_type])
 
         event_row.append()
         event_table.flush()

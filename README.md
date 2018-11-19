@@ -2,7 +2,7 @@
 
 [![build status](https://travis-ci.org/cta-observatory/image-extractor.svg?branch=master)](https://travis-ci.org/cta-observatory/image-extractor.svg?branch=master)[![Coverage Status](https://coveralls.io/repos/github/cta-observatory/image-extractor/badge.svg?branch=master)](https://coveralls.io/github/cta-observatory/image-extractor?branch=master) [![Code Health](https://landscape.io/github/cta-observatory/image-extractor/master/landscape.svg?style=flat)](https://landscape.io/github/cta-observatory/image-extractor/master)
 
-A package of utilities for writing, reading, and applying image processing to [Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") DL1 data (calibrated images) in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data. 
+A package of utilities for writing, reading, and applying image processing to [Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") DL1 data (calibrated images) in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data.
 
 Currently supports for data in the CTA pyhessio sim_telarray format, with the possibility of supporting other IACT data formats in the future. Built using ctapipe and PyTables.
 
@@ -10,7 +10,7 @@ Previously named image-extractor (v0.1.0 - v0.6.0). Currently under development,
 
 ## Data Format
 
-DL1DataWriter implements a standardized format for storing simulated CTA DL1 event data into Pytables files. CTAMLDataDumper is the class which implements the conversion from ctapipe containers to the CTA ML data format. See the wiki page [here](https://github.com/cta-observatory/dl1-data-handler/wiki/CTA-ML-Data-Format) for a full description of this data format and an FAQ. 
+DL1DataWriter implements a standardized format for storing simulated CTA DL1 event data into Pytables files. CTAMLDataDumper is the class which implements the conversion from ctapipe containers to the CTA ML data format. See the wiki page [here](https://github.com/cta-observatory/dl1-data-handler/wiki/CTA-ML-Data-Format) for a full description of this data format and an FAQ.
 
 ## Installation
 
@@ -23,7 +23,7 @@ DL1 Data Handler v0.7.0 is available as a conda package here: https://anaconda.o
 To install, simply create a conda environment (install all requirements using environment.yml) and run:
 
 ```bash
-conda install -c bryankim96 dl1-data-handler 
+conda install -c bryankim96 dl1-data-handler
 ```
 
 You can verify that dl1-data-handler was installed correctly by running:
@@ -76,7 +76,7 @@ for dl1-data-writer:
 
 * PyTables 3.4.4
 * NumPy 1.15.0
-* ctapipe 0.6.0
+* ctapipe 0.6.1
 * PyYAML 3.13
 
 ## Usage
@@ -122,10 +122,10 @@ def my_cut_function(event):
     # custom cut logic here
     return True
 
-data_writer = dl1_data_writer.DL1DataWriter(event_source_class=event_source_class, 
-    event_source_settings=event_source_settings, 
-    data_dumper_class=data_dumper_class, 
-    data_dumper_settings=dumper_settings, 
+data_writer = dl1_data_writer.DL1DataWriter(event_source_class=event_source_class,
+    event_source_settings=event_source_settings,
+    data_dumper_class=data_dumper_class,
+    data_dumper_settings=dumper_settings,
     calibration_settings={
          'r1_product': 'HESSIOR1Calibrator',
          'extractor_product': 'NeighbourPeakIntegrator'
@@ -133,12 +133,12 @@ data_writer = dl1_data_writer.DL1DataWriter(event_source_class=event_source_clas
      preselection_cut_function=my_cut_function,
      output_file_size=10737418240,
      events_per_file=500)
-     
+
 run_list = [
  {'inputs': ['file1.simtel.gz', 'file2.simtel.gz'],
   'target': 'output.h5'}
 ]
-     
+
 data_writer.process_data(run_list)
 
 ```
@@ -157,9 +157,3 @@ data_writer.process_data(run_list)
 * [Deep Learning for CTA Analysis](https://github.com/bryankim96/deep-learning-CTA "Deep Learning for CTA Repository") - Repository of code for studies on applying deep learning to CTA analysis tasks. Maintained by groups at Columbia University and Barnard College.
 * [ctapipe](https://cta-observatory.github.io/ctapipe/ "ctapipe Official Documentation Page") - Official documentation for the ctapipe analysis package (in development)
 * [ViTables](http://vitables.org/ "ViTables Homepage") - Homepage for ViTables application for Pytables HDF5 file visualization
-
-
-
-
-
- 
