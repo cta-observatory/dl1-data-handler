@@ -1,0 +1,8 @@
+- inputs:
+    - '/path/to/input/file.simtel.gz'
+    - '/path/to/input/file_2.simtel.gz'
+  target: 'output_file_1.h5'
+
+- inputs:
+    - '/path/to/input/file_3.simtel.gz'
+  target: 'output_file_2.h5'
