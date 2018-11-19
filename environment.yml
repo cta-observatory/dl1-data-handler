@@ -1,10 +1,11 @@
-name: dl1-data-dumper
+name: image-extractor
 channels:
+  - bryankim96
   - cta-observatory
   - conda-forge
   - defaults
-  - bryankim96
 dependencies:
+  - image-extractor=0.6.0=py36_0
   - astropy=3.0.4=py36_0
   - atomicwrites=1.2.1=py_0
   - attrs=18.2.0=py_0
@@ -128,7 +129,7 @@ dependencies:
   - scipy=1.1.0=py36hc49cb51_0
   - pip:
     - dask==0.19.2
-    - dl1-data-dumper==0.6.0
+    - dl1-data-handler==0.6.0
     - pyqt5==5.11.2
     - pyqt5-sip==4.19.12
     - qtpy==1.5.1
@@ -136,3 +137,4 @@ dependencies:
     - virtualenv==16.0.0
     - vitables==3.0.0
 prefix: /home/bryankim96/anaconda3/envs/image-extractor
+
