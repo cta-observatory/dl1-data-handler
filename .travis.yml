@@ -1,6 +1,6 @@
 language: python
 python:
-      - "3.5"
+      - "3.6"
 notifications:
     email:
         on_success: change # default: change
@@ -22,22 +22,6 @@ install:
       - conda update -q conda
         # Useful for debugging any issues with conda
       - conda info -a
-        #get most recent dev version of ctapipe and install from source
-      - cd ..
-      - wget -q https://github.com/cta-observatory/ctapipe/archive/master.zip
-      - unzip -qq master.zip
-      - cd ctapipe-master
-      - conda env create -q -n test -f environment.yml
-      - source activate test
-      - python setup.py install
-        # get most recent dev version of ctapipe-extra and install from source
-      - cd ..
-      - rm master.zip
-      - wget -q https://github.com/cta-observatory/ctapipe-extra/archive/master.zip
-      - unzip -qq master.zip
-      - cd ctapipe-extra-master
-      - python setup.py install
-      - cd ../dl1-data-handler
       - conda install -q --yes --file requirements.txt -c cta-observatory -c conda-forge -c openastronomy
       - python setup.py install
 script:
