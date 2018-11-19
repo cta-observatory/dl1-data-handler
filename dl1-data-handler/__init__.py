@@ -1,2 +1,1 @@
-from . import image
-from . import row_types
+from . import table_definitions
