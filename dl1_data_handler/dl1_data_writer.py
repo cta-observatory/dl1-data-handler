@@ -416,7 +416,7 @@ class CTAMLDataDumper(DL1DataDumper):
                         pass
 
 class DL1DataWriter:
-    """Class for managing data processing using event sources and DL1DataWriters.
+    """Class for managing data processing using event sources and DL1DataDumpers.
 
     Provides some options for controlling the output file sizes.
 
@@ -424,12 +424,12 @@ class DL1DataWriter:
         event_source_class (subclass of ctapipe.io.eventsource.EventSource):
             A subclass of EventSource which will be used to load and yield events
             as DataContainers.
-        event_source_class (dict): A dictionary of kwargs which will be passed
+        event_source_settings (dict): A dictionary of kwargs which will be passed
             into the constructor for the EventSource.
         data_dumper_class (subclass of dl1_data_writer.DL1DataDumper):
             A subclass of DL1DataDumper which will be used to write events from
             the EventSource to output files.
-        data_dumper_class (dict): A dictionary of kwargs which will be passed
+        data_dumper_settings (dict): A dictionary of kwargs which will be passed
             into the constructor for the DL1DataDumper.
         calibration_settings (dict): A dictionary of kwargs which will be passed
             into the constructor for ctapipe.calib.camera.CameraCalibrator.
@@ -447,9 +447,9 @@ class DL1DataWriter:
     """
     def __init__(self,
                 event_source_class=None,
-                event_source_settings={},
+                event_source_settings=None,
                 data_dumper_class=CTAMLDataDumper,
-                data_dumper_settings={},
+                data_dumper_settings=None,
                 calibration_settings={
                     'r1_product': 'HESSIOR1Calibrator',
                     'extractor_product': 'NeighbourPeakIntegrator'
@@ -459,10 +459,10 @@ class DL1DataWriter:
                 events_per_file=None):
 
         self.event_source_class = event_source_class
-        self.event_source_settings = event_source_settings
+        self.event_source_settings = event_source_settings if event_source_settings else {}
 
         self.data_dumper_class = data_dumper_class
-        self.data_dumper_settings = data_dumper_settings
+        self.data_dumper_settings = data_dumper_settings if data_dumper_settings else {}
 
         self.preselection_cut_function = preselection_cut_function
 
