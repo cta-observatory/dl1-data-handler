@@ -72,31 +72,27 @@ class DL1DataReader:
             cut_condition = tel_cut_string
 
         self.example_identifiers = None
-        self.metadata = {}
+        self.telescopes = {}
         if selected_tel_ids is None:
             selected_tel_ids = {}
        
-        # Loop over every file, assembling the identifiers for all selected
-        # events and compiling metadata
-        # TODO: Handle metadata in a consistent way
+        # Loop over the files to assemble the selected event identifiers
         for filename, f in self.files.items():
             example_identifiers = []
-            metadata = {}
             
             # Get dict of all the tel_types in the file mapped to their tel_ids
-            self.telescopes = {}
+            telescopes = {}
             for row in f.root.Array_Info:
                 tel_type = row['tel_type'].decode('utf-8')
-                if tel_type not in self.telescopes:
-                    self.telescopes[tel_type] = []
-                self.telescopes[tel_type].append(row['tel_id'])
-            metadata['telescopes'] = self.telescopes
+                if tel_type not in telescopes:
+                    telescopes[tel_type] = []
+                telescopes[tel_type].append(row['tel_id'])
 
             # Select which telescopes from the full dataset to include in each
             # event by a telescope type and an optional list of telescope ids.
             selected_telescopes = {}
             for tel_type in selected_tel_types:
-                available_tel_ids = self.telescopes[tel_type]
+                available_tel_ids = telescopes[tel_type]
                 # Keep only the selected tel ids for the tel type
                 if tel_type in selected_tel_ids:
                     # Check all requested telescopes are available to select
@@ -111,14 +107,11 @@ class DL1DataReader:
                 else:
                     selected_telescopes[tel_type] = available_tel_ids
                 
-            all_nrows = [row.nrow for row in f.root.Event_Table]
             selected_nrows = [row.nrow for row
                     in f.root.Event_Table.where(cut_condition)
-                    if self.select_event_intensity(row, intensity_selection)]
-            metadata['num_events_before_cuts'] = len(all_nrows)
-            metadata['num_events_after_cuts'] = len(selected_nrows)
+                    if self._select_event_intensity(row, intensity_selection)]
 
-            # Load list of identifiers of all examples passing event selection
+            # Make list of identifiers of all examples passing event selection
             if mode in ['stereo', 'multi-stereo']:
                 example_identifiers = [(filename, nrow) for nrow
                         in selected_nrows]
@@ -131,25 +124,20 @@ class DL1DataReader:
                             indices):
                         if (tel_id in selected_telescopes[self.tel_type]
                                 and index != 0
-                                and self.select_image_intensity(
+                                and self._select_image_intensity(
                                     f.root._f_get_child(self.tel_type)[
                                         image_index]['image_charge'],
                                     intensity_selection)):
                             example_identifiers.append(
                                     (filename, image_index, tel_id))
         
-            # Confirm that the file metadata are consistent and if so,
-            # merge them into the overall metadata
-            if not self.metadata:
-                self.metadata = metadata
-            if self.metadata['telescopes'] != metadata['telescopes']:
+            # Confirm that the files are consistent and merge them
+            if not self.telescopes:
+                self.telescopes = telescopes
+            if self.telescopes != telescopes:
                 raise ValueError("Inconsistent telescope definition in "
                         "{}".format(filename))
             self.selected_telescopes = selected_telescopes
-            self.metadata['classes'] = list(set(self.metadata['classes']
-                + metadata['classes']))
-            for param in ['num_events_before_cuts', 'num_events_after_cuts']:
-                self.metadata[param] = self.metadata[param] + metadata[param]
 
             if self.example_identifiers is None:
                 self.example_identifiers = example_identifiers
@@ -177,7 +165,7 @@ class DL1DataReader:
 
         # Construct example description (before preprocessing)
         if self.mode == 'mono':
-            example_description = [
+            self.unprocessed_example_description = [
                     {
                         'name': 'image',
                         'tel_type': None,
@@ -186,58 +174,106 @@ class DL1DataReader:
                         'dtype': np.dtype(np.float32)
                         }
                     ]
+            for col_name in array_info:
+                col = f.root.Array_Information._f_col(col_name)
+                self.unprocessed_example_description.append(
+                        {
+                            'name': col_name,
+                            'tel_type': None,
+                            'base_name': None,
+                            'shape': col.shape,
+                            'dtype': col.dtype
+                            }
+                        )
         elif self.mode == 'stereo':
-            example_description = [
+            num_tels = len(self.selected_telescopes[self.tel_type])
+            self.unprocessed_example_description = [
                     {
                         'name': 'image',
                         'tel_type': None,
                         'base_name': None,
-                        'shape': self.image_mapper.image_shape[self.tel_type],
+                        'shape': ((num_tels,)
+                            + self.image_mapper.image_shape[self.tel_type]),
                         'dtype': np.dtype(np.float32)
                         },
                     {
                         'name': 'trigger',
                         'tel_type': None,
                         'base_name': None,
-                        'shape': 1,
+                        'shape': (num_tels, 1),
                         'dtype': np.dtype(np.int8)
                         }
                     ]
+            for col_name in array_info:
+                col = f.root.Array_Information._f_col(col_name)
+                self.unprocessed_example_description.append(
+                        {
+                            'name': col_name,
+                            'tel_type': None,
+                            'base_name': None,
+                            'shape': (num_tels,) + col.shape
+                            'dtype': col.dtype
+                            }
+                        )
         elif self.mode == 'multi-stereo':
-            example_description = []
+            self.unprocessed_example_description = []
             for tel_type in self.selected_telescopes:
-                example_description.extend([
+                num_tels = len(self.selected_telescopes[tel_type])
+                self.unprocessed_example_description.extend([
                     {
                         'name': tel_type + '_image',
                         'tel_type': tel_type,
                         'base_name': 'image',
-                        'shape': self.image_mapper.image_shape[tel_type],
+                        'shape': ((num_tels,)
+                            + self.image_mapper.image_shape[self.tel_type]),
                         'dtype': np.dtype(np.float32)
                         },
                     {
                         'name': tel_type + '_trigger',
                         'tel_type': tel_type,
                         'base_name': 'trigger',
-                        'shape': 1,
+                        'shape': (num_tels, 1),
                         'dtype': np.dtype(np.int8)
                         }
                     ])
-        # TODO: Add auxiliary info to description
+                for col_name in array_info:
+                    col = f.root.Array_Information._f_col(col_name)
+                    self.unprocessed_example_description.append(
+                            {
+                                'name': tel_type + '_' + col_name,
+                                'tel_type': tel_type,
+                                'base_name': col_name,
+                                'shape': (num_tels,) + col.shape
+                                'dtype': col.dtype
+                                }
+                            )
+        # Add event info to description
+        for col in self.event_info:
+            self.unprocessed_example_description.append(
+                    {
+                        'name': col,
+                        'tel_type': None,
+                        'base_name': None,
+                        'shape': f.root.Events._f_col(col).shape,
+                        'dtype': f.root.Events._f_col(col).dtype
+                        }
+                    )
 
-        self.processor = DL1DataProcessor(self.mode, example_description,
+        self.processor = DL1DataProcessor(self.mode,
+                self.unprocessed_example_description,
                 transforms)
         
         # Definition of preprocessed example
         self.example_description = self.processor.output_description
     
-    def select_event_intensity(self, row, intensity_selection):
+    def _select_event_intensity(self, row, intensity_selection):
         if intensity_selection is None or self.mode == 'mono':
             return True
         elif mode in ['stereo', 'multi-stereo']:
             # TODO: define event-wise intensity
             raise NotImplementedError
 
-    def select_image_intensity(self, image_charge, intensity_selection):
+    def _select_image_intensity(self, image_charge, intensity_selection):
         intensity = np.sum(image_charge)
         lower = intensity_selection.get('lower', np.ninf)
         upper = intensity_selection.get('upper', np.inf)
@@ -336,3 +372,21 @@ class DL1DataReader:
         example = self.processor.process(example)
 
         return example
+
+    # Return a dictionary of number of examples in the dataset, grouped by
+    # the array names listed in the iterable group_by.
+    def num_examples(self, group_by=None):
+        example_indices = []
+        if group_by:
+            for name in group_by:
+                index = [i for i, des in enumerate(self.example_description)
+                        if des['name'] == name][0]
+                example_indices.append(index)
+        num_examples = {}
+        for example in self:
+            group = tuple([example[index] for index in example_indices])
+            if group in num_examples:
+                num_examples[group] += 1
+            else:
+                num_examples[group] = 1
+        return num_examples
