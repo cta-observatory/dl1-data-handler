@@ -47,15 +47,15 @@ class ConvertParticleIDToClassLabel(Transform):
 
     def define(self, input_description):
         self.input_description = input_description
-        output_description = [{**dsn, 'name': 'class_label'} for dsn
-                in input_description if dsn['name'] == 'particle_id']
+        output_description = [{**des, 'name': 'class_label'} for des
+                in input_description if des['name'] == 'particle_id']
         return output_description
     
     def transform(self, example):
-        for i, (arr, dsn) in enumerate(zip(example, self.input_description)):
-            if dsn['name'] == 'particle_id':
+        for i, (arr, des) in enumerate(zip(example, self.input_description)):
+            if des['name'] == 'particle_id':
                 class_label = np.array(self.particle_id_to_class[arr],
-                        dtype=dsn['dtype'])
+                        dtype=des['dtype'])
                 example[i] = class_label
         return example
 
@@ -65,8 +65,8 @@ class NormalizeTelescopePositions(Transform):
         self.norms = {'tel_x': norm_x, 'tel_y': norm_y, 'tel_z': norm_z}
 
     def transform(self, example):
-        for i, (arr, dsn) in enumerate(zip(example, self.input_description)):
-            if dsn['base_name'] in self.norms:
-                normed_pos = arr / self.norms[dsn['base_name']]
-                example[i] = np.array(normed_pos, dtype=dsn['dtype'])
+        for i, (arr, des) in enumerate(zip(example, self.input_description)):
+            if des['base_name'] in self.norms:
+                normed_pos = arr / self.norms[des['base_name']]
+                example[i] = np.array(normed_pos, dtype=des['dtype'])
         return example
