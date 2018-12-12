@@ -3,26 +3,18 @@
 
 from abc import ABC, abstractmethod
 import pkg_resources
-import argparse
-import logging
 import os
 import re
 import multiprocessing
-import warnings
-import sys
+import logging
 
-import yaml
 import numpy as np
 import tables
 from ctapipe import io, calib
 
-import table_definitions as table_defs
+from dl1_data_handler import table_definitions as table_defs
 
 logger = logging.getLogger(__name__)
-
-# Disable warnings by default
-if not sys.warnoptions:
-    warnings.simplefilter("ignore")
 
 
 class DL1DataDumper(ABC):
@@ -270,7 +262,8 @@ class CTAMLDataDumper(DL1DataDumper):
         installation.
 
         """
-        logger.info("Writing general header information to file attributes...")
+        logger.info(
+            "Writing general header information to file attributes...")
 
         attributes = self.file.root._v_attrs
 
@@ -445,8 +438,8 @@ class CTAMLDataDumper(DL1DataDumper):
         array_table = self.file.create_table(self.file.root,
                                              'Array_Information',
                                              table_defs.ArrayTableRow,
-                                             ("Table of array/subarray \
-                                              information"),
+                                             ("Table of array/subarray "
+                                              "information"),
                                              filters=self.filters,
                                              expectedrows=(
                                                  self.expected_tels)
@@ -490,7 +483,14 @@ class CTAMLDataDumper(DL1DataDumper):
                     try:
                         table = self.file.get_node(name, classname='Table')
                         table.cols._f_col(col_name).create_index()
+                        logger.info("Added index on {}:{}".format(
+                            location,
+                            col_name))
                     except Exception:
+                        logger.warning(
+                            "Failed to create index on {} : {}".format(
+                                location,
+                                col_name))
                         pass
 
 
@@ -563,13 +563,13 @@ class DL1DataWriter:
         self.events_per_file = events_per_file
 
         if self.output_file_size:
-            logger.info("Max output file size set at {} bytes. Note that this \
-                        may increase the number of output files.".format(
-                        self.output_file_size))
+            logger.info("Max output file size set at {} bytes. Note that "
+                        "this may increase the number of output "
+                        "files.".format(self.output_file_size))
         if self.events_per_file:
-            logger.info("Max number of output events per file set at {}. Note \
-                        that this may increase the number of output \
-                        files.".format(self.events_per_file))
+            logger.info("Max number of output events per file set at {}. Note "
+                        "that this may increase the number of output "
+                        "files.".format(self.events_per_file))
 
         self.calibrator = calib.camera.calibrator.CameraCalibrator(
             None, None, **calibration_settings)
@@ -600,7 +600,7 @@ class DL1DataWriter:
                                                     run_list[i]['target']))
             jobs.append(process)
 
-        logger.info("Starting processing...")
+        logger.info("Starting processes...")
         try:
             # Start all parallel processes
             for j in jobs:
@@ -610,7 +610,7 @@ class DL1DataWriter:
             for j in jobs:
                 j.join()
         except KeyboardInterrupt:
-            # Wait for all processes to complete
+            logger.error("Caught keyboard interrupt, killing all processes...")
             for j in jobs:
                 j.shutdown()
 
@@ -684,6 +684,9 @@ class DL1DataWriter:
                 data_dumper.dump_instrument_info(example_event.inst)
                 data_dumper.dump_mc_header_info(example_event.mcheader)
             except IOError:
+                logger.error("Failed to write header info from file "
+                             "{}, skipping...".format(
+                                 filename))
                 continue
 
             # Write all events sequentially
@@ -696,6 +699,9 @@ class DL1DataWriter:
                     data_dumper.dump_event(event)
                     event_count += 1
                 except IOError:
+                    logger.error("Failed to write event from file "
+                                 "{}, skipping...".format(
+                                     filename))
                     break
 
                 # Check whether to create another file
@@ -721,78 +727,3 @@ class DL1DataWriter:
                     # Reset event count and increment file count
                     event_count = 0
                     output_file_count += 1
-
-
-if __name__ == '__main__':
-
-    parser = argparse.ArgumentParser(
-        description=(
-            "Read DL1 data via event source into ctapipe containers, \
-            then write to a specified output file format."))
-    parser.add_argument(
-        'runlist',
-        help='YAML file containing matched groups of input filenames and \
-        output filenames.')
-    parser.add_argument(
-        '--output_dir',
-        help='Path to directory to create output files.',
-        default='.')
-    parser.add_argument(
-        '--config_file',
-        help='YAML configuration file for settings.')
-    parser.add_argument(
-        "--debug",
-        help="Print all debug logger messages",
-        action="store_true")
-
-    args = parser.parse_args()
-
-    if args.debug:
-        logger.setLevel(logging.DEBUG)
-
-    runlist = yaml.load(open(args.runlist, 'r'))
-
-    for run in runlist:
-        run['target'] = os.path.join(args.output_dir, run['target'])
-
-    print(runlist)
-
-    logger.info("Number of input files in runlist: {}".format(
-        len([input_file for run in runlist for input_file in run['inputs']])))
-    logger.info("Number of output files requested: {}".format(
-        len(runlist)))
-
-    # load options from config file and create DL1 Data Writer object
-    if args.config_file:
-        logger.info("Reading config file {}...".format(args.config_file))
-        config = yaml.load(open(args.config_file, 'r'))
-
-        logger.info("Config file {} loaded.".format(args.config_file))
-        logger.info(yaml.dump(config,
-                              default_flow_style=False,
-                              default_style=''))
-
-        writer_settings = config['Data Writer']['Settings']
-        event_src_settings = config['Event Source']['Settings']
-
-        dumper_name = config['Data Dumper']['Type']
-        dumper_settings = config['Data Dumper']['Settings']
-
-        # Locate DL1DataDumper subclass
-        dumpers = {i.__name__: i for i in DL1DataDumper.__subclasses__()}
-        if dumper_name in dumpers:
-            data_dumper_class = dumpers[dumper_name]
-        else:
-            raise ValueError(
-                "No subclass of DL1DataDumper: {}".format(dumper_name))
-
-        data_writer = DL1DataWriter(event_source_class=None,
-                                    event_source_settings=event_src_settings,
-                                    data_dumper_class=data_dumper_class,
-                                    data_dumper_settings=dumper_settings,
-                                    **writer_settings)
-    else:
-        logger.info("No config file provided, using default settings")
-        data_writer = DL1DataWriter()
-
-    data_writer.process_data(runlist)
