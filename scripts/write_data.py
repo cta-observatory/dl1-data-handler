@@ -9,7 +9,7 @@ import os
 
 import yaml
 
-logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
 
 # Disable warnings by default
 if not sys.warnoptions:
@@ -39,27 +39,29 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
+        logger.setLevel(logging.INFO)
+        logging.getLogger('dl1_data_handler.dl1_data_writer').setLevel(
+            logging.INFO)
 
     runlist = yaml.load(open(args.runlist, 'r'))
 
     for run in runlist:
         run['target'] = os.path.join(args.output_dir, run['target'])
 
-    logging.info("Number of input files in runlist: {}".format(
+    logger.info("Number of input files in runlist: {}".format(
         len([input_file for run in runlist for input_file in run['inputs']])))
-    logging.info("Number of output files requested: {}".format(
+    logger.info("Number of output files requested: {}".format(
         len(runlist)))
 
     # load options from config file and create DL1 Data Writer object
     if args.config_file:
-        logging.info("Reading config file {}...".format(args.config_file))
+        logger.info("Reading config file {}...".format(args.config_file))
         config = yaml.load(open(args.config_file, 'r'))
 
-        logging.info("Config file {} loaded.".format(args.config_file))
-        logging.info(yaml.dump(config,
-                               default_flow_style=False,
-                               default_style=''))
+        logger.info("Config file {} loaded.".format(args.config_file))
+        logger.info(yaml.dump(config,
+                              default_flow_style=False,
+                              default_style=''))
 
         writer_settings = config['Data Writer']['Settings']
         event_src_settings = config['Event Source']['Settings']
@@ -81,7 +83,7 @@ if __name__ == '__main__':
                                     data_dumper_settings=dumper_settings,
                                     **writer_settings)
     else:
-        logging.info("No config file provided, using default settings")
+        logger.info("No config file provided, using default settings")
         data_writer = DL1DataWriter()
 
     data_writer.process_data(runlist)
