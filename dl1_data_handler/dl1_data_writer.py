@@ -491,17 +491,18 @@ class CTAMLDataDumper(DL1DataDumper):
                 else:
                     table_names = [location]
 
-                for name in table_names:
+                for table_name in table_names:
                     try:
-                        table = self.file.get_node(name, classname='Table')
+                        table = self.file.get_node(table_name,
+                                                   classname='Table')
                         table.cols._f_col(col_name).create_index()
                         logger.info("Added index on {}:{}".format(
-                            location,
+                            table_name,
                             col_name))
                     except Exception:
                         logger.warning(
                             "Failed to create index on {} : {}".format(
-                                location,
+                                table_name,
                                 col_name))
                         pass
 
