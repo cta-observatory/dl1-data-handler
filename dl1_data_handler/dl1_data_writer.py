@@ -179,9 +179,8 @@ class CTAMLDataDumper(DL1DataDumper):
         self.image_tables = []
 
     def __del__(self):
-        """Cleanup + finalize ouput file, then close."""
+        """Cleanup + finalize output file."""
         self.finalize()
-        self.file.close()
 
     def dump_instrument_info(self, inst_container):
         """Dump ctapipe instrument container to output file.
