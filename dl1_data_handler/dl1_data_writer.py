@@ -58,8 +58,15 @@ class DL1DataDumper(ABC):
 
     # Write non-ctapipe container header info
     @abstractmethod
-    def dump_header_info(self):
-        """Dump non-ctapipe header data to output file."""
+    def dump_header_info(self, input_filename):
+        """Dump non-ctapipe header data to output file.
+
+        Parameters
+        ----------
+        input_filename : str
+            Full path to input file being dumped.
+
+        """
         pass
 
     # Write a single event's information (dl1 data, monte carlo information)
@@ -254,11 +261,16 @@ class CTAMLDataDumper(DL1DataDumper):
         for field in mcheader_dict:
             attributes[field] = mcheader_dict[field]
 
-    def dump_header_info(self):
+    def dump_header_info(self, input_filename):
         """Dump all non-ctapipe header data to output file.
 
         Uses pkg_resources to get software versions in current Python
         installation.
+
+        Parameters
+        ----------
+        input_filename : str
+            Full path to input file being dumped.
 
         """
         logger.info(
@@ -275,7 +287,8 @@ class CTAMLDataDumper(DL1DataDumper):
 
         if not hasattr(attributes, 'runlist'):
             attributes.runlist = []
-        attributes.runlist.append(self.output_filename)
+        attributes.runlist = attributes.runlist + [os.path.basename(
+            input_filename)]
 
     def dump_event(self, event_container):
         """Dump ctapipe event data (event params and images) to output file.
@@ -679,7 +692,7 @@ class DL1DataWriter:
             # Write all file-level data once
             example_event = next(event_source._generator())
             try:
-                data_dumper.dump_header_info()
+                data_dumper.dump_header_info(filename)
                 data_dumper.dump_instrument_info(example_event.inst)
                 data_dumper.dump_mc_header_info(example_event.mcheader)
             except IOError:
@@ -720,7 +733,7 @@ class DL1DataWriter:
                     # and write file-level data
                     data_dumper = self.data_dumper_class(
                         output_filename, **self.data_dumper_settings)
-                    data_dumper.dump_header_info()
+                    data_dumper.dump_header_info(filename)
                     data_dumper.dump_instrument_info(event.inst)
                     data_dumper.dump_mc_header_info(event.mcheader)
                     # Reset event count and increment file count
