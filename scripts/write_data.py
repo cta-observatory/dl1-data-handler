@@ -1,5 +1,5 @@
 """Load data from ctapipe EventSources and dump to file."""
-from dl1_data_handler.dl1_data_writer import DL1DataDumper, DL1DataWriter
+from dl1_data_handler.writer import DL1DataDumper, DL1DataWriter
 
 import argparse
 import logging
@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
     if args.debug:
         logger.setLevel(logging.INFO)
-        logging.getLogger('dl1_data_handler.dl1_data_writer').setLevel(
+        logging.getLogger('dl1_data_handler.writer').setLevel(
             logging.INFO)
 
     runlist = yaml.load(open(args.runlist, 'r'))
