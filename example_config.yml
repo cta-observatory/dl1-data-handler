@@ -1,60 +1,34 @@
-General:
-  storage_mode: 'tel_type'
-  tel_type_list:
-    - 'LST:LSTCam'
-    - 'MST:FlashCam'
-    - 'MST:NectarCam'
-    - 'MST-SCT:SCTCam'
-    - 'SST:DigiCam'
-    - 'SST:ASTRICam'
-    - 'SST:CHEC'
+Data Writer:
+  Settings:
+    calibration_settings:
+        r1_product: 'HESSIOR1Calibrator'
+        extractor_product: 'NeighbourPeakIntegrator'
+    #preselection_cut_function: None
+    output_file_size: 1073741824
+    events_per_file: 500
 
-Image:
-  img_mode: '1D'
-  img_channels: 1
-  include_timing: True
-  img_scale_factors:
-      'NectarCam': 1
-  img_dtypes:
-      'LSTCam': 'float32'
-      'NectarCam': 'float32'
-      'FlashCam': 'float32'
-      'SCTCam': 'float32'
-      'DigiCam': 'float32'
-      'ASTRICam': 'float32'
-      'CHEC': 'float32'
-  img_dim_order: 'channels_last'
+Event Source:
+  Settings: {}
 
-Preselection Cuts:
-  ED_cuts_dict:
-  cuts_dict:
-
-Compression:
-  comp_lib: 'lzo'
-  comp_lvl: 1
-
-Chunking:
-  expected_tel_types: 10
-  expected_tels: 300
-  expected_events: 10000
-  expected_images_per_event:
-      'LST:LSTCam': 0.5
-      'MST:NectarCam': 2.0
-      'MST:FlashCam': 2.0
-      'MST-SCT:SCTCam': 1.5
-      'DigiCam': 1.25
-      'ASTRICam': 1.25
-      'CHEC': 1.25
-
-Indexes:
-  index_columns:
-     - ['/Event_Info', 'mc_energy']
-     - ['/Event_Info', 'alt']
-     - ['/Event_Info', 'az']
-     - ['/LST:LSTCam', 'event_index']
-     - ['/MST:NectarCam', 'event_index']
-     - ['/MST:FlashCam', 'event_index']
-     - ['/MST-SCT:SCTCam', 'event_index']
-     - ['/SST:DigiCam', 'event_index']
-     - ['/SST:ASTRICam', 'event_index']
-     - ['/SST:CHEC', 'event_index']
+Data Dumper:
+  Type: 'CTAMLDataDumper'
+  Settings:
+    filter_settings:
+      complib: 'lzo'
+      complevel: 1
+    expected_tel_types: 10
+    expected_tels: 300
+    expected_events: 10000
+    expected_images_per_event:
+        'LST:LSTCam': 0.5
+        'MST:NectarCam': 2.0
+        'MST:FlashCam': 2.0
+        'MST-SCT:SCTCam': 1.5
+        'SST:DigiCam': 1.25
+        'SST:ASTRICam': 1.25
+        'SST:CHEC': 1.25
+    index_columns:
+        - ['/Events', 'mc_energy']
+        - ['/Events', 'alt']
+        - ['/Events', 'az']
+        - ['tel', 'event_index']
