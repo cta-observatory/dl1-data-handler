@@ -1,11 +1,11 @@
-name: image-extractor
+name: dl1-data-handler
 channels:
   - bryankim96
   - cta-observatory
   - conda-forge
   - defaults
 dependencies:
-  - image-extractor=0.6.0=py36_0
+  - dl1_data_handler=0.7.0=py36_0
   - atomicwrites=1.2.1=py_0
   - attrs=18.2.0=py_0
   - blosc=1.14.4=hfc679d8_0
@@ -150,4 +150,3 @@ dependencies:
     - vitables==3.0.0
     - yarg==0.1.9
 prefix: /home/bryankim96/anaconda3/envs/image-extractor
-
