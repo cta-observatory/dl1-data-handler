@@ -4,7 +4,7 @@
 
 A package of utilities for writing, reading, and applying image processing to [Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") DL1 data (calibrated images) in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data.
 
-Currently supports for data in the CTA pyhessio sim_telarray format, with the possibility of supporting other IACT data formats in the future. Built using ctapipe and PyTables.
+Currently supports data in the CTA pyhessio sim_telarray format, with the possibility of supporting other IACT data formats in the future. Built using ctapipe and PyTables.
 
 Previously named image-extractor (v0.1.0 - v0.6.0). Currently under development, intended for internal use only.
 
@@ -32,7 +32,7 @@ You can verify that dl1-data-handler was installed correctly by running:
 conda list
 ```
 
-and looking for image-extractor.
+and looking for dl1-data-handler.
 
 ### Installing DL1 Data Handler from source with pip
 
@@ -88,14 +88,14 @@ for dl1-data-writer:
 To process data files into a desired format:
 
 ```bash
-dl1_data_writer.py [runlist] [--config_file CONFIG_FILE_PATH] [--output_dir OUTPUT_DIR] [--debug]
+scripts/write_data.py [runlist] [--config_file CONFIG_FILE_PATH] [--output_dir OUTPUT_DIR] [--debug]
 ```
 on the command line.
 
 ex:
 
 ```bash
-dl1_data_writer.py runlist.yml --config_file example_config.yml --debug
+scripts/write_data.py runlist.yml --config_file example_config.yml --debug
 ```
 
 * runlist - A YAML file containing groups of input files to load data from and output files to write to. See example runlist for format.
@@ -103,7 +103,7 @@ dl1_data_writer.py runlist.yml --config_file example_config.yml --debug
 * output_dir - Path to directory to write all output files to. If not provided, defaults to the current directory.
 * debug - Optional flag to print additional debug information from the logger.
 
-### In a Python script:
+#### In a Python script:
 
 If the package was installed with pip as described above, you can import and use it in Python like:
 
@@ -142,6 +142,25 @@ run_list = [
 data_writer.process_data(run_list)
 
 ```
+#### Generating a run list
+
+If processing data from simtel.gz files, as long as their filenames have the format ``[particle_type]_[ze]deg_[az]deg_run[run_number]___[production info].simtel.gz`` the scripts/generate_runlist.py can be used to automatically generate a runlist in the correct format.
+
+It can be called as:
+
+```bash
+scripts/generate_runlist.py [file_dir] [--num_inputs_per_run NUM_INPUTS_PER_RUN] [--output_file OUTPUT_FILE]
+```
+
+* file_dir - Path to a directory containing simtel.gz files with the filename format specified above.
+* num_inputs_per_run - Number of input files with the same particle type, ze, az, and production info to group together into each run (defaults to 10).
+* output_file - Path/filename of output runlist file. Defaults to ./runlist.yml
+
+It will automatically sort the simtel files in the file_dir directory into groups with matching particle_type, zenith, azimuth, and production parameters. Within each of these groups, it will group together input files in sequential order into runs of size NUM_INPUTS_PER_RUN. The output filename for each run will be automatically generated as ``[particle_type]_[ze]deg_[az]deg_runs[run_number_range]___[production info].h5``. The output YAML file will be written to output_file.
+
+### Other scripts
+
+All other scripts located in the scripts/deprecated directory are not currently updated to be compatible with v0.7.0 and should not be used.
 
 ## Examples/Tips
 
