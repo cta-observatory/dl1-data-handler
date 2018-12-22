@@ -16,9 +16,9 @@ requirements:
 
   test:
     imports:
-      -dl1-data-dumper
+      -dl1-data-handler
 
 about:
-  home: https://github.com/cta-observatory/dl1-data-dumper
+  home: https://github.com/cta-observatory/dl1-data-handler
   license: MIT
   license_file: LICENSE
