@@ -1,10 +1,10 @@
 package:
-  name: dl1-data-dumper
-  version: "0.6.0"
+  name: dl1_data_handler
+  version: "0.7.0"
 
 source:
-  git_rev: v0.6.0
-  git_url: https://github.com/cta-observatory/dl1-data-dumper.git
+  git_rev: v0.7.0
+  git_url: https://github.com/cta-observatory/dl1-data-handler.git
 
 requirements:
   host:
@@ -16,9 +16,9 @@ requirements:
 
   test:
     imports:
-      -dl1-data-dumper
+      -dl1-data-handler
 
 about:
-  home: https://github.com/cta-observatory/dl1-data-dumper
+  home: https://github.com/cta-observatory/dl1-data-handler
   license: MIT
   license_file: LICENSE

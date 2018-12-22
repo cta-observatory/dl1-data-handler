@@ -5,4 +5,7 @@
 *.png
 *.h5
 *.simtel.gz
-dl1-data-handler/__pycache__
+dl1_data_handler/__pycache__
+build
+dist
+dl1_data_handler.egg-info
