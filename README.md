@@ -2,17 +2,15 @@
 
 [![build status](https://travis-ci.org/cta-observatory/image-extractor.svg?branch=master)](https://travis-ci.org/cta-observatory/image-extractor.svg?branch=master)[![Coverage Status](https://coveralls.io/repos/github/cta-observatory/image-extractor/badge.svg?branch=master)](https://coveralls.io/github/cta-observatory/image-extractor?branch=master) [![Code Health](https://landscape.io/github/cta-observatory/image-extractor/master/landscape.svg?style=flat)](https://landscape.io/github/cta-observatory/image-extractor/master)
 
-A package of utilities for writing, reading, and applying image processing to [Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") dl1 data (calibrated images) in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data. 
+A package of utilities for writing, reading, and applying image processing to [Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") DL1 data (calibrated images) in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data.
 
-Currently supports for data in the CTA pyhessio simtel_array format, with the possibility of supporting other IACT data formats in the future. Built using ctapipe and PyTables.
+Currently supports data in the CTA pyhessio sim_telarray format, with the possibility of supporting other IACT data formats in the future. Built using ctapipe and PyTables.
 
 Previously named image-extractor (v0.1.0 - v0.6.0). Currently under development, intended for internal use only.
 
-# ImageExtractor Documentation (v0.6.0) - Deprecated
-
 ## Data Format
 
-ImageExtractor implements a standardized format for storing simulated CTA DL1 event data into Pytables files. See the wiki page [here](https://github.com/cta-observatory/image-extractor/wiki/CTA-ML-Data-Format) for a detailed description of this data format and an FAQ. 
+DL1DataWriter implements a standardized format for storing simulated CTA DL1 event data into Pytables files. CTAMLDataDumper is the class which implements the conversion from ctapipe containers to the CTA ML data format. See the wiki page [here](https://github.com/cta-observatory/dl1-data-handler/wiki/CTA-ML-Data-Format) for a full description of this data format and an FAQ.
 
 ## Installation
 
@@ -20,29 +18,29 @@ The following installation method (for Linux) is recommended:
 
 ### Installing with Anaconda
 
-Image-extractor v0.6.0 is available as a conda package here: https://anaconda.org/bryankim96/image-extractor.
+DL1 Data Handler v0.7.0 is available as a conda package here: https://anaconda.org/bryankim96/dl1-data-handler.
 
-To install, simply create a conda environment (install requirements using environment.yml) and run:
+To install, simply create a conda environment (install all requirements using environment.yml) and run:
 
 ```bash
-conda install -c bryankim96 image-extractor 
+conda install -c bryankim96 dl1-data-handler
 ```
 
-You can verify that image-extractor was installed correctly by running:
+You can verify that dl1-data-handler was installed correctly by running:
 
 ```bash
 conda list
 ```
 
-and looking for image-extractor.
+and looking for dl1-data-handler.
 
-### Installing ImageExtractor from source with pip
+### Installing DL1 Data Handler from source with pip
 
-Alternatively, you can install ImageExtractor using pip after cloning the repository:
+Alternatively, you can install DL1 Data Handler using pip after cloning the repository:
 
 ```bash
-git clone https://github.com/cta-observatory/image-extractor.git
-cd image-extractor
+git clone https://github.com/cta-observatory/dl1-data-handler.git
+cd dl1-data-handler
 ```
 
 To install into a conda environment:
@@ -74,75 +72,95 @@ See requirements.txt or environment.yml for the full list of dependencies.
 
 The main dependencies are:
 
-for image_extractor:
+for dl1-data-writer:
 
-* Python 3 (3.6)
-* PyTables
-* NumPy
-* ctapipe
-
-for additional scripts in scripts directory:
-
-* Pillow
-* ROOT
-* matplotlib
+* PyTables 3.4.4
+* NumPy 1.15.0
+* ctapipe 0.6.1
+* PyYAML 3.13
 
 ## Usage
 
-### From the Command Line:
+### DL1 Data Writer
 
-To create a HDF5 dataset file out of a collection of .simtel.gz files, run:
+#### From the Command Line:
+
+To process data files into a desired format:
 
 ```bash
-image_extractor.py [runlist] [output_file] [--config_file_path CONFIG_FILE_PATH] [--ED_cuts_dict_file ED_CUTS_DICT_FILE] [--max_events MAX_EVENTS] [--shuffle [SEED]] [--split [SPLIT_LIST]] [--debug]
+scripts/write_data.py [runlist] [--config_file CONFIG_FILE_PATH] [--output_dir OUTPUT_DIR] [--debug]
 ```
 on the command line.
 
 ex:
 
 ```bash
-image_extractor.py runlist.txt ./dataset.h5 --config_file_path ../example_config.yml --ED_cuts_dict_file ./bins_cuts_dict.pkl --debug
+scripts/write_data.py runlist.yml --config_file example_config.yml --debug
 ```
 
-* runlist - A text file list of filepaths (relative or absolute) for the simtel.gz files (one per line) to process. Lines beginning with a '#' are ignored and can be used for comments. 
-* output_file - The path to the HDF5 file into which you wish to write your data.
-* config_file_path - The path to a YAML configuration file. If not provided, default settings will be used for all options. An example config file is provided in example_config.yml.
-* ED_cuts_dict_file - Optional path to a pickled Python dictionary of a specified format (see prepare_cuts_dict.py) containing information from EventDisplay on which events (run_number,event_number) passed the cuts, what their reconstructed energies are, and which energy bin they are in.
-* max_events - Optional argument to specify the maximum number of events to save from the simtel file
-* shuffle [SEED]- Optional flag to randomly shuffle the data in the Events table after writing. Can provide an optional seed value to get a reproduceable result.
-* split [SPLIT_LIST]- Optional flag to split the Events table into separate training/validation/test tables for convenience. Can provide a list (3 arguments) which give the split proportions between train, val, and test. A split proportion of 0 indicates that the corresponding table will not be created. Split proportions must sum to 1.
-* debug - Optional flag to print additional debug information.
+* runlist - A YAML file containing groups of input files to load data from and output files to write to. See example runlist for format.
+* config_file - The path to a YAML configuration file specifying all of the settings for data loading and writing. See example config file and documentation for details on each setting. If none is provided, default settings are used for everything.
+* output_dir - Path to directory to write all output files to. If not provided, defaults to the current directory.
+* debug - Optional flag to print additional debug information from the logger.
 
-NOTE: The shuffle and split flags as well as other non-default ImageExtractor constructor options are not currently being maintained as carefully as they are not part of the standard CTA ML data format. Use at your own risk!
-
-NOTE: The split option is currently set to use a hardcoded default split setting (0.9 training, 0.1 validation). This can be modified in the script if desired.
-
-NOTE: The splitting and shuffling handled by the split and shuffle options are NOT done in-place, so they require a temporary disk space overhead beyond the normal final size of the output .h5 file. Because only the Events tables are copied/duplicated and the majority of the final file size is in the telescope arrays, this overhead is likely insignificant for the 'mapped' storage format. However, it is much larger for the 'all' storage format, as the telescope images are stored directly in the Event tables and are therefore duplicated temporarily. Also, it is worth noting that this overhead becomes larger in absolute terms as the absolute size of the output files becomes larger.
-
-### In a Python script:
+#### In a Python script:
 
 If the package was installed with pip as described above, you can import and use it in Python like:
 
 ex:
 
 ```python
-from image_extractor import image_extractor
+from dl1_data_handler import dl1_data_writer
 
-#max events to read per file
-max_events = 50
+event_source_class = MyEventSourceClass
+event_source_settings = {'setting1': 'value1'}
 
-data_file = "/home/computer/user/data/simtel/test.simtel.gz"
+data_dumper_class = MyDataDumperClass
+data_dumper_settings = {'setting2': 'value2'}
 
-#create an ImageExtractor with default settings
-extractor = image_extractor.ImageExtractor(output_path,tel_type_list=['MST-SCT:SCTCam'])
+def my_cut_function(event):
+    # custom cut logic here
+    return True
 
-extractor.process_data(data_file,max_events)
+data_writer = dl1_data_writer.DL1DataWriter(event_source_class=event_source_class,
+    event_source_settings=event_source_settings,
+    data_dumper_class=data_dumper_class,
+    data_dumper_settings=dumper_settings,
+    calibration_settings={
+         'r1_product': 'HESSIOR1Calibrator',
+         'extractor_product': 'NeighbourPeakIntegrator'
+     },
+     preselection_cut_function=my_cut_function,
+     output_file_size=10737418240,
+     events_per_file=500)
+
+run_list = [
+ {'inputs': ['file1.simtel.gz', 'file2.simtel.gz'],
+  'target': 'output.h5'}
+]
+
+data_writer.process_data(run_list)
 
 ```
+#### Generating a run list
 
-### ED_cuts_dict files
+If processing data from simtel.gz files, as long as their filenames have the format ``[particle_type]_[ze]deg_[az]deg_run[run_number]___[production info].simtel.gz`` the scripts/generate_runlist.py can be used to automatically generate a runlist in the correct format.
 
-ED_cuts_dict.pkl files are the result of running the EventDisplay analysis on the simtel files through to the MSCW stage, then applying the cuts specified in the config file on the array/event-level parameters. The default cuts were selected to match those used by the Boosted Decision Tree analysis method for Gamma-Hadron separation currently being used in EventDisplay for VERITAS data. A new one can be created (for example, to match a new set of simtel files) by running the standard ED analysis on all simtel files up to the MSCW stage, then passing the MSCW.root files into prepare_bins_dict.py.
+It can be called as:
+
+```bash
+scripts/generate_runlist.py [file_dir] [--num_inputs_per_run NUM_INPUTS_PER_RUN] [--output_file OUTPUT_FILE]
+```
+
+* file_dir - Path to a directory containing simtel.gz files with the filename format specified above.
+* num_inputs_per_run - Number of input files with the same particle type, ze, az, and production info to group together into each run (defaults to 10).
+* output_file - Path/filename of output runlist file. Defaults to ./runlist.yml
+
+It will automatically sort the simtel files in the file_dir directory into groups with matching particle_type, zenith, azimuth, and production parameters. Within each of these groups, it will group together input files in sequential order into runs of size NUM_INPUTS_PER_RUN. The output filename for each run will be automatically generated as ``[particle_type]_[ze]deg_[az]deg_runs[run_number_range]___[production info].h5``. The output YAML file will be written to output_file.
+
+### Other scripts
+
+All other scripts located in the scripts/deprecated directory are not currently updated to be compatible with v0.7.0 and should not be used.
 
 ## Examples/Tips
 
@@ -158,9 +176,3 @@ ED_cuts_dict.pkl files are the result of running the EventDisplay analysis on th
 * [Deep Learning for CTA Analysis](https://github.com/bryankim96/deep-learning-CTA "Deep Learning for CTA Repository") - Repository of code for studies on applying deep learning to CTA analysis tasks. Maintained by groups at Columbia University and Barnard College.
 * [ctapipe](https://cta-observatory.github.io/ctapipe/ "ctapipe Official Documentation Page") - Official documentation for the ctapipe analysis package (in development)
 * [ViTables](http://vitables.org/ "ViTables Homepage") - Homepage for ViTables application for Pytables HDF5 file visualization
-
-
-
-
-
- 
