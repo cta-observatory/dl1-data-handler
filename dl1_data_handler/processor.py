@@ -4,7 +4,7 @@ import numpy as np
 
 class DL1DataProcessor():
 
-    def __init__(mode, input_description, transforms=None):
+    def __init__(self, mode, input_description, transforms=None):
         if mode in ['mono', 'stereo', 'multi-stereo']:
             self.mode = mode
         else:
@@ -19,7 +19,7 @@ class DL1DataProcessor():
             input_description = copy.deepcopy(output_description)
         self.output_description = input_description
 
-    def process(example):
+    def process(self, example):
         for transform in self.transforms:
             example = transform.transform(example, self.reader_example_dfn)
         return example

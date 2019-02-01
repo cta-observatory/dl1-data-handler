@@ -52,29 +52,17 @@ class DL1DataReader:
         else:
             raise ValueError("Invalid mode selection '{}'. Valid options: "
                     "'mono', 'stereo', 'multi-stereo'".format(mode))
-       
-        # Enforce an automatic minimal telescope selection cut: there must be
-        # at least one triggered telescope of a selected type in the event
-        # Users can include stricter cuts in the selection string
-        if self.mode in ['mono', 'stereo']:
-            self.tel_type = selected_telescope_type
-            selected_tel_types = [selected_telescope_type]
-        elif self.mode == 'multi-stereo':
-            self.tel_type = None
-            selected_tel_types = selected_telescope_type
-        multiplicity_conditions = ['(' + tel_type + '_multiplicity > 0)'
-                for tel_type in selected_tel_types]
-        tel_cut_string = '(' + ' | '.join(multiplicity_conditions) + ')'
-        # Combine minimal telescope cut with explicit selection cuts
-        if selection_string:
-            cut_condition = selection_string + ' & ' + tel_cut_string
-        else:
-            cut_condition = tel_cut_string
 
         self.example_identifiers = None
         self.telescopes = {}
-        if selected_tel_ids is None:
-            selected_tel_ids = {}
+        if selected_telescope_ids is None:
+            selected_telescope_ids = {}
+
+        if intensity_selection is None:
+            intensity_selection = {}
+
+        if mapping_settings is None:
+            mapping_settings = {}
        
         # Loop over the files to assemble the selected event identifiers
         for filename, f in self.files.items():
@@ -82,21 +70,47 @@ class DL1DataReader:
             
             # Get dict of all the tel_types in the file mapped to their tel_ids
             telescopes = {}
-            for row in f.root.Array_Info:
-                tel_type = row['tel_type'].decode('utf-8')
+            for row in f.root.Array_Information:
+                tel_type = row['type'].decode()
                 if tel_type not in telescopes:
                     telescopes[tel_type] = []
-                telescopes[tel_type].append(row['tel_id'])
+                telescopes[tel_type].append(row['id'])
 
+            # Enforce an automatic minimal telescope selection cut:
+            # there must be at least one triggered telescope of a
+            # selected type in the event
+            # Users can include stricter cuts in the selection string
+            if self.mode in ['mono', 'stereo']:
+                if selected_telescope_type is None:
+                    # Default: use the first tel type in the file
+                    default = f.root.Array_Information[0]['type'].decode()
+                    selected_telescope_type = default
+                self.tel_type = selected_telescope_type
+                selected_tel_types = [selected_telescope_type]
+            elif self.mode == 'multi-stereo':
+                if selected_telescope_type is None:
+                    # Default: use all tel types
+                    selected_telescope_type = list(telescopes)
+                self.tel_type = None
+                selected_tel_types = selected_telescope_type
+            multiplicity_conditions = ['(' + tel_type + '_multiplicity > 0)'
+                    for tel_type in selected_tel_types]
+            tel_cut_string = '(' + ' | '.join(multiplicity_conditions) + ')'
+            # Combine minimal telescope cut with explicit selection cuts
+            if selection_string:
+                cut_condition = selection_string + ' & ' + tel_cut_string
+            else:
+                cut_condition = tel_cut_string
+            
             # Select which telescopes from the full dataset to include in each
             # event by a telescope type and an optional list of telescope ids.
             selected_telescopes = {}
             for tel_type in selected_tel_types:
                 available_tel_ids = telescopes[tel_type]
                 # Keep only the selected tel ids for the tel type
-                if tel_type in selected_tel_ids:
+                if tel_type in selected_telescope_ids:
                     # Check all requested telescopes are available to select
-                    requested_tel_ids = selected_tel_ids[tel_type]
+                    requested_tel_ids = selected_telescope_ids[tel_type]
                     invalid_tel_ids = list(set(requested_tel_ids) -
                             set(available_tel_ids))
                     if invalid_tel_ids:
@@ -108,7 +122,7 @@ class DL1DataReader:
                     selected_telescopes[tel_type] = available_tel_ids
                 
             selected_nrows = [row.nrow for row
-                    in f.root.Event_Table.where(cut_condition)
+                    in f.root.Events.where(cut_condition)
                     if self._select_event_intensity(row, intensity_selection)]
 
             # Make list of identifiers of all examples passing event selection
@@ -117,19 +131,19 @@ class DL1DataReader:
                         in selected_nrows]
             elif mode == 'mono':
                 example_identifiers = []
-                for indices in f.root.Event_Table.read_coordinates(
-                        selected_nrows,
-                        field=self.tel_type.encode() + b'_indices'):
-                    for tel_id, index in zip(self.telescopes[self.tel_type],
+                field = '{}_indices'.format(self.tel_type)
+                for indices in f.root.Events.read_coordinates(
+                        selected_nrows, field=field):
+                    for tel_id, index in zip(telescopes[self.tel_type],
                             indices):
                         if (tel_id in selected_telescopes[self.tel_type]
                                 and index != 0
                                 and self._select_image_intensity(
-                                    f.root._f_get_child(self.tel_type)[
-                                        image_index]['image_charge'],
+                                    f.root._f_get_child(
+                                        self.tel_type)[index]['charge'],
                                     intensity_selection)):
                             example_identifiers.append(
-                                    (filename, image_index, tel_id))
+                                    (filename, index, tel_id))
         
             # Confirm that the files are consistent and merge them
             if not self.telescopes:
@@ -211,7 +225,7 @@ class DL1DataReader:
                             'name': col_name,
                             'tel_type': None,
                             'base_name': None,
-                            'shape': (num_tels,) + col.shape
+                            'shape': (num_tels,) + col.shape,
                             'dtype': col.dtype
                             }
                         )
@@ -243,7 +257,7 @@ class DL1DataReader:
                                 'name': tel_type + '_' + col_name,
                                 'tel_type': tel_type,
                                 'base_name': col_name,
-                                'shape': (num_tels,) + col.shape
+                                'shape': (num_tels,) + col.shape,
                                 'dtype': col.dtype
                                 }
                             )
@@ -275,7 +289,7 @@ class DL1DataReader:
 
     def _select_image_intensity(self, image_charge, intensity_selection):
         intensity = np.sum(image_charge)
-        lower = intensity_selection.get('lower', np.ninf)
+        lower = intensity_selection.get('lower', -np.inf)
         upper = intensity_selection.get('upper', np.inf)
         if lower < intensity < upper:
             return True
@@ -293,16 +307,16 @@ class DL1DataReader:
         length = [x['num_pixels'] for x
                 in f.root.Telescope_Info.where("tel_type == " + tel_type)][0]
         num_channels = len(self.image_channels)
-        1D_image = np.empty(shape=(length + 1, num_channels), dtype=np.float32)
+        vector = np.empty(shape=(length + 1, num_channels), dtype=np.float32)
         # An "empty" pixel at index 0 is used to fill blank areas in image
-        1D_image[0, :] = 0.0
+        vector[0, :] = 0.0
         # If the telescope didn't trigger, the image index is 0 and a blank
         # image of all zeros with be loaded
         for i, channel in enumerate(self.image_channels):
-            1D_image[1:, i] = record[channel]
-        2D_image = self._image_mapper.map_image(1D_image, tel_type)
+            vector[1:, i] = record[channel]
+        image = self._image_mapper.map_image(vector, tel_type)
 
-        return 2D_image
+        return image
 
     def __len__(self):
         return len(self.example_identifiers)
@@ -316,8 +330,8 @@ class DL1DataReader:
         f = self.files[filename]
         
         def append_array_info(array_info, tel_id):
-            row = [row for row in f.root.Array_Info.where(
-                "tel_id == " + tel_id)][0]
+            row = [row for row in f.root.Array_Information.where(
+                "id == " + tel_id)][0]
             for info, column in zip(array_info, self.array_info):
                 info.append(row[column])
 
