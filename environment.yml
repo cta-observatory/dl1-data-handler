@@ -5,7 +5,6 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - dl1_data_handler=0.7.0=py36_0
   - atomicwrites=1.2.1=py_0
   - attrs=18.2.0=py_0
   - blosc=1.14.4=hfc679d8_0
@@ -129,9 +128,9 @@ dependencies:
   - scipy=1.1.0=py36hc49cb51_0
   - pip:
     - bokeh==1.0.2
+    - ctapipe==0.6.2
     - chardet==3.0.4
     - dask==0.19.2
-    - dl1-data-handler==0.7.0
     - docopt==0.6.2
     - eventio==0.11.0
     - idna==2.7
