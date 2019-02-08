@@ -217,6 +217,7 @@ class CTAMLDataDumper(DL1DataDumper):
                 row["y"] = subarray.positions[tel_id].value[1]
                 row["z"] = subarray.positions[tel_id].value[2]
                 row.append()
+            array_table.flush()
 
         if "/Telescope_Type_Information" not in self.file:
             # Compute maximum number of pixels across all camera types
@@ -241,6 +242,7 @@ class CTAMLDataDumper(DL1DataDumper):
                 row["num_pixels"] = len(subarray.tel[tel_id].camera.pix_id)
                 row["pixel_positions"] = pos
                 row.append()
+            tel_table.flush()
 
     def dump_mc_header_info(self, mcheader_container):
         """Dump ctapipe instrument container to output file.
