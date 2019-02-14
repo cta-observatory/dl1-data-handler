@@ -76,7 +76,7 @@ for dl1-data-writer:
 
 * PyTables 3.4.4
 * NumPy 1.15.0
-* ctapipe 0.6.1
+* ctapipe 0.6.2
 * PyYAML 3.13
 
 ## Usage
