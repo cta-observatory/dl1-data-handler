@@ -16,46 +16,13 @@ DL1DataWriter implements a standardized format for storing simulated CTA DL1 eve
 
 The following installation method (for Linux) is recommended:
 
-### Installing with Anaconda
-
-DL1 Data Handler v0.7.0 is available as a conda package here: https://anaconda.org/bryankim96/dl1-data-handler.
-
-To install, simply create a conda environment (install all requirements using environment.yml) and run:
-
-```bash
-conda install -c bryankim96 dl1-data-handler
-```
-
-You can verify that dl1-data-handler was installed correctly by running:
-
-```bash
-conda list
-```
-
-and looking for dl1-data-handler.
-
-### Installing DL1 Data Handler from source with pip
+### Installing with pip/setuptools
 
 Alternatively, you can install DL1 Data Handler using pip after cloning the repository:
 
 ```bash
 git clone https://github.com/cta-observatory/dl1-data-handler.git
 cd dl1-data-handler
-```
-
-To install into a conda environment:
-
-```bash
-source activate [ENV_NAME]
-conda install pip
-/path/to/anaconda/install/envs/[ENV_NAME]/bin/pip install .
-```
-where /path/to/anaconda/install is the path to your anaconda installation directory and ENV\_NAME is the name of your environment.
-
-The path to the environment directory for the environment you wish to install into can be found quickly by running
-
-```bash
-conda env list
 ```
 
 To install into a virtualenv environment:
