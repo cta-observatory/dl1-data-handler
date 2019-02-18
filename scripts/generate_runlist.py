@@ -34,21 +34,19 @@ def parse_filename(filename):
 
     """
     basename = os.path.basename(filename).replace('.simtel.gz', '')
-    outputs = re.split(
-        '_*', basename)
-    if len(outputs) == 6:
-        particle_type, ze, az, run_number, prod_info, cone = outputs
-        identifiers = [particle_type, ze, az, prod_info + '_' + cone]
-    elif len(outputs) == 5:
-        particle_type, ze, az, run_number, prod_info = outputs
-        identifiers = [particle_type, ze, az, prod_info]
-
+    foutputs = re.split(
+        '___', basename)
+    prod_info = foutputs[1]
+    soutputs = re.split(
+        '_', foutputs[0])
+    particle_type, ze, az, run_number = soutputs
+    identifiers = [particle_type, ze, az, prod_info]
+    
     identifiers[1] = int(re.sub('deg$', '', identifiers[1]))
     identifiers[2] = int(re.sub('deg$', '', identifiers[2]))
     run_number = int(re.sub('^run', '', run_number))
 
     return run_number, identifiers
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -90,7 +88,7 @@ if __name__ == "__main__":
                 start_run_number = run_number
 
             inputs.append(filename)
-            if len(inputs) >= args.num_inputs_per_run or i == (
+            if len(inputs) >= int(args.num_inputs_per_run) or i == (
                     len(list) - 1):
                 particle_type, ze, az, prod_info = key
 
