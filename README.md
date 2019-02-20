@@ -16,9 +16,9 @@ DL1DataWriter implements a standardized format for storing simulated CTA DL1 eve
 
 The following installation method (for Linux) is recommended:
 
-### Installing with pip/setuptools
+### Installing with pip/setuptools from source
 
-Alternatively, you can install DL1 Data Handler using pip after cloning the repository:
+You can install DL1 Data Handler using pip after cloning the repository:
 
 ```bash
 git clone https://github.com/cta-observatory/dl1-data-handler.git
@@ -33,18 +33,23 @@ source /path/to/ENV/bin/activate
 pip install .
 ```
 
-## Dependencies
+### Installing as a conda package
 
-See requirements.txt or environment.yml for the full list of dependencies.
+DL1 Data Handler v0.7.1 isn't yet available as an anaconda package. However, a conda package release is planned for the very near future.
+
+## Dependencies
 
 The main dependencies are:
 
 for dl1-data-writer:
 
-* PyTables 3.4.4
-* NumPy 1.15.0
-* ctapipe 0.6.2
-* PyYAML 3.13
+* PyTables >= 3.4.4
+* NumPy >= 1.15.0
+* ctapipe >= 0.6.2
+* ctapipe-extra >= 0.2.16
+* pyhessio >= 2.1.1
+
+Also see setup.py.
 
 ## Usage
 
@@ -111,7 +116,7 @@ data_writer.process_data(run_list)
 ```
 #### Generating a run list
 
-If processing data from simtel.gz files, as long as their filenames have the format ``[particle_type]_[ze]deg_[az]deg_run[run_number]___[production info].simtel.gz`` the scripts/generate_runlist.py can be used to automatically generate a runlist in the correct format.
+If processing data from simtel.gz files, as long as their filenames have the format ``[particle_type]_[ze]deg_[az]deg_run[run_number]___[production info].simtel.gz`` or ``[particle_type]_[ze]deg_[az]deg_run[run_number]___[production info]_cone[cone_num].simtel.gz`` the scripts/generate_runlist.py can be used to automatically generate a runlist in the correct format.
 
 It can be called as:
 
@@ -127,7 +132,7 @@ It will automatically sort the simtel files in the file_dir directory into group
 
 ### Other scripts
 
-All other scripts located in the scripts/deprecated directory are not currently updated to be compatible with v0.7.0 and should not be used.
+All other scripts located in the scripts/deprecated directory are not currently updated to be compatible with dl1-data-handler >= 0.7.0 and should not be used.
 
 ## Examples/Tips
 
@@ -135,6 +140,7 @@ All other scripts located in the scripts/deprecated directory are not currently 
 
 ## Known Issues/Troubleshooting
 
+* As of v0.7.1 there appears to be an issue when processing files containing SCT data. A fix is planned for v0.7.2.
 * ViTables PyQt5 dependency confict (pip vs. conda): [relevent issue thread](https://github.com/ContinuumIO/anaconda-issues/issues/1554)
 
 ## Links
