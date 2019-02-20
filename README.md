@@ -35,7 +35,7 @@ pip install .
 
 ### Installing as a conda package
 
-DL1 Data Handler v0.7.1 isn't yet available as an anaconda package. However, a conda package release is planned for the very near future.
+DL1 Data Handler v0.7.2 isn't yet available as an anaconda package. However, a conda package release is planned for the very near future.
 
 ## Dependencies
 
