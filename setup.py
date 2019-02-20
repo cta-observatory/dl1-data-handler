@@ -2,7 +2,7 @@ from setuptools import setup
 from setuptools import find_packages
 
 setup(name='dl1_data_handler',
-      version='0.7.0',
+      version='0.7.2',
       description='dl1 HDF5 data writer + reader + processor',
       url='http://github.com/cta-observatory/dl1-data-handler',
       license='MIT',
