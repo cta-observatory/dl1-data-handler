@@ -140,7 +140,7 @@ All other scripts located in the scripts/deprecated directory are not currently 
 
 ## Known Issues/Troubleshooting
 
-* As of v0.7.1 there appears to be an issue when processing files containing SCT data. A fix is planned for v0.7.2.
+* As of v0.7.2 there appears to be an issue when processing files containing SCT data. A fix is planned for v0.7.3.
 * ViTables PyQt5 dependency confict (pip vs. conda): [relevent issue thread](https://github.com/ContinuumIO/anaconda-issues/issues/1554)
 
 ## Links
