@@ -13,6 +13,10 @@ requirements:
 
   run:
     - python
+    - pyhessio >=2.1.1
+    - ctapipe >=0.6.2
+    - ctapipe-extra >=0.2.17
+    - pytables >=3.4.4
 
   test:
     imports:
