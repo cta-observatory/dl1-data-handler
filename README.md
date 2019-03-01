@@ -35,7 +35,39 @@ pip install .
 
 ### Installing as a conda package
 
-DL1 Data Handler v0.7.2 isn't yet available as an anaconda package. However, a conda package release is planned for the very near future.
+To install it as a conda package, first install Anaconda by following the instructions here: https://www.anaconda.com/distribution/.
+
+Then, create and enter a new Python 3.6 environment with:
+
+```bash
+conda create -n [ENVIRONMENT_NAME] python=3.6
+source activate [ENVIRONMENT_NAME]
+```
+
+From the environment, add the necessary channels for all dependencies:
+
+```bash
+conda config --add channels anaconda
+conda config --add channels conda-forge
+conda config --add channels cta-observatory
+```
+
+Install the package:
+
+```bash
+conda install -c bryankim96 dl1_data_handler
+```
+
+This should automatically install all dependencies (NOTE: this may take some time, as by default MKL is included as a dependency of NumPy and it is very large).
+
+If you want to import any functionality from DL1 Data Handler into your own Python scripts, then you are all set. However, if you wish to make use of any of the scripts in dl1-data-handler/scripts (like write_data.py), you should also clone the repository locally and checkout the corresponding tag (i.e. for version v0.7.2): 
+
+```bash
+git clone https://github.com/cta-observatory/dl1-data-handler.git
+git checkout -b v0.7.2 v0.7.2
+```
+
+DL1 Data Handler should already have been installed in your environment by Conda, so no further installation steps (i.e. with setuptools or pip) are necessary and you should be able to run scripts/write_data.py directly.
 
 ## Dependencies
 
