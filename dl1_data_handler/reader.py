@@ -164,7 +164,7 @@ class DL1DataReader:
             random.shuffle(self.example_identifiers)
         
         if image_channels is None:
-            image_channels = ['image_charge']
+            image_channels = ['charge']
         self.image_channels = image_channels
         self.image_mapper = ImageMapper(mapping_method, image_channels,
                 **mapping_settings)
@@ -182,7 +182,7 @@ class DL1DataReader:
             self.unprocessed_example_description = [
                     {
                         'name': 'image',
-                        'tel_type': None,
+                        'tel_type': self.tel_type,
                         'base_name': None,
                         'shape': self.image_mapper.image_shape[self.tel_type],
                         'dtype': np.dtype(np.float32)
@@ -193,7 +193,7 @@ class DL1DataReader:
                 self.unprocessed_example_description.append(
                         {
                             'name': col_name,
-                            'tel_type': None,
+                            'tel_type': self.tel_type,
                             'base_name': None,
                             'shape': col.shape,
                             'dtype': col.dtype
@@ -204,7 +204,7 @@ class DL1DataReader:
             self.unprocessed_example_description = [
                     {
                         'name': 'image',
-                        'tel_type': None,
+                        'tel_type': self.tel_type,
                         'base_name': None,
                         'shape': ((num_tels,)
                             + self.image_mapper.image_shape[self.tel_type]),
@@ -212,7 +212,7 @@ class DL1DataReader:
                         },
                     {
                         'name': 'trigger',
-                        'tel_type': None,
+                        'tel_type': self.tel_type,
                         'base_name': None,
                         'shape': (num_tels, 1),
                         'dtype': np.dtype(np.int8)
@@ -223,7 +223,7 @@ class DL1DataReader:
                 self.unprocessed_example_description.append(
                         {
                             'name': col_name,
-                            'tel_type': None,
+                            'tel_type': self.tel_type,
                             'base_name': None,
                             'shape': (num_tels,) + col.shape,
                             'dtype': col.dtype
@@ -304,8 +304,9 @@ class DL1DataReader:
         
         f = self.files[filename]
         record = f.root._f_get_child(tel_type)[image_index]
+        query = "type == '{}'".format(tel_type)
         length = [x['num_pixels'] for x
-                in f.root.Telescope_Info.where("tel_type == " + tel_type)][0]
+                in f.root.Telescope_Type_Information.where(query)][0]
         num_channels = len(self.image_channels)
         vector = np.empty(shape=(length + 1, num_channels), dtype=np.float32)
         # An "empty" pixel at index 0 is used to fill blank areas in image
@@ -314,7 +315,7 @@ class DL1DataReader:
         # image of all zeros with be loaded
         for i, channel in enumerate(self.image_channels):
             vector[1:, i] = record[channel]
-        image = self._image_mapper.map_image(vector, tel_type)
+        image = self.image_mapper.map_image(vector, tel_type)
 
         return image
 
@@ -330,8 +331,8 @@ class DL1DataReader:
         f = self.files[filename]
         
         def append_array_info(array_info, tel_id):
-            row = [row for row in f.root.Array_Information.where(
-                "id == " + tel_id)][0]
+            query = "id == {}".format(tel_id)
+            row = [row for row in f.root.Array_Information.where(query)][0]
             for info, column in zip(array_info, self.array_info):
                 info.append(row[column])
 
@@ -353,10 +354,10 @@ class DL1DataReader:
             return example
         
         # Load the data and any selected array info
-        if self.example_type == "mono":
+        if self.mode == "mono":
             # Get a single image
             image_index, tel_id = identifiers[1:3]
-            nrow = f.root._f_get_child(tel_type)[image_index]['event_index']
+            nrow = f.root._f_get_child(self.tel_type)[image_index]['event_index']
             
             image = self._get_image(filename, self.tel_type, image_index)
             example = [image]
@@ -364,11 +365,11 @@ class DL1DataReader:
             array_info = [[] for column in self.array_info]
             append_array_info(array_info, tel_id)
             example.extend([info for info in array_info])
-        elif self.example_type == "stereo":
+        elif self.mode == "stereo":
             # Get a list of images and an array of binary trigger values
             nrow = identifiers[1]
             example = load_tel_type_data(nrow, self.tel_type)
-        elif self.example_type == "multi-stereo":
+        elif self.mode == "multi-stereo":
             # Get a list of images and an array of binary trigger values
             # for each selected telescope type
             nrow = identifiers[1]
@@ -378,7 +379,7 @@ class DL1DataReader:
                 example.extend(tel_type_example)
 
         # Load event info
-        record = f.root.Event_Info[nrow]
+        record = f.root.Events[nrow]
         for column in self.event_info:
             example.append(record[column])
 
