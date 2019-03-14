@@ -111,8 +111,8 @@ class DL1DataReader:
                 if tel_type in selected_telescope_ids:
                     # Check all requested telescopes are available to select
                     requested_tel_ids = selected_telescope_ids[tel_type]
-                    invalid_tel_ids = list(set(requested_tel_ids) -
-                                           set(available_tel_ids))
+                    invalid_tel_ids = (set(requested_tel_ids)
+                                       - set(available_tel_ids))
                     if invalid_tel_ids:
                         raise ValueError("Tel ids {} are not a valid selection"
                                          "for tel type '{}'".format(
