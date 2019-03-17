@@ -7,7 +7,6 @@ notifications:
         on_failure: change # default: always
 
 install:
-      - sudo apt-get update
         # We do this conditionally because it saves us some downloading if the
         # version is the same.
       - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
@@ -22,8 +21,12 @@ install:
       - conda update -q conda
         # Useful for debugging any issues with conda
       - conda info -a
-      - conda install -q --yes --file requirements.txt -c cta-observatory -c conda-forge -c openastronomy
-      - python setup.py install
+      - conda create -n test python=3.6
+      - source activate test
+      - conda config --add channels anaconda
+      - conda config --add channels conda-forge
+      - conda config --add channels cta-observatory
+      - conda install -c bryankim96 dl1_data_handler
 script:
       - pytest --cov=dl1-data-handler;
 after_success:
