@@ -28,6 +28,6 @@ install:
       - conda config --add channels cta-observatory
       - conda install -c bryankim96 dl1_data_handler
 script:
-      - pytest --cov=dl1-data-handler;
+      - pytest --cov=dl1_data_handler;
 after_success:
       - coveralls
