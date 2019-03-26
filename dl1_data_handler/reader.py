@@ -184,19 +184,19 @@ class DL1DataReader:
                 {
                     'name': 'image',
                     'tel_type': self.tel_type,
-                    'base_name': None,
+                    'base_name': 'image',
                     'shape': self.image_mapper.image_shape[self.tel_type],
                     'dtype': np.dtype(np.float32)
                     }
                 ]
             for col_name in array_info:
-                col = f.root.Array_Information._f_col(col_name)
+                col = f.root.Array_Information.cols._f_col(col_name)
                 self.unprocessed_example_description.append(
                     {
                         'name': col_name,
                         'tel_type': self.tel_type,
-                        'base_name': None,
-                        'shape': col.shape,
+                        'base_name': col_name,
+                        'shape': col.shape[1:],
                         'dtype': col.dtype
                         }
                     )
@@ -206,7 +206,7 @@ class DL1DataReader:
                 {
                     'name': 'image',
                     'tel_type': self.tel_type,
-                    'base_name': None,
+                    'base_name': 'image',
                     'shape': ((num_tels,)
                               + self.image_mapper.image_shape[self.tel_type]),
                     'dtype': np.dtype(np.float32)
@@ -214,19 +214,19 @@ class DL1DataReader:
                 {
                     'name': 'trigger',
                     'tel_type': self.tel_type,
-                    'base_name': None,
+                    'base_name': 'trigger',
                     'shape': (num_tels, 1),
                     'dtype': np.dtype(np.int8)
                     }
                 ]
             for col_name in array_info:
-                col = f.root.Array_Information._f_col(col_name)
+                col = f.root.Array_Information.cols._f_col(col_name)
                 self.unprocessed_example_description.append(
                     {
                         'name': col_name,
                         'tel_type': self.tel_type,
-                        'base_name': None,
-                        'shape': (num_tels,) + col.shape,
+                        'base_name': col_name,
+                        'shape': (num_tels,) + col.shape[1:],
                         'dtype': col.dtype
                         }
                     )
@@ -252,25 +252,26 @@ class DL1DataReader:
                         }
                     ])
                 for col_name in array_info:
-                    col = f.root.Array_Information._f_col(col_name)
+                    col = f.root.Array_Information.cols._f_col(col_name)
                     self.unprocessed_example_description.append(
                         {
                             'name': tel_type + '_' + col_name,
                             'tel_type': tel_type,
                             'base_name': col_name,
-                            'shape': (num_tels,) + col.shape,
+                            'shape': (num_tels,) + col.shape[1:],
                             'dtype': col.dtype
                             }
                         )
         # Add event info to description
-        for col in self.event_info:
+        for col_name in self.event_info:
+            col = f.root.Events.cols._f_col(col_name)
             self.unprocessed_example_description.append(
                 {
-                    'name': col,
+                    'name': col_name,
                     'tel_type': None,
-                    'base_name': None,
-                    'shape': f.root.Events._f_col(col).shape,
-                    'dtype': f.root.Events._f_col(col).dtype
+                    'base_name': col_name,
+                    'shape': col.shape[1:],
+                    'dtype': col.dtype
                     }
                 )
 
