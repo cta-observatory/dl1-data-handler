@@ -20,7 +20,7 @@ class DL1DataProcessor():
 
     def process(self, example):
         for transform in self.transforms:
-            example = transform.transform(example)
+            example = transform(example)
         return example
 
 class Transform():
@@ -32,29 +32,29 @@ class Transform():
         self.description = description
         return self.description
 
-    def transform(self, example):
+    def __call__(self, example):
         return example
 
-class ConvertPrimaryIDToClassLabel(Transform):
+class ConvertShowerPrimaryIDToClassLabel(Transform):
 
     def __init__(self):
         super().__init__()
-        self.primary_id_to_class = {
+        self.shower_primary_id_to_class = {
             0: 1, # gamma
             101: 0 # proton
             }
 
     def describe(self, description):
         self.description = [
-            {**des, 'name': 'class_label'} for des
-            in description if des['name'] == 'shower_primary']
+            {**des, 'name': 'class_label'} if des['name'] == 'shower_primary_id'
+            else des for des in description]
         return self.description
 
-    def transform(self, example):
+    def __call__(self, example):
         for i, (arr, des) in enumerate(zip(example, self.description)):
-            if des['name'] == 'shower_primary':
+            if des['name'] == 'shower_primary_id':
                 class_label = np.array(
-                    self.primary_id_to_class[arr],
+                    self.shower_primary_id_to_class[arr],
                     dtype=des['dtype'])
                 example[i] = class_label
         return example
