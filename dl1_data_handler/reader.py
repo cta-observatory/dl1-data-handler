@@ -34,7 +34,8 @@ class DL1DataReader:
                  mapping_settings=None,
                  array_info=None,
                  event_info=None,
-                 transforms=None
+                 transforms=None,
+                 validate_processor=False
                 ):
 
         # Construct dict of filename:file_handle pairs
@@ -278,7 +279,8 @@ class DL1DataReader:
         self.processor = DL1DataProcessor(
             self.mode,
             self.unprocessed_example_description,
-            transforms
+            transforms,
+            validate_processor
             )
 
         # Definition of preprocessed example
