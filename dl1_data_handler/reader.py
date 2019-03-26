@@ -216,7 +216,7 @@ class DL1DataReader:
                     'name': 'trigger',
                     'tel_type': self.tel_type,
                     'base_name': 'trigger',
-                    'shape': (num_tels, 1),
+                    'shape': (num_tels,),
                     'dtype': np.dtype(np.int8)
                     }
                 ]
@@ -248,7 +248,7 @@ class DL1DataReader:
                         'name': tel_type + '_trigger',
                         'tel_type': tel_type,
                         'base_name': 'trigger',
-                        'shape': (num_tels, 1),
+                        'shape': (num_tels,),
                         'dtype': np.dtype(np.int8)
                         }
                     ])
