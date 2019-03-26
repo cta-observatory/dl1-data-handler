@@ -35,11 +35,11 @@ class Transform():
     def transform(self, example):
         return example
 
-class ConvertParticleIDToClassLabel(Transform):
+class ConvertPrimaryIDToClassLabel(Transform):
 
     def __init__(self):
         super().__init__()
-        self.particle_id_to_class = {
+        self.primary_id_to_class = {
             0: 1, # gamma
             101: 0 # proton
             }
@@ -47,14 +47,14 @@ class ConvertParticleIDToClassLabel(Transform):
     def describe(self, description):
         self.description = [
             {**des, 'name': 'class_label'} for des
-            in description if des['name'] == 'particle_id']
+            in description if des['name'] == 'shower_primary']
         return self.description
 
     def transform(self, example):
         for i, (arr, des) in enumerate(zip(example, self.description)):
-            if des['name'] == 'particle_id':
+            if des['name'] == 'shower_primary':
                 class_label = np.array(
-                    self.particle_id_to_class[arr],
+                    self.primary_id_to_class[arr],
                     dtype=des['dtype'])
                 example[i] = class_label
         return example
@@ -63,7 +63,7 @@ class NormalizeTelescopePositions(Transform):
 
     def __init__(self, norm_x=1.0, norm_y=1.0, norm_z=1.0):
         super().__init__()
-        self.norms = {'tel_x': norm_x, 'tel_y': norm_y, 'tel_z': norm_z}
+        self.norms = {'x': norm_x, 'y': norm_y, 'z': norm_z}
 
     def transform(self, example):
         for i, (arr, des) in enumerate(zip(example, self.description)):
