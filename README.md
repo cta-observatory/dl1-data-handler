@@ -16,46 +16,13 @@ DL1DataWriter implements a standardized format for storing simulated CTA DL1 eve
 
 The following installation method (for Linux) is recommended:
 
-### Installing with Anaconda
+### Installing with pip/setuptools from source
 
-DL1 Data Handler v0.7.0 is available as a conda package here: https://anaconda.org/bryankim96/dl1-data-handler.
-
-To install, simply create a conda environment (install all requirements using environment.yml) and run:
-
-```bash
-conda install -c bryankim96 dl1-data-handler
-```
-
-You can verify that dl1-data-handler was installed correctly by running:
-
-```bash
-conda list
-```
-
-and looking for dl1-data-handler.
-
-### Installing DL1 Data Handler from source with pip
-
-Alternatively, you can install DL1 Data Handler using pip after cloning the repository:
+You can install DL1 Data Handler using pip after cloning the repository:
 
 ```bash
 git clone https://github.com/cta-observatory/dl1-data-handler.git
 cd dl1-data-handler
-```
-
-To install into a conda environment:
-
-```bash
-source activate [ENV_NAME]
-conda install pip
-/path/to/anaconda/install/envs/[ENV_NAME]/bin/pip install .
-```
-where /path/to/anaconda/install is the path to your anaconda installation directory and ENV\_NAME is the name of your environment.
-
-The path to the environment directory for the environment you wish to install into can be found quickly by running
-
-```bash
-conda env list
 ```
 
 To install into a virtualenv environment:
@@ -66,18 +33,55 @@ source /path/to/ENV/bin/activate
 pip install .
 ```
 
-## Dependencies
+### Installing as a conda package
 
-See requirements.txt or environment.yml for the full list of dependencies.
+To install it as a conda package, first install Anaconda by following the instructions here: https://www.anaconda.com/distribution/.
+
+Then, create and enter a new Python 3.6 environment with:
+
+```bash
+conda create -n [ENVIRONMENT_NAME] python=3.6
+source activate [ENVIRONMENT_NAME]
+```
+
+From the environment, add the necessary channels for all dependencies:
+
+```bash
+conda config --add channels anaconda
+conda config --add channels conda-forge
+conda config --add channels cta-observatory
+```
+
+Install the package:
+
+```bash
+conda install -c bryankim96 dl1_data_handler
+```
+
+This should automatically install all dependencies (NOTE: this may take some time, as by default MKL is included as a dependency of NumPy and it is very large).
+
+If you want to import any functionality from DL1 Data Handler into your own Python scripts, then you are all set. However, if you wish to make use of any of the scripts in dl1-data-handler/scripts (like write_data.py), you should also clone the repository locally and checkout the corresponding tag (i.e. for version v0.7.2): 
+
+```bash
+git clone https://github.com/cta-observatory/dl1-data-handler.git
+git checkout -b v0.7.2 v0.7.2
+```
+
+DL1 Data Handler should already have been installed in your environment by Conda, so no further installation steps (i.e. with setuptools or pip) are necessary and you should be able to run scripts/write_data.py directly.
+
+## Dependencies
 
 The main dependencies are:
 
 for dl1-data-writer:
 
-* PyTables 3.4.4
-* NumPy 1.15.0
-* ctapipe 0.6.1
-* PyYAML 3.13
+* PyTables >= 3.4.4
+* NumPy >= 1.15.0
+* ctapipe >= 0.6.2
+* ctapipe-extra >= 0.2.16
+* pyhessio >= 2.1.1
+
+Also see setup.py.
 
 ## Usage
 
@@ -144,7 +148,7 @@ data_writer.process_data(run_list)
 ```
 #### Generating a run list
 
-If processing data from simtel.gz files, as long as their filenames have the format ``[particle_type]_[ze]deg_[az]deg_run[run_number]___[production info].simtel.gz`` the scripts/generate_runlist.py can be used to automatically generate a runlist in the correct format.
+If processing data from simtel.gz files, as long as their filenames have the format ``[particle_type]_[ze]deg_[az]deg_run[run_number]___[production info].simtel.gz`` or ``[particle_type]_[ze]deg_[az]deg_run[run_number]___[production info]_cone[cone_num].simtel.gz`` the scripts/generate_runlist.py can be used to automatically generate a runlist in the correct format.
 
 It can be called as:
 
@@ -160,7 +164,7 @@ It will automatically sort the simtel files in the file_dir directory into group
 
 ### Other scripts
 
-All other scripts located in the scripts/deprecated directory are not currently updated to be compatible with v0.7.0 and should not be used.
+All other scripts located in the scripts/deprecated directory are not currently updated to be compatible with dl1-data-handler >= 0.7.0 and should not be used.
 
 ## Examples/Tips
 
@@ -168,6 +172,7 @@ All other scripts located in the scripts/deprecated directory are not currently 
 
 ## Known Issues/Troubleshooting
 
+* As of v0.7.2 there appears to be an issue when processing files containing SCT data. A fix is planned for v0.7.3.
 * ViTables PyQt5 dependency confict (pip vs. conda): [relevent issue thread](https://github.com/ContinuumIO/anaconda-issues/issues/1554)
 
 ## Links

@@ -1,4 +1,0 @@
-setuptools==40.4.0
-numpy==1.15.0
-tables==3.4.4
-PyYAML==3.13
