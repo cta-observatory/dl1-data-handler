@@ -168,7 +168,7 @@ class DL1DataReader:
         if image_channels is None:
             image_channels = ['charge']
         self.image_channels = image_channels
-        self.image_mapper = ImageMapper(mapping_method, image_channels,
+        self.image_mapper = ImageMapper(mapping_method=mapping_method, channels=image_channels,
                                         **mapping_settings)
 
         if array_info is None:
