@@ -66,7 +66,8 @@ if __name__ == "__main__":
 
     runlist = []
 
-    filenames = glob.glob(os.path.join(args.file_dir, "*.simtel.gz"))
+    abs_file_dir = os.path.abspath(args.file_dir)
+    filenames = glob.glob(os.path.join(abs_file_dir, "*.simtel.gz"))
     filename_groups = {}
 
     # Separate files by particle type, ze, az, processing info, cone
@@ -92,7 +93,8 @@ if __name__ == "__main__":
                     len(list) - 1):
                 particle_type, ze, az, prod_info = key
 
-                target_filename = "{}_{}deg_{}deg_runs{}___{}.h5".format(
+                target_filename = "{}/{}_{}deg_{}deg_runs{}___{}.h5".format(
+                    abs_file_dir,
                     particle_type,
                     ze,
                     az,
