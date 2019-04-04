@@ -7,7 +7,6 @@ from scipy.sparse import csr_matrix
 from collections import Counter
 
 from ctapipe.instrument.camera import CameraGeometry
-from astropy import units as u
 
 from dl1_data_handler import processor
 
@@ -80,8 +79,8 @@ class ImageMapper:
             self.camera_geometries[camtype] = CameraGeometry.from_name(camtype)
 
             # Rotate it if necessary
-            if camtype in ['LSTCam', 'NectarCam', 'MAGICCam']:
-                self.camera_geometries[camtype].rotate(90.0 * u.deg - self.camera_geometries[camtype].pix_rotation)
+            #if camtype in ['LSTCam', 'NectarCam', 'MAGICCam']:
+                #self.camera_geometries[camtype].rotate(90.0 * u.deg - self.camera_geometries[camtype].pix_rotation)
 
             map_method = self.mapping_method[camtype]
             if map_method not in ['oversampling', 'rebinning', 'nearest_interpolation', 'bilinear_interpolation',
@@ -123,7 +122,8 @@ class ImageMapper:
                 channels  # number of channels
                 )
 
-            self.mapping_tables[camtype] = self.generate_table(camtype)
+            if camtype != "FACT":
+                self.mapping_tables[camtype] = self.generate_table(camtype)
 
     def map_image(self, pixels, camera_type):
         """
@@ -155,7 +155,13 @@ class ImageMapper:
         num_pixels = len(CameraGeometry.from_name(camera_type).pix_id)
         # Get telescope pixel positions and padding for the given tel type
         camgeom = self.camera_geometries[camera_type]
+
         pos = np.column_stack([camgeom.pix_x.value, camgeom.pix_y.value]).T
+
+        if camera_type in ['LSTCam', 'NectarCam', 'MAGICCam']:
+            pixel_rot = 90.0 - camgeom.pix_rotation.value
+            pos = self.rotate_pixel_pos(pos, pixel_rot)
+
         pad = self.padding[camera_type]
         default_pad = self.default_pad
         map_method = self.mapping_method[camera_type]
@@ -881,5 +887,13 @@ class ImageMapper:
         for i in range(1, mapping_matrix3d.shape[0]):
             mapping_matrix3d[i] *= mask
         return mapping_matrix3d
+
+    @staticmethod
+    def rotate_pixel_pos(pos, angle_deg):
+        angle = angle_deg * np.pi/180.0
+        rotation_matrix = np.matrix([[np.cos(angle), -np.sin(angle)],
+                                     [np.sin(angle), np.cos(angle)]], dtype=float)
+        pos_rotated = np.squeeze(np.asarray(np.dot(rotation_matrix, pos)))
+        return pos_rotated
 
 

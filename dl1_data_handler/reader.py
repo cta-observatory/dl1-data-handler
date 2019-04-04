@@ -8,6 +8,9 @@ import tables
 from dl1_data_handler.image_mapper import ImageMapper
 from dl1_data_handler.processor import DL1DataProcessor
 
+def get_camera_type(tel_type):
+    return tel_type.split('_')[1]
+
 class DL1DataReader:
 
     @staticmethod
@@ -186,7 +189,7 @@ class DL1DataReader:
                     'name': 'image',
                     'tel_type': self.tel_type,
                     'base_name': 'image',
-                    'shape': self.image_mapper.image_shape[self.tel_type],
+                    'shape': self.image_mapper.image_shapes[get_camera_type(self.tel_type)],
                     'dtype': np.dtype(np.float32)
                     }
                 ]
@@ -209,7 +212,7 @@ class DL1DataReader:
                     'tel_type': self.tel_type,
                     'base_name': 'image',
                     'shape': ((num_tels,)
-                              + self.image_mapper.image_shape[self.tel_type]),
+                              + self.image_mapper.image_shapes[get_camera_type(self.tel_type)]),
                     'dtype': np.dtype(np.float32)
                     },
                 {
@@ -241,7 +244,7 @@ class DL1DataReader:
                         'tel_type': tel_type,
                         'base_name': 'image',
                         'shape': ((num_tels,)
-                                  + self.image_mapper.image_shape[tel_type]),
+                                  + self.image_mapper.image_shapes[get_camera_type(tel_type)]),
                         'dtype': np.dtype(np.float32)
                         },
                     {
@@ -319,7 +322,7 @@ class DL1DataReader:
         # image of all zeros with be loaded
         for i, channel in enumerate(self.image_channels):
             vector[1:, i] = record[channel]
-        image = self.image_mapper.map_image(vector, tel_type)
+        image = self.image_mapper.map_image(vector, get_camera_type(tel_type))
 
         return image
 
