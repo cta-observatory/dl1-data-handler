@@ -762,7 +762,7 @@ def gain_selection(waveform, image, peakpos, cam_id, threshold):
     Parameters
     ----------
     waveform: array of waveforms of the events
-    signals: array of calibrated pixel charges
+    image: array of calibrated pixel charges
     peakpos: array of pixel peak positions
     cam_id: str
     threshold: int threshold to change form high gain to low gain
