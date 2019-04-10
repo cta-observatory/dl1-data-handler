@@ -11,10 +11,18 @@ import logging
 import numpy as np
 import tables
 from ctapipe import io, calib
+from ctapipe.calib.camera.gainselection import ThresholdGainSelector
 
 from dl1_data_handler import table_definitions as table_defs
 
 logger = logging.getLogger(__name__)
+
+
+gain_threshold = {
+    'LSTCam': 4094,
+    'NectarCam': 4094,
+    'ASTRICam': 4094,
+}
 
 
 class DL1DataDumper(ABC):
@@ -338,8 +346,8 @@ class CTAMLDataDumper(DL1DataDumper):
                 if tel_id in event_container.dl1.tel:
                     tel_description = subarray.tels[tel_id]
 
-                    pixel_vector = event_container.dl1.tel[tel_id].image[0]
-                    peaks_vector = event_container.dl1.tel[tel_id].peakpos[0]
+                    pixel_vector = event_container.dl1.tel[tel_id].image
+                    peaks_vector = event_container.dl1.tel[tel_id].peakpos
 
                     image_table = self.file.get_node(
                         '/' + self.convert_tel_name(str(tel_description)),
@@ -707,6 +715,7 @@ class DL1DataWriter:
             # Write all events sequentially
             for event in event_source:
                 self.calibrator.calibrate(event)
+                combine_channels(event)
                 if (self.preselection_cut_function is not None and not
                         self.preselection_cut_function(event)):
                     continue
@@ -742,3 +751,54 @@ class DL1DataWriter:
                     # Reset event count and increment file count
                     event_count = 0
                     output_file_count += 1
+
+
+def gain_selection(waveform, signals, peakpos, cam_id, threshold):
+    """
+    Custom lst calibration.
+    Update event.dl1.tel[telescope_id] with calibrated image and peakpos
+
+    Parameters
+    ----------
+    waveform: array of waveforms of the events
+    signals: array of calibrated pixel charges
+    peakpos: array of pixel peak positions
+    cam_id: str
+    threshold: int threshold to change form high gain to low gain
+    """
+
+    gainsel = ThresholdGainSelector(select_by_sample=True)
+    gainsel.thresholds[cam_id] = threshold
+
+    waveform, gainmask = gainsel.select_gains(cam_id, waveform)
+    signalmask = gainmask.max(axis=1)
+
+    combined_image = signals[0].copy()
+    combined_image[signalmask] = signals[1][signalmask].copy()
+    combined_peakpos = peakpos[0].copy()
+    combined_peakpos[signalmask] = peakpos[1][signalmask].copy()
+
+    return combined_image, combined_peakpos
+
+
+def combine_channels(event):
+    """
+    Combine the channels for the image and peakpos arrays in the event.dl1 containers
+
+    Parameters
+    ----------
+    event: `ctapipe.io.containers.DataContainer`
+    """
+    for tel_id in event.r0.tels_with_data:
+        cam_id = event.inst.subarray.tel[tel_id].camera.cam_id
+        if cam_id in gain_threshold:
+            waveform = event.r0.tel[tel_id].waveform
+            signals = event.dl1.tel[tel_id].image
+            peakpos = event.dl1.tel[tel_id].peakpos
+
+            combined_image, combined_peakpos = gain_selection(waveform, signals, peakpos, cam_id, gain_threshold[cam_id])
+            event.dl1.tel[tel_id].image = combined_image
+            event.dl1.tel[tel_id].peakpos = combined_peakpos
+        else:
+            event.dl1.tel[tel_id].image = event.dl1.tel[tel_id].image[0]
+            event.dl1.tel[tel_id].peakpos = event.dl1.tel[tel_id].peakpos[0]
