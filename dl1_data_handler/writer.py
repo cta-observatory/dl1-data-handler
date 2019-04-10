@@ -765,6 +765,10 @@ def gain_selection(waveform, signals, peakpos, cam_id, threshold):
     peakpos: array of pixel peak positions
     cam_id: str
     threshold: int threshold to change form high gain to low gain
+
+    Returns
+    -------
+    combined_image, combined_peakpos: `(numpy.array, numpy.array)`
     """
 
     gainsel = ThresholdGainSelector(select_by_sample=True)
@@ -784,6 +788,7 @@ def gain_selection(waveform, signals, peakpos, cam_id, threshold):
 def combine_channels(event):
     """
     Combine the channels for the image and peakpos arrays in the event.dl1 containers
+    The `event.dl1.tel[tel_id].image` and `event.dl1.tel[tel_id].peakpos` are replaced by their combined versions
 
     Parameters
     ----------
