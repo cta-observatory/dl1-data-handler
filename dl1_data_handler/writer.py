@@ -753,10 +753,11 @@ class DL1DataWriter:
                     output_file_count += 1
 
 
-def gain_selection(waveform, signals, peakpos, cam_id, threshold):
+def gain_selection(waveform, image, peakpos, cam_id, threshold):
     """
-    Custom lst calibration.
-    Update event.dl1.tel[telescope_id] with calibrated image and peakpos
+    Based on the waveform and threshold, select the proper gain for each pixel.
+    By default, the channel 0 is kept.
+    If a pixel is saturated (value > threshold in the waveform), the channel 1 is used.
 
     Parameters
     ----------
@@ -769,18 +770,21 @@ def gain_selection(waveform, signals, peakpos, cam_id, threshold):
     Returns
     -------
     combined_image, combined_peakpos: `(numpy.array, numpy.array)`
+        combined_image.shape = image.shape[1]
     """
+
+    assert image.shape[0] == 2
 
     gainsel = ThresholdGainSelector(select_by_sample=True)
     gainsel.thresholds[cam_id] = threshold
 
-    waveform, gainmask = gainsel.select_gains(cam_id, waveform)
-    signalmask = gainmask.max(axis=1)
+    waveform, gain_mask = gainsel.select_gains(cam_id, waveform)
+    signal_mask = gain_mask.max(axis=1)
 
-    combined_image = signals[0].copy()
-    combined_image[signalmask] = signals[1][signalmask].copy()
+    combined_image = image[0].copy()
+    combined_image[signal_mask] = image[1][signal_mask].copy()
     combined_peakpos = peakpos[0].copy()
-    combined_peakpos[signalmask] = peakpos[1][signalmask].copy()
+    combined_peakpos[signal_mask] = peakpos[1][signal_mask].copy()
 
     return combined_image, combined_peakpos
 
