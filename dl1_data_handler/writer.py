@@ -24,6 +24,8 @@ gain_threshold = {
     'ASTRICam': 4094,
 }
 
+gain_selector = ThresholdGainSelector(select_by_sample=True)
+
 
 class DL1DataDumper(ABC):
     """Abstract class for dumping data from ctapipe DL1 containers to file."""
@@ -775,16 +777,15 @@ def gain_selection(waveform, image, peakpos, cam_id, threshold):
 
     assert image.shape[0] == 2
 
-    gainsel = ThresholdGainSelector(select_by_sample=True)
-    gainsel.thresholds[cam_id] = threshold
+    gain_selector.thresholds[cam_id] = threshold
 
-    waveform, gain_mask = gainsel.select_gains(cam_id, waveform)
+    waveform, gain_mask = gain_selector.select_gains(cam_id, waveform)
     signal_mask = gain_mask.max(axis=1)
 
     combined_image = image[0].copy()
-    combined_image[signal_mask] = image[1][signal_mask].copy()
+    combined_image[signal_mask] = image[1][signal_mask]
     combined_peakpos = peakpos[0].copy()
-    combined_peakpos[signal_mask] = peakpos[1][signal_mask].copy()
+    combined_peakpos[signal_mask] = peakpos[1][signal_mask]
 
     return combined_image, combined_peakpos
 
