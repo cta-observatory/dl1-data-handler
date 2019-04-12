@@ -18,15 +18,6 @@ from dl1_data_handler import table_definitions as table_defs
 logger = logging.getLogger(__name__)
 
 
-gain_threshold = {
-    'LSTCam': 4094,
-    'NectarCam': 4094,
-    'ASTRICam': 4094,
-}
-
-gain_selector = ThresholdGainSelector(select_by_sample=True)
-
-
 class DL1DataDumper(ABC):
     """Abstract class for dumping data from ctapipe DL1 containers to file."""
 
@@ -536,7 +527,12 @@ class DL1DataWriter:
                  },
                  preselection_cut_function=None,
                  output_file_size=10737418240,
-                 events_per_file=None):
+                 events_per_file=None,
+                 gain_thresholds = {
+                    'LSTCam': 4094,
+                    'NectarCam': 4094,
+                    'ASTRICam': 4094,
+                }):
         """Initialize a DL1DataWriter instance.
 
         Provides some options for controlling the output file sizes.
@@ -598,6 +594,9 @@ class DL1DataWriter:
 
         self.calibrator = calib.camera.calibrator.CameraCalibrator(
             None, None, **calibration_settings)
+        
+        self.gain_selector = ThresholdGainSelector(select_by_sample=True)
+        self.gain_thresholds = gain_thresholds
 
     def process_data(self, run_list):
         """Process data from a list of runs in parallel.
@@ -717,7 +716,7 @@ class DL1DataWriter:
             # Write all events sequentially
             for event in event_source:
                 self.calibrator.calibrate(event)
-                combine_channels(event)
+                self.combine_channels(event)
                 if (self.preselection_cut_function is not None and not
                         self.preselection_cut_function(event)):
                     continue
@@ -754,61 +753,60 @@ class DL1DataWriter:
                     event_count = 0
                     output_file_count += 1
 
+    def gain_selection(self, waveform, image, peakpos, cam_id, threshold):
+        """
+        Based on the waveform and threshold, select the proper gain for each pixel.
+        By default, the channel 0 is kept.
+        If a pixel is saturated (value > threshold in the waveform), the channel 1 is used.
 
-def gain_selection(waveform, image, peakpos, cam_id, threshold):
-    """
-    Based on the waveform and threshold, select the proper gain for each pixel.
-    By default, the channel 0 is kept.
-    If a pixel is saturated (value > threshold in the waveform), the channel 1 is used.
+        Parameters
+        ----------
+        waveform: array of waveforms of the events
+        image: array of calibrated pixel charges
+        peakpos: array of pixel peak positions
+        cam_id: str
+        threshold: int threshold to change form high gain to low gain
 
-    Parameters
-    ----------
-    waveform: array of waveforms of the events
-    image: array of calibrated pixel charges
-    peakpos: array of pixel peak positions
-    cam_id: str
-    threshold: int threshold to change form high gain to low gain
+        Returns
+        -------
+        combined_image, combined_peakpos: `(numpy.array, numpy.array)`
+            combined_image.shape = image.shape[1]
+        """
 
-    Returns
-    -------
-    combined_image, combined_peakpos: `(numpy.array, numpy.array)`
-        combined_image.shape = image.shape[1]
-    """
+        assert image.shape[0] == 2
 
-    assert image.shape[0] == 2
+        self.gain_selector.thresholds[cam_id] = threshold
 
-    gain_selector.thresholds[cam_id] = threshold
+        waveform, gain_mask = self.gain_selector.select_gains(cam_id, waveform)
+        signal_mask = gain_mask.max(axis=1)
 
-    waveform, gain_mask = gain_selector.select_gains(cam_id, waveform)
-    signal_mask = gain_mask.max(axis=1)
+        combined_image = image[0].copy()
+        combined_image[signal_mask] = image[1][signal_mask]
+        combined_peakpos = peakpos[0].copy()
+        combined_peakpos[signal_mask] = peakpos[1][signal_mask]
 
-    combined_image = image[0].copy()
-    combined_image[signal_mask] = image[1][signal_mask]
-    combined_peakpos = peakpos[0].copy()
-    combined_peakpos[signal_mask] = peakpos[1][signal_mask]
-
-    return combined_image, combined_peakpos
+        return combined_image, combined_peakpos
 
 
-def combine_channels(event):
-    """
-    Combine the channels for the image and peakpos arrays in the event.dl1 containers
-    The `event.dl1.tel[tel_id].image` and `event.dl1.tel[tel_id].peakpos` are replaced by their combined versions
+    def combine_channels(self, event):
+        """
+        Combine the channels for the image and peakpos arrays in the event.dl1 containers
+        The `event.dl1.tel[tel_id].image` and `event.dl1.tel[tel_id].peakpos` are replaced by their combined versions
 
-    Parameters
-    ----------
-    event: `ctapipe.io.containers.DataContainer`
-    """
-    for tel_id in event.r0.tels_with_data:
-        cam_id = event.inst.subarray.tel[tel_id].camera.cam_id
-        if cam_id in gain_threshold:
-            waveform = event.r0.tel[tel_id].waveform
-            signals = event.dl1.tel[tel_id].image
-            peakpos = event.dl1.tel[tel_id].peakpos
+        Parameters
+        ----------
+        event: `ctapipe.io.containers.DataContainer`
+        """
+        for tel_id in event.r0.tels_with_data:
+            cam_id = event.inst.subarray.tel[tel_id].camera.cam_id
+            if cam_id in self.gain_thresholds:
+                waveform = event.r0.tel[tel_id].waveform
+                signals = event.dl1.tel[tel_id].image
+                peakpos = event.dl1.tel[tel_id].peakpos
 
-            combined_image, combined_peakpos = gain_selection(waveform, signals, peakpos, cam_id, gain_threshold[cam_id])
-            event.dl1.tel[tel_id].image = combined_image
-            event.dl1.tel[tel_id].peakpos = combined_peakpos
-        else:
-            event.dl1.tel[tel_id].image = event.dl1.tel[tel_id].image[0]
-            event.dl1.tel[tel_id].peakpos = event.dl1.tel[tel_id].peakpos[0]
+                combined_image, combined_peakpos = self.gain_selection(waveform, signals, peakpos, cam_id, self.gain_thresholds[cam_id])
+                event.dl1.tel[tel_id].image = combined_image
+                event.dl1.tel[tel_id].peakpos = combined_peakpos
+            else:
+                event.dl1.tel[tel_id].image = event.dl1.tel[tel_id].image[0]
+                event.dl1.tel[tel_id].peakpos = event.dl1.tel[tel_id].peakpos[0]
