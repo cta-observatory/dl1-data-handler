@@ -11,10 +11,20 @@ import logging
 import numpy as np
 import tables
 from ctapipe import io, calib
+from ctapipe.calib.camera.gainselection import ThresholdGainSelector
 
 from dl1_data_handler import table_definitions as table_defs
 
 logger = logging.getLogger(__name__)
+
+
+gain_threshold = {
+    'LSTCam': 4094,
+    'NectarCam': 4094,
+    'ASTRICam': 4094,
+}
+
+gain_selector = ThresholdGainSelector(select_by_sample=True)
 
 
 class DL1DataDumper(ABC):
@@ -338,8 +348,8 @@ class CTAMLDataDumper(DL1DataDumper):
                 if tel_id in event_container.dl1.tel:
                     tel_description = subarray.tels[tel_id]
 
-                    pixel_vector = event_container.dl1.tel[tel_id].image[0]
-                    peaks_vector = event_container.dl1.tel[tel_id].peakpos[0]
+                    pixel_vector = event_container.dl1.tel[tel_id].image
+                    peaks_vector = event_container.dl1.tel[tel_id].peakpos
 
                     image_table = self.file.get_node(
                         '/' + self.convert_tel_name(str(tel_description)),
@@ -707,6 +717,7 @@ class DL1DataWriter:
             # Write all events sequentially
             for event in event_source:
                 self.calibrator.calibrate(event)
+                combine_channels(event)
                 if (self.preselection_cut_function is not None and not
                         self.preselection_cut_function(event)):
                     continue
@@ -742,3 +753,62 @@ class DL1DataWriter:
                     # Reset event count and increment file count
                     event_count = 0
                     output_file_count += 1
+
+
+def gain_selection(waveform, image, peakpos, cam_id, threshold):
+    """
+    Based on the waveform and threshold, select the proper gain for each pixel.
+    By default, the channel 0 is kept.
+    If a pixel is saturated (value > threshold in the waveform), the channel 1 is used.
+
+    Parameters
+    ----------
+    waveform: array of waveforms of the events
+    image: array of calibrated pixel charges
+    peakpos: array of pixel peak positions
+    cam_id: str
+    threshold: int threshold to change form high gain to low gain
+
+    Returns
+    -------
+    combined_image, combined_peakpos: `(numpy.array, numpy.array)`
+        combined_image.shape = image.shape[1]
+    """
+
+    assert image.shape[0] == 2
+
+    gain_selector.thresholds[cam_id] = threshold
+
+    waveform, gain_mask = gain_selector.select_gains(cam_id, waveform)
+    signal_mask = gain_mask.max(axis=1)
+
+    combined_image = image[0].copy()
+    combined_image[signal_mask] = image[1][signal_mask]
+    combined_peakpos = peakpos[0].copy()
+    combined_peakpos[signal_mask] = peakpos[1][signal_mask]
+
+    return combined_image, combined_peakpos
+
+
+def combine_channels(event):
+    """
+    Combine the channels for the image and peakpos arrays in the event.dl1 containers
+    The `event.dl1.tel[tel_id].image` and `event.dl1.tel[tel_id].peakpos` are replaced by their combined versions
+
+    Parameters
+    ----------
+    event: `ctapipe.io.containers.DataContainer`
+    """
+    for tel_id in event.r0.tels_with_data:
+        cam_id = event.inst.subarray.tel[tel_id].camera.cam_id
+        if cam_id in gain_threshold:
+            waveform = event.r0.tel[tel_id].waveform
+            signals = event.dl1.tel[tel_id].image
+            peakpos = event.dl1.tel[tel_id].peakpos
+
+            combined_image, combined_peakpos = gain_selection(waveform, signals, peakpos, cam_id, gain_threshold[cam_id])
+            event.dl1.tel[tel_id].image = combined_image
+            event.dl1.tel[tel_id].peakpos = combined_peakpos
+        else:
+            event.dl1.tel[tel_id].image = event.dl1.tel[tel_id].image[0]
+            event.dl1.tel[tel_id].peakpos = event.dl1.tel[tel_id].peakpos[0]
