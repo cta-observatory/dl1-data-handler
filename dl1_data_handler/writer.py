@@ -7,12 +7,16 @@ import os
 import re
 import multiprocessing
 import logging
+import math
 
 import numpy as np
 import tables
+
+import ctapipe
 from ctapipe import io, calib
 from ctapipe.calib.camera.gainselection import ThresholdGainSelector
 
+import dl1_data_handler
 from dl1_data_handler import table_definitions as table_defs
 
 logger = logging.getLogger(__name__)
@@ -116,28 +120,12 @@ class CTAMLDataDumper(DL1DataDumper):
 
     def __init__(self,
                  output_filename,
-                 filter_settings={
-                     'complib': 'lzo',
-                     'complevel': 1
-                 },
+                 filter_settings=None,
                  expected_tel_types=10,
                  expected_tels=300,
                  expected_events=10000,
-                 expected_images_per_event={
-                     'LST:LSTCam': 0.5,
-                     'MST:NectarCam': 2.0,
-                     'MST:FlashCam': 2.0,
-                     'MST-SCT:SCTCam': 1.5,
-                     'SST:DigiCam': 1.25,
-                     'SST:ASTRICam': 1.25,
-                     'SST:CHEC': 1.25,
-                 },
-                 index_columns=[
-                     ('/Events', 'mc_energy'),
-                     ('/Events', 'alt'),
-                     ('/Events', 'az'),
-                     ('tel', 'event_index')
-                 ]):
+                 expected_images_per_event=None,
+                 index_columns=None):
         """Instantiate a CTAMLDataDumper instance.
 
         Parameters
@@ -172,17 +160,41 @@ class CTAMLDataDumper(DL1DataDumper):
         super().__init__(output_filename)
         self.file = tables.open_file(output_filename, mode="w")
 
-        if filter_settings:
-            self.filters = tables.Filters(**filter_settings)
+        if filter_settings is None:
+            self.filter_settings = {
+                     'complib': 'lzo',
+                     'complevel': 1
+            }
         else:
-            self.filters = None
+            self.filter_settings = filter_settings
+        self.filters = tables.Filters(**self.filter_settings)
 
         self.expected_tel_types = expected_tel_types
         self.expected_tels = expected_tels
         self.expected_events = expected_events
-        self.expected_images_per_event = expected_images_per_event
+        
+        if expected_images_per_event is None:
+            self.expected_images_per_event = {
+                     'LST:LSTCam': 0.5,
+                     'MST:NectarCam': 2.0,
+                     'MST:FlashCam': 2.0,
+                     'MST-SCT:SCTCam': 1.5,
+                     'SST:DigiCam': 1.25,
+                     'SST:ASTRICam': 1.25,
+                     'SST:CHEC': 1.25,
+                 },
+        else:
+            self.expected_images_per_event = expected_images_per_event
 
-        self.index_columns = index_columns
+        if index_columns is None:
+            self.index_columns = [
+                     ('/Events', 'mc_energy'),
+                     ('/Events', 'alt'),
+                     ('/Events', 'az'),
+                     ('tel', 'event_index')
+                 ]
+        else:
+            self.index_columns = index_columns
 
         self.image_tables = []
 
@@ -190,7 +202,7 @@ class CTAMLDataDumper(DL1DataDumper):
         """Cleanup + finalize output file."""
         self.finalize()
 
-    def dump_instrument_info(self, inst_container):
+    def dump_instrument_info(self, subarray):
         """Dump ctapipe instrument container to output file.
 
         If not present in the output file, creates two tables,
@@ -203,9 +215,27 @@ class CTAMLDataDumper(DL1DataDumper):
             ctapipe container of instrument data
 
         """
-        subarray = inst_container.subarray
 
-        if "/Array_Information" not in self.file:
+        if "/Array_Information" in self.file:
+            array_table = self.file.root.Array_Information
+            logger.info("Array_Information table already present. Validating...")
+            for tel_id in subarray.tels:
+                tel_desc = subarray.tels[tel_id]
+                rows = [row for row in array_table.iterrows()
+                        if row["id"] == tel_id and
+                        row["type"].decode('utf-8') == self.convert_tel_name(str(tel_desc)) and
+                        row["x"] == subarray.positions[tel_id].value[0] and
+                        row["y"] == subarray.positions[tel_id].value[1] and
+                        row["z"] == subarray.positions[tel_id].value[2]]
+
+                if len(rows) != 1:
+                    logger.error("Printing all entries in Array_Information...")
+                    for row in array_table.iterrows():
+                        logger.error("{}, {}, [{}, {}, {}]".format(row["id"], row["type"].decode('utf-8'), row["x"], row["y"], row["z"]))
+                    logger.error("Failed to find: {}, {}, {}".format(tel_id, self.convert_tel_name(str(tel_desc)), subarray.positions[tel_id].value))
+                    raise ValueError("Failed to validate telescope description in Array_Information.")
+
+        else:
             array_table = self._create_array_table()
             row = array_table.row
 
@@ -220,7 +250,36 @@ class CTAMLDataDumper(DL1DataDumper):
                 row.append()
             array_table.flush()
 
-        if "/Telescope_Type_Information" not in self.file:
+        if "/Telescope_Type_Information" in self.file:
+            tel_table = self.file.root.Telescope_Type_Information
+            max_px = max([len(x.camera.pix_id) for x in subarray.tel.values()])
+
+            logger.info("Telescope_Type_Information table already present. Validating...")
+            for tel_type in subarray.telescope_types:
+                tel_id = subarray.get_tel_ids_for_type(tel_type)[0]
+                tel_desc = subarray.tels[tel_id]
+
+                pos = np.zeros(shape=(max_px, 2))
+                x_len = subarray.tel[tel_id].camera.pix_x.value.shape[0]
+                y_len = subarray.tel[tel_id].camera.pix_y.value.shape[0]
+                pos[0:x_len, 0] = subarray.tel[tel_id].camera.pix_x.value
+                pos[0:y_len, 1] = subarray.tel[tel_id].camera.pix_y.value
+
+                rows = [row for row in tel_table.iterrows() if
+                            row["type"].decode('utf-8') == self.convert_tel_name(str(tel_desc)) and
+                            row["optics"].decode('utf-8') == str(tel_desc.optics) and
+                            row["camera"].decode('utf-8') == str(tel_desc.camera) and
+                            row["num_pixels"] == len(subarray.tel[tel_id].camera.pix_id) and
+                            np.allclose(row["pixel_positions"], pos)]
+
+                if len(rows) != 1:
+                    for row in tel_table.iterrows():
+                        logger.error("{}, {}, {}, {}".format(row["type"].decode('utf-8'), row["optics"].decode('utf-8'), row["camera"].decode('utf-8'), row["num_pixels"]))
+                        logger.error(row["pixel_positions"])
+                    logger.error("New input file: {}-{}-{}-{}".format(self.convert_tel_name(str(tel_desc)), str(tel_desc.optics), str(tel_desc.camera), len(subarray.tel[tel_id].camera.pix_id)))    
+                    logger.error(pos)
+                    raise ValueError("Failed to validate telescope type description in Telescope_Type_Information.")
+        else:
             # Compute maximum number of pixels across all camera types
             max_px = max([len(x.camera.pix_id) for x in subarray.tel.values()])
             tel_table = self._create_tel_table(subarray, max_px)
@@ -262,7 +321,28 @@ class CTAMLDataDumper(DL1DataDumper):
         mcheader_dict = mcheader_container.as_dict()
 
         for field in mcheader_dict:
-            attributes[field] = mcheader_dict[field]
+            if field in attributes:
+                if field == "num_showers":
+                    attributes[field] = attributes[field] + mcheader_dict[field]
+                elif field == "run_array_direction":
+                    if not np.allclose(attributes[field], mcheader_dict[field].value):
+                        raise ValueError("Attribute {} in output file root attributes does not match new value in input file: {} vs {}".format(field, attributes[field], mcheader_dict[field].value))
+                elif field == "shower_prog_start" or field == "detector_prog_start":
+                    continue
+                else:
+                    if hasattr(mcheader_dict[field], 'value'):
+                        match = math.isclose(attributes[field], mcheader_dict[field].value)  
+                    elif type(mcheader_dict[field]) is str or type(mcheader_dict[field]) is int:
+                        match = (attributes[field] == mcheader_dict[field])
+                    elif type(mcheader_dict[field]) is float:
+                        match = math.isclose(attributes[field], mcheader_dict[field])
+                    else:
+                        raise ValueError("Found unexpected type for field {} in MC header: {}".format(field, type(mcheader_dict[field])))
+                                     
+                    if not match:    
+                        raise ValueError("Attribute {} in output file root attributes does not match new value in input file: {} vs {}".format(field, attributes[field], mcheader_dict[field]))
+            else:
+                attributes[field] = mcheader_dict[field]
 
     def dump_header_info(self, input_filename):
         """Dump all non-ctapipe header data to output file.
@@ -281,12 +361,10 @@ class CTAMLDataDumper(DL1DataDumper):
 
         attributes = self.file.root._v_attrs
 
-        if not hasattr(attributes, 'dl1_data_writer_version'):
-            attributes['dl1_data_writer_version'] = (
-                pkg_resources.get_distribution('dl1-data-handler').version)
+        if not hasattr(attributes, 'dl1_data_handler_version'):
+            attributes['dl1_data_handler_version'] = pkg_resources.get_distribution('dl1_data_handler').version
         if not hasattr(attributes, 'ctapipe_version'):
-            attributes['ctapipe_version'] = (
-                pkg_resources.get_distribution('ctapipe').version)
+            attributes['ctapipe_version'] = pkg_resources.get_distribution('ctapipe').version
 
         if not hasattr(attributes, 'runlist'):
             attributes.runlist = []
@@ -306,7 +384,12 @@ class CTAMLDataDumper(DL1DataDumper):
             ctapipe container of all event data for a given event.
 
         """
-        event_table = self._create_event_table(event_container)
+        if "/Events" not in self.file:
+            logger.info("Creating event table...")
+            subarray = event_container.inst.subarray
+            event_table = self._create_event_table(subarray)
+
+        event_table = self.file.root.Events
         self._create_image_tables(event_container)
         event_row = event_table.row
         event_index = event_table.nrows
@@ -369,34 +452,77 @@ class CTAMLDataDumper(DL1DataDumper):
         event_row.append()
         event_table.flush()
 
-    def _create_event_table(self, event_container):
-        # Create event table
+    def dump_eventio_mc_event(self, eventio_mc_event, subarray, obs_id):
+        """Dump eventio event data (event params and images) to output file.
+
+        Creates '/Events' table in output file if not present, then does the
+        same for all required image tables. Finally, writes all event
+        parameters and images to tables.
+
+        Parameters
+        ----------
+        event_container : ctapipe.io.containers.DataContainer
+            ctapipe container of all event data for a given event.
+
+        """
         if "/Events" not in self.file:
             logger.info("Creating event table...")
+            event_table = self._create_event_table(subarray)
 
-            event_table_desc = table_defs.EventTableRow
-            subarray = event_container.inst.subarray
+        event_table = self.file.root.Events
+        event_row = event_table.row
+        event_index = event_table.nrows
 
-            for tel_type in subarray.telescope_types:
-                event_table_desc.columns[
-                    self.convert_tel_name(tel_type) + '_indices'] = (
-                        tables.UInt32Col(shape=(
-                            len(subarray.get_tel_ids_for_type(tel_type)))))
-                event_table_desc.columns[
-                    self.convert_tel_name(tel_type) + '_multiplicity'] = (
-                    tables.UInt32Col())
+        event_row['event_id'] = eventio_mc_event['event_id']
+        event_row['obs_id'] = obs_id
 
-            event_table = self.file.create_table(self.file.root,
-                                                 'Events',
-                                                 event_table_desc,
-                                                 "Table of Event Information",
-                                                 filters=self.filters,
-                                                 expectedrows=(
-                                                     self.expected_events))
-        else:
-            event_table = self.file.root.Events
+        event_row['shower_primary_id'] = eventio_mc_event['mc_shower']['primary_id']
+        event_row['core_x'] = eventio_mc_event['mc_event']['xcore']
+        event_row['core_y'] = eventio_mc_event['mc_event']['ycore']
+        event_row['h_first_int'] = eventio_mc_event['mc_shower']['h_first_int']
+        event_row['x_max'] = eventio_mc_event['mc_shower']['xmax']
+        event_row['mc_energy'] = eventio_mc_event['mc_shower']['energy']
+        event_row['alt'] = eventio_mc_event['mc_shower']['altitude']
+        event_row['az'] = eventio_mc_event['mc_shower']['azimuth']
 
-        return event_table
+        # Write images and image index vectors
+        image_index_vectors = {tel_type: []
+                               for tel_type in subarray.telescope_types}
+
+        for tel_type in subarray.telescope_types:
+            # Note that index vectors are sorted by tel ID
+            for tel_id in sorted(subarray.get_tel_ids_for_type(tel_type)):
+                index_vector = image_index_vectors[tel_type]
+                index_vector.append(0)
+
+        for tel_type in image_index_vectors:
+            event_row[self.convert_tel_name(tel_type) + '_indices'] = (
+                image_index_vectors[tel_type])
+            event_row[self.convert_tel_name(tel_type) + '_multiplicity'] = 0
+
+        event_row.append()
+        event_table.flush()
+
+    def _create_event_table(self, subarray):
+        # Create event table
+        event_table_desc = table_defs.EventTableRow
+
+        for tel_type in subarray.telescope_types:
+            event_table_desc.columns[
+                self.convert_tel_name(tel_type) + '_indices'] = (
+                tables.UInt32Col(shape=(
+                    len(subarray.get_tel_ids_for_type(tel_type)))))
+            event_table_desc.columns[
+                self.convert_tel_name(tel_type) + '_multiplicity'] = (
+                tables.UInt32Col())
+
+        event_table = self.file.create_table(self.file.root,
+                                             'Events',
+                                             event_table_desc,
+                                             "Table of Event Information",
+                                             filters=self.filters,
+                                             expectedrows=(
+                                                 self.expected_events))
 
     def _create_image_tables(self, event_container):
         # Create image tables (by telescope type)
@@ -521,18 +647,12 @@ class DL1DataWriter:
                  event_source_settings=None,
                  data_dumper_class=CTAMLDataDumper,
                  data_dumper_settings=None,
-                 calibration_settings={
-                     'r1_product': 'HESSIOR1Calibrator',
-                     'extractor_product': 'NeighbourPeakIntegrator'
-                 },
+                 calibration_settings=None,
                  preselection_cut_function=None,
                  output_file_size=10737418240,
                  events_per_file=None,
-                 gain_thresholds = {
-                    'LSTCam': 4094,
-                    'NectarCam': 4094,
-                    'ASTRICam': 4094,
-                }):
+                 gain_thresholds=None,
+                 save_nontriggered_events=False):
         """Initialize a DL1DataWriter instance.
 
         Provides some options for controlling the output file sizes.
@@ -583,6 +703,8 @@ class DL1DataWriter:
         self.output_file_size = output_file_size
         self.events_per_file = events_per_file
 
+        self.save_nontriggered_events = save_nontriggered_events
+
         if self.output_file_size:
             logger.info("Max output file size set at {} bytes. Note that "
                         "this may increase the number of output "
@@ -592,11 +714,27 @@ class DL1DataWriter:
                         "that this may increase the number of output "
                         "files.".format(self.events_per_file))
 
+        if calibration_settings is None:
+            self.calibration_settings = {
+                     'r1_product': 'HESSIOR1Calibrator',
+                     'extractor_product': 'NeighbourPeakIntegrator'
+                 }
+        else:
+            self.calibration_settings = calibration_settings
+
         self.calibrator = calib.camera.calibrator.CameraCalibrator(
             None, None, **calibration_settings)
-        
+
         self.gain_selector = ThresholdGainSelector(select_by_sample=True)
-        self.gain_thresholds = gain_thresholds
+        
+        if gain_thresholds is None:
+            self.gain_thresholds = {
+                    'LSTCam': 4094,
+                    'NectarCam': 4094,
+                    'ASTRICam': 4094,
+                }
+        else:
+            self.gain_thresholds = gain_thresholds
 
     def process_data(self, run_list):
         """Process data from a list of runs in parallel.
@@ -687,12 +825,13 @@ class DL1DataWriter:
             Filename of the output file to write data to.
 
         """
+        output_file_count = 1
+        event_count = 0
+
         data_dumper = self.data_dumper_class(
             output_filename,
             **self.data_dumper_settings)
 
-        output_file_count = 2
-        event_count = 0
         for filename in file_list:
             if self.event_source_class:
                 event_source = self.event_source_class(
@@ -705,7 +844,7 @@ class DL1DataWriter:
             example_event = next(event_source._generator())
             try:
                 data_dumper.dump_header_info(filename)
-                data_dumper.dump_instrument_info(example_event.inst)
+                data_dumper.dump_instrument_info(example_event.inst.subarray)
                 data_dumper.dump_mc_header_info(example_event.mcheader)
             except IOError:
                 logger.error("Failed to write header info from file "
@@ -713,6 +852,8 @@ class DL1DataWriter:
                                  filename))
                 continue
 
+            if self.save_nontriggered_events:
+                events_seen = set()
             # Write all events sequentially
             for event in event_source:
                 self.calibrator.calibrate(event)
@@ -723,21 +864,26 @@ class DL1DataWriter:
                 try:
                     data_dumper.dump_event(event)
                     event_count += 1
+                    if self.save_nontriggered_events:
+                        events_seen.add(event.dl0.event_id)
                 except IOError:
                     logger.error("Failed to write event from file "
                                  "{}, skipping...".format(
                                      filename))
                     break
 
-                # Check whether to create another file
                 max_events_reached = ((self.events_per_file is not None) and (
-                    event_count >= self.events_per_file))
+                        event_count >= self.events_per_file))
 
                 max_size_reached = ((self.output_file_size is not None) and (
-                    os.path.getsize(
-                        data_dumper.output_filename) > self.output_file_size))
+                        os.path.getsize(
+                            data_dumper.output_filename) > self.output_file_size))
 
                 if max_events_reached or max_size_reached:
+                    # Reset event count and increment file count
+                    event_count = 0
+                    output_file_count += 1
+
                     output_filename = self._get_next_filename(
                         output_filename,
                         output_file_count)
@@ -747,11 +893,50 @@ class DL1DataWriter:
                     data_dumper = self.data_dumper_class(
                         output_filename, **self.data_dumper_settings)
                     data_dumper.dump_header_info(filename)
-                    data_dumper.dump_instrument_info(event.inst)
+                    data_dumper.dump_instrument_info(event.inst.subarray)
                     data_dumper.dump_mc_header_info(event.mcheader)
-                    # Reset event count and increment file count
-                    event_count = 0
-                    output_file_count += 1
+
+            if self.save_nontriggered_events:
+                example_mc_event = next(event_source.file_.iter_mc_events())
+                subarray = io.SimTelEventSource.prepare_subarray_info(event_source.file_.telescope_descriptions,
+                                                                        event_source.file_.header)
+                for mc_event in event_source.file_.iter_mc_events():
+                    try:
+                        if mc_event['event_id'] not in events_seen:
+                            data_dumper.dump_eventio_mc_event(mc_event, subarray, event_source.file_.header['run'])
+                            event_count += 1
+                    except IOError:
+                        logger.error("Failed to write event from file "
+                                     "{}, skipping...".format(
+                            filename))
+                        break
+
+                    # Check whether to create another file
+                    max_events_reached = ((self.events_per_file is not None) and (
+                            event_count >= self.events_per_file))
+
+                    max_size_reached = ((self.output_file_size is not None) and (
+                            os.path.getsize(
+                                data_dumper.output_filename) > self.output_file_size))
+
+                    if max_events_reached or max_size_reached:
+                        output_filename = self._get_next_filename(
+                            output_filename,
+                            output_file_count)
+
+                        # Create a new Data Dumper pointing at a new file
+                        # and write file-level data
+                        data_dumper = self.data_dumper_class(
+                            output_filename, **self.data_dumper_settings)
+                        data_dumper.dump_header_info(filename)
+                        data_dumper.dump_instrument_info(subarray)
+                        temp = io.DataContainer()
+                        event_source.fill_mc_information(temp, mc_event)
+                        data_dumper.dump_mc_header_info(temp.mcheader)
+                        # Reset event count and increment file count
+                        event_count = 0
+                        output_file_count += 1
+
 
     def gain_selection(self, waveform, image, peakpos, cam_id, threshold):
         """
