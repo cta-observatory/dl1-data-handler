@@ -723,7 +723,7 @@ class DL1DataWriter:
             self.calibration_settings = calibration_settings
 
         self.calibrator = calib.camera.calibrator.CameraCalibrator(
-            None, None, **calibration_settings)
+            None, None, **self.calibration_settings)
 
         self.gain_selector = ThresholdGainSelector(select_by_sample=True)
         
