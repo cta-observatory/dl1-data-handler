@@ -6,7 +6,7 @@ the output PyTables .h5 files.
 """
 
 from tables import (IsDescription, UInt32Col, UInt16Col, UInt8Col,
-                    Float32Col, StringCol)
+                    Float32Col, StringCol, BoolCol)
 
 
 class EventTableRow(IsDescription):
@@ -23,6 +23,8 @@ class EventTableRow(IsDescription):
     obs_id : tables.UInt32Col
         Shower observation (run) id. Replaces old "run_id" in ctapipe r0
         container.
+    triggered : tables.BoolCol
+        Whether the (Monte Carlo) shower triggered the array
     shower_primary_id : tables.UInt8Col
         Particle type id for the shower primary particle. From Monte Carlo
         simulation parameters.
@@ -47,6 +49,7 @@ class EventTableRow(IsDescription):
 
     event_id = UInt32Col()
     obs_id = UInt32Col()
+    triggered = BoolCol()
     shower_primary_id = UInt8Col()
     core_x = Float32Col()
     core_y = Float32Col()
