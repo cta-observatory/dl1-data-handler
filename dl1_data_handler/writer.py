@@ -210,7 +210,10 @@ class CTAMLDataDumper(DL1DataDumper):
             self.file.get_node("/" + table).flush()
 
         self.finalize()
-        #self.file.close()
+        try:
+            self.file.close()
+        except:
+            pass
 
     def dump_instrument_info(self, subarray):
         """Dump ctapipe instrument container to output file.
@@ -542,9 +545,6 @@ class CTAMLDataDumper(DL1DataDumper):
 
                 image_row.append()
                 table.flush()
-            else:
-                table = self.file.get_node(
-                    "/" + self.convert_tel_name(tel_name), classname='Table')
 
     def prepare_file(self, input_filename, subarray, mcheader):
         """Dump file-level data to file and setup file structure.
