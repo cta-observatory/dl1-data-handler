@@ -168,7 +168,7 @@ class DL1DataReader:
         if image_channels is None:
             image_channels = ['charge']
         self.image_channels = image_channels
-        self.image_mapper = ImageMapper(mapping_method, image_channels,
+        self.image_mapper = ImageMapper(channels=self.image_channels,
                                         **mapping_settings)
 
         if array_info is None:
@@ -190,7 +190,7 @@ class DL1DataReader:
                     'dtype': np.dtype(np.float32)
                     }
                 ]
-            for col_name in array_info:
+            for col_name in self.array_info:
                 col = f.root.Array_Information.cols._f_col(col_name)
                 self.unprocessed_example_description.append(
                     {
@@ -220,7 +220,7 @@ class DL1DataReader:
                     'dtype': np.dtype(np.int8)
                     }
                 ]
-            for col_name in array_info:
+            for col_name in self.array_info:
                 col = f.root.Array_Information.cols._f_col(col_name)
                 self.unprocessed_example_description.append(
                     {
@@ -252,7 +252,7 @@ class DL1DataReader:
                         'dtype': np.dtype(np.int8)
                         }
                     ])
-                for col_name in array_info:
+                for col_name in self.array_info:
                     col = f.root.Array_Information.cols._f_col(col_name)
                     self.unprocessed_example_description.append(
                         {
@@ -396,16 +396,26 @@ class DL1DataReader:
     # the array names listed in the iterable group_by.
     def num_examples(self, group_by=None):
         example_indices = []
-        if group_by:
+        if group_by is not None:
             for name in group_by:
-                index = [i for i, des in enumerate(self.example_description)
-                         if des['name'] == name][0]
-                example_indices.append(index)
+                for idx, des in enumerate(self.example_description):
+                    if des['name'] == name:
+                        example_indices.append(idx)
         num_examples = {}
         for example in self:
-            group = tuple([example[index] for index in example_indices])
+            # Use tuple() and tolist() to convert list and NumPy array
+            # to hashable keys
+            group = tuple([example[idx].tolist() for idx in example_indices])
             if group in num_examples:
                 num_examples[group] += 1
             else:
                 num_examples[group] = 1
         return num_examples
+
+    # Return a generator iterating over the examples. This convenience
+    # function is compatible with tensorflow.Dataset.from_generator().
+    # https://www.tensorflow.org/api_docs/python/tf/data/Dataset#from_generator
+    def generator(self, indices=None):
+        selected_indices = range(len(self)) if indices is None else indices
+        for idx in selected_indices:
+            yield self[idx]
