@@ -6,7 +6,7 @@ the output PyTables .h5 files.
 """
 
 from tables import (IsDescription, UInt32Col, UInt16Col, UInt8Col,
-                    Float32Col, StringCol, BoolCol)
+                    Float32Col, StringCol)
 
 
 class EventTableRow(IsDescription):
