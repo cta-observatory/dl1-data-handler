@@ -122,8 +122,8 @@ class ImageMapper:
                 channels  # number of channels
                 )
 
-            if camtype != "FACT":
-                self.mapping_tables[camtype] = self.generate_table(camtype)
+            # Calculating the mapping tables for the selected camera types
+            self.mapping_tables[camtype] = self.generate_table(camtype)
 
     def map_image(self, pixels, camera_type):
         """
@@ -171,6 +171,8 @@ class ImageMapper:
         if map_method == 'rebinning':
             grid_size_factor = 10
         hex_grid, table_grid = self.get_grids(pos, camera_type, grid_size_factor)
+        # Updating output_dim, since it could be modified in self.get_grid()
+        output_dim = self.image_shapes[camera_type][0]
 
         # Oversampling and nearest interpolation
         if map_method in ['oversampling', 'nearest_interpolation', 'image_shifting', 'axial_addressing']:
