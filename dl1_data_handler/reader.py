@@ -396,20 +396,25 @@ class DL1DataReader:
 
     # Return a dictionary of number of examples in the dataset, grouped by
     # the array names listed in the iterable group_by.
-    def num_examples(self, group_by=None):
-        example_indices = []
+    # If example_indices is a list of indices, consider only those examples,
+    # otherwise all examples in the reader are considered.
+    def num_examples(self, group_by=None, example_indices=None):
+        grouping_indices = []
         if group_by is not None:
             for name in group_by:
                 for idx, des in enumerate(self.example_description):
                     if des['name'] == name:
-                        example_indices.append(idx)
-        num_examples = {}
-        for example in self:
+                        grouping_indices.append(idx)
+        group_nums = {}
+        if example_indices is None:
+            example_indices = list(range(len(self)))
+        for idx in example_indices:
+            example = self[idx]
             # Use tuple() and tolist() to convert list and NumPy array
             # to hashable keys
-            group = tuple([example[idx].tolist() for idx in example_indices])
-            if group in num_examples:
-                num_examples[group] += 1
+            group = tuple([example[idx].tolist() for idx in grouping_indices])
+            if group in group_nums:
+                group_nums[group] += 1
             else:
-                num_examples[group] = 1
-        return num_examples
+                group_nums[group] = 1
+        return group_nums
