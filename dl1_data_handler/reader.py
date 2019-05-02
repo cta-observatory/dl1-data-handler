@@ -413,11 +413,3 @@ class DL1DataReader:
             else:
                 num_examples[group] = 1
         return num_examples
-
-    # Return a generator iterating over the examples. This convenience
-    # function is compatible with tensorflow.Dataset.from_generator().
-    # https://www.tensorflow.org/api_docs/python/tf/data/Dataset#from_generator
-    def generator(self, indices=None):
-        selected_indices = range(len(self)) if indices is None else indices
-        for idx in selected_indices:
-            yield tuple(self[idx])
