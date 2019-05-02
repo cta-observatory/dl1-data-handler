@@ -4,6 +4,8 @@ import bisect
 
 from scipy import spatial
 from scipy.sparse import csr_matrix
+from scipy.ndimage import rotate
+from astropy import units as u
 from collections import Counter
 
 from ctapipe.instrument.camera import CameraGeometry
@@ -20,6 +22,7 @@ class ImageMapper:
                  mapping_method=None,
                  padding=None,
                  interpolation_image_shape=None,
+                 rotate_camera=False,
                  mask_interpolation=False,
                  channels=1):
 
@@ -69,6 +72,9 @@ class ImageMapper:
 
         # Mask interpolation
         self.mask = True if mask_interpolation else False
+
+        # Rotate the camera back to the actual orientation. The pixel are moved into a horizontal grid to perform the image_mapper algorithm.
+        self.rot_cam = True if rotate_camera else False
 
         # Camera geometries and mapping tables initialization
         self.camera_geometries = {}
@@ -498,8 +504,8 @@ class ImageMapper:
         if self.mask and map_method in ['bilinear_interpolation', 'bicubic_interpolation']:
             mapping_matrix3d = self.apply_mask_interpolation(mapping_matrix3d, nn_index, num_pixels, pad)
         # Rotating the camera back to the original orientation
-        # if camera_type in ['LSTCam', 'NectarCam', 'MAGICCam'] and hex_algo not in ['image_shifting', 'axial_addressing']:
-        #    mapping_matrix3d = self.rotate_mapping_table(mapping_matrix3d,camera_type,output_dim+pad*2,self.pixel_rotation[camera_type])
+        if self.rot_cam and camera_type in ['LSTCam', 'NectarCam', 'MAGICCam'] and map_method not in ['image_shifting', 'axial_addressing']:
+             mapping_matrix3d = self.rotate_mapping_table(mapping_matrix3d,90.0-CameraGeometry.from_name(camera_type).pix_rotation.deg)
         # Normalization (approximation) of the mapping table
         if map_method in ['rebinning', 'bilinear_interpolation', 'bicubic_interpolation']:
             mapping_matrix3d = self.normalize_mapping_matrix(mapping_matrix3d, num_pixels)
@@ -889,6 +895,14 @@ class ImageMapper:
         for i in range(1, mapping_matrix3d.shape[0]):
             mapping_matrix3d[i] *= mask
         return mapping_matrix3d
+
+    @staticmethod
+    def rotate_mapping_table(mapping_matrix3d,angle):
+        mapping_table = []
+        for i in np.arange(0,mapping_matrix3d.shape[0],1):
+            image = rotate(mapping_matrix3d[i],angle,reshape=False,prefilter=False)
+            mapping_table.append(image)
+        return np.array(mapping_table)
 
     @staticmethod
     def rotate_pixel_pos(pos, angle_deg):
