@@ -197,7 +197,7 @@ class DL1DataReader:
                         'name': col_name,
                         'tel_type': self.tel_type,
                         'base_name': col_name,
-                        'shape': col.shape[1:],
+                        'shape': (1,) + col.shape[1:],
                         'dtype': col.dtype
                         }
                     )
@@ -336,9 +336,10 @@ class DL1DataReader:
 
         def append_array_info(array_info, tel_id):
             query = "id == {}".format(tel_id)
-            row = [row for row in f.root.Array_Information.where(query)][0]
-            for info, column in zip(array_info, self.array_info):
-                info.append(row[column])
+            for row in f.root.Array_Information.where(query):
+                for info, column in zip(array_info, self.array_info):
+                    dtype = f.root.Array_Information.cols._f_col(column).dtype
+                    info.append(np.array(row[column], dtype=dtype))
 
         def load_tel_type_data(nrow, tel_type):
             images = []
@@ -368,7 +369,7 @@ class DL1DataReader:
 
             array_info = [[] for column in self.array_info]
             append_array_info(array_info, tel_id)
-            example.extend([info for info in array_info])
+            example.extend([np.stack(info) for info in array_info])
         elif self.mode == "stereo":
             # Get a list of images and an array of binary trigger values
             nrow = identifiers[1]
@@ -385,7 +386,8 @@ class DL1DataReader:
         # Load event info
         record = f.root.Events[nrow]
         for column in self.event_info:
-            example.append(record[column])
+            dtype = f.root.Events.cols._f_col(column).dtype
+            example.append(np.array(record[column], dtype=dtype))
 
         # Preprocess the example
         example = self.processor.process(example)
@@ -418,4 +420,4 @@ class DL1DataReader:
     def generator(self, indices=None):
         selected_indices = range(len(self)) if indices is None else indices
         for idx in selected_indices:
-            yield self[idx]
+            yield tuple(self[idx])
