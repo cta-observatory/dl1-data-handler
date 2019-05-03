@@ -3,7 +3,7 @@ import numpy as np
 class ImageMapper():
 
     def __init__(self, **kwargs):
-        self.mapping_method = kwargs['mapping_method']
+        self.mapping_method = kwargs.get('mapping_method', 'vector')
         self.channels = kwargs['channels']
         self.mapping_tables = {}
         self.image_shape = {
