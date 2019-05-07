@@ -189,10 +189,10 @@ class ImageMapper:
                 pixel_weight = 1 / 4
             else:
                 pixel_weight = 1
-            mapping_matrix3d = np.zeros((hex_grid.shape[0] + 1, output_dim + pad * 2, output_dim + pad * 2))
+            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2))
             for y_grid in np.arange(output_dim):
                 for x_grid in np.arange(output_dim):
-                    mapping_matrix3d[nn_index[y_grid][x_grid] + 1][y_grid + pad][x_grid + pad] = pixel_weight
+                    mapping_matrix3d[nn_index[y_grid][x_grid]][y_grid + pad][x_grid + pad] = pixel_weight
 
         # Rebinning (approximation)
         elif map_method == 'rebinning':
@@ -202,12 +202,12 @@ class ImageMapper:
                                   (output_dim * grid_size_factor, output_dim * grid_size_factor))
 
             # Calculating the overlapping area/weights for each square pixel
-            mapping_matrix3d = np.zeros((hex_grid.shape[0] + 1, output_dim + pad * 2, output_dim + pad * 2))
+            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2))
             for y_grid in np.arange(0, output_dim * grid_size_factor, grid_size_factor):
                 for x_grid in np.arange(0, output_dim * grid_size_factor, grid_size_factor):
                     counter = Counter(
                         np.reshape(nn_index[y_grid:y_grid + grid_size_factor, x_grid:x_grid + grid_size_factor], -1))
-                    pixel_index = np.array(list(counter.keys())) + 1
+                    pixel_index = np.array(list(counter.keys()))
                     weights = list(counter.values()) / np.sum(list(counter.values()))
                     for key in np.arange(0, len(pixel_index), 1):
                         mapping_matrix3d[pixel_index[key]][int(y_grid / grid_size_factor) + pad][
@@ -287,11 +287,11 @@ class ImageMapper:
             weights = np.reshape(weights, (output_dim, output_dim, weights.shape[1]))
             corner_indexes = np.reshape(corner_indexes, (output_dim, output_dim, corner_indexes.shape[1]))
 
-            mapping_matrix3d = np.zeros((hex_grid.shape[0] + 1, output_dim + pad * 2, output_dim + pad * 2))
+            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2))
             for i in np.arange(0, output_dim, 1):
                 for j in np.arange(0, output_dim, 1):
                     for k in np.arange(0, corner_indexes.shape[2], 1):
-                        mapping_matrix3d[corner_indexes[j][i][k] + 1][j + pad][i + pad] = weights[j][i][k]
+                        mapping_matrix3d[corner_indexes[j][i][k]][j + pad][i + pad] = weights[j][i][k]
 
         # Bicubic interpolation
         elif map_method == 'bicubic_interpolation':
@@ -486,20 +486,20 @@ class ImageMapper:
                 corner_indexes = np.reshape(simplexes_2NN,
                                             (simplexes_2NN.shape[0], output_dim, output_dim, simplexes_2NN.shape[2]))
 
-            mapping_matrix3d = np.zeros((hex_grid.shape[0] + 1, output_dim + pad * 2, output_dim + pad * 2))
+            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2))
             for i in np.arange(0, 4, 1):
                 for j in np.arange(0, output_dim, 1):
                     for k in np.arange(0, output_dim, 1):
                         for l in np.arange(0, weights.shape[3], 1):
                             if weights.shape[3] == 3:
-                                mapping_matrix3d[corner_indexes[i][k][j][l] + 1][k + pad][j + pad] = weights[i][k][j][
+                                mapping_matrix3d[corner_indexes[i][k][j][l]][k + pad][j + pad] = weights[i][k][j][
                                                                                                          l] / 4
                             elif weights.shape[3] == 4:
-                                mapping_matrix3d[corner_indexes[k][j][i][l] + 1][k + pad][j + pad] = weights[k][j][i][
+                                mapping_matrix3d[corner_indexes[k][j][i][l]][k + pad][j + pad] = weights[k][j][i][
                                                                                                          l] / 4
 
         # Cutting the mapping table after num_pixels+1, since the virtual pixels have intensity zero.
-        mapping_matrix3d = mapping_matrix3d[:num_pixels + 1]
+        mapping_matrix3d = mapping_matrix3d[:num_pixels]
         # Mask interpolation
         if self.mask and map_method in ['bilinear_interpolation', 'bicubic_interpolation']:
             mapping_matrix3d = self.apply_mask_interpolation(mapping_matrix3d, nn_index, num_pixels, pad)
