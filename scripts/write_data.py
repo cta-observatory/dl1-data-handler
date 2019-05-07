@@ -26,8 +26,7 @@ if __name__ == '__main__':
         output filenames.')
     parser.add_argument(
         '--output_dir',
-        help='Path to directory to create output files.',
-        default='.')
+        help='Path to directory to create output files. It overwrites the output path found in the runlist.')
     parser.add_argument(
         '--config_file',
         help='YAML configuration file for settings.')
@@ -46,7 +45,8 @@ if __name__ == '__main__':
     runlist = yaml.load(open(args.runlist, 'r'))
 
     for run in runlist:
-        run['target'] = os.path.join(args.output_dir, run['target'])
+        if args.output_dir:
+            run['target'] = os.path.join(args.output_dir, os.path.basename(run['target']))
 
     logger.info("Number of input files in runlist: {}".format(
         len([input_file for run in runlist for input_file in run['inputs']])))
