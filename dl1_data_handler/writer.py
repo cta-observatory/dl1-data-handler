@@ -116,6 +116,7 @@ class CTAMLDataDumper(DL1DataDumper):
 
     def __init__(self,
                  output_filename,
+                 write_mode='parallel',
                  filter_settings=None,
                  expected_tel_types=10,
                  expected_tels=300,
@@ -129,6 +130,9 @@ class CTAMLDataDumper(DL1DataDumper):
         ----------
         output_filename : str
             String path to output file.
+        write_mode : str
+            Whether to process the data with parallel threads (one per run)
+            or in serial. Valid options are 'serial' and 'parallel'.
         filter_settings : dict
             Dictionary of filter settings (kwargs), passed to the constructor
             for tables.Filters. Determines compression settings.
@@ -156,6 +160,9 @@ class CTAMLDataDumper(DL1DataDumper):
         """
         super().__init__(output_filename)
         self.file = tables.open_file(output_filename, mode="w")
+
+        if write_mode in ['serial', 'parallel']:
+            self.write_mode = write_mode
 
         if filter_settings is None:
             self.filter_settings = {
@@ -755,10 +762,13 @@ class DL1DataWriter:
             self.gain_thresholds = gain_thresholds
 
     def process_data(self, run_list):
-        """Process data from a list of runs in parallel.
+        """Process data from a list of runs.
 
-        Creates one process for each requested run and executes them all in
-        parallel.
+        If the selected write mode is parallel, creates one process for
+        each requested run and executes them all in parallel.
+
+        If the selected write mode is sequential, executes each run sequentially,
+        writing each target one by one.
 
         Parameters
         ----------
@@ -769,30 +779,37 @@ class DL1DataWriter:
              to which the data from the input files should be written.
 
         """
-        num_processes = len(run_list)
-        logger.info("{} parallel processes requested.".format(num_processes))
+        if self.write_mode == 'parallel':
+            num_processes = len(run_list)
+            logger.info("{} parallel processes requested.".format(num_processes))
 
-        logger.info("Creating processes...")
-        jobs = []
-        for i in range(0, num_processes):
-            process = multiprocessing.Process(target=self._process_data,
-                                              args=(run_list[i]['inputs'],
-                                                    run_list[i]['target']))
-            jobs.append(process)
+            logger.info("Creating processes...")
+            jobs = []
+            for i in range(0, num_processes):
+                process = multiprocessing.Process(target=self._process_data,
+                                                  args=(run_list[i]['inputs'],
+                                                        run_list[i]['target']))
+                jobs.append(process)
 
-        logger.info("Starting processes...")
-        try:
-            # Start all parallel processes
-            for j in jobs:
-                j.start()
+            logger.info("Starting processes...")
+            try:
+                # Start all parallel processes
+                for j in jobs:
+                    j.start()
 
-            # Wait for all processes to complete
-            for j in jobs:
-                j.join()
-        except KeyboardInterrupt:
-            logger.error("Caught keyboard interrupt, killing all processes...")
-            for j in jobs:
-                j.terminate()
+                # Wait for all processes to complete
+                for j in jobs:
+                    j.join()
+            except KeyboardInterrupt:
+                logger.error("Caught keyboard interrupt, killing all processes...")
+                for j in jobs:
+                    j.terminate()
+        elif self.write_mode == 'serial':
+            logger.info("Serial processing requested.")
+
+            for run in run_list:
+                logger.info("Starting run for target: {}...".format(run['target']))
+                self._process_data(run['inputs'], run['target'])
 
         logger.info("Done!")
 
