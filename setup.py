@@ -8,6 +8,7 @@ setup(name='dl1_data_handler',
       license='MIT',
       packages=['dl1_data_handler'],
       install_requires=[
+          'astropy',
           'numpy>=1.15.0',
           'scipy',
           'tables>=3.4.4',

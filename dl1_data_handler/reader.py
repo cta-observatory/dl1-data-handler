@@ -316,12 +316,10 @@ class DL1DataReader:
                   in f.root.Telescope_Type_Information.where(query)][0]
         num_channels = len(self.image_channels)
         vector = np.empty(shape=(length, num_channels), dtype=np.float32)
-        # An "empty" pixel at index 0 is used to fill blank areas in image
-        vector[0, :] = 0.0
         # If the telescope didn't trigger, the image index is 0 and a blank
         # image of all zeros with be loaded
         for i, channel in enumerate(self.image_channels):
-            vector[0:, i] = record[channel]
+            vector[:, i] = record[channel]
         image = self.image_mapper.map_image(vector, get_camera_type(tel_type))
 
         return image
