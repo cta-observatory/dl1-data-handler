@@ -1,5 +1,6 @@
 Data Writer:
   Settings:
+    write_mode: 'parallel'
     calibration_settings:
         r1_product: 'HESSIOR1Calibrator'
         extractor_product: 'NeighbourPeakIntegrator'
