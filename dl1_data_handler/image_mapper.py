@@ -10,8 +10,6 @@ from collections import Counter
 
 from ctapipe.instrument.camera import CameraGeometry
 
-from dl1_data_handler import processor
-
 logger = logging.getLogger(__name__)
 
 
@@ -24,7 +22,7 @@ class ImageMapper:
                  interpolation_image_shape=None,
                  rotate_camera=False,
                  mask_interpolation=False,
-                 channels=1):
+                 channels=['charge']):
 
         # image_shapes should be a non static field to prevent problems
         # when multiple instances of ImageMapper are created
@@ -84,10 +82,6 @@ class ImageMapper:
             # Get a corresponding CameraGeometry
             self.camera_geometries[camtype] = CameraGeometry.from_name(camtype)
 
-            # Rotate it if necessary
-            #if camtype in ['LSTCam', 'NectarCam', 'MAGICCam']:
-                #self.camera_geometries[camtype].rotate(90.0 * u.deg - self.camera_geometries[camtype].pix_rotation)
-
             map_method = self.mapping_method[camtype]
             if map_method not in ['oversampling', 'rebinning', 'nearest_interpolation', 'bilinear_interpolation',
                                   'bicubic_interpolation', 'image_shifting', 'axial_addressing']:
@@ -96,7 +90,7 @@ class ImageMapper:
                 raise ValueError(
                     "{} (hexagonal convolution) is not available for square pixel cameras.".format(map_method))
 
-            if map_method not in ['oversampling', 'image_shifting', 'axial_addressing']:
+            if map_method in ['rebinning', 'nearest_interpolation', 'bilinear_interpolation', 'bicubic_interpolation']:
                 self.image_shapes[camtype] = self.interpolation_image_shape[camtype]
 
             # At the edges of the cameras the mapping methods run into issues.
@@ -125,7 +119,7 @@ class ImageMapper:
             self.image_shapes[camtype] = (
                 self.image_shapes[camtype][0],
                 self.image_shapes[camtype][1],
-                channels  # number of channels
+                len(channels)  # number of channels
                 )
 
             # Calculating the mapping tables for the selected camera types
@@ -498,7 +492,7 @@ class ImageMapper:
                                 mapping_matrix3d[corner_indexes[k][j][i][l]][k + pad][j + pad] = weights[k][j][i][
                                                                                                          l] / 4
 
-        # Cutting the mapping table after num_pixels+1, since the virtual pixels have intensity zero.
+        # Cutting the mapping table after num_pixels, since the virtual pixels have intensity zero.
         mapping_matrix3d = mapping_matrix3d[:num_pixels]
         # Mask interpolation
         if self.mask and map_method in ['bilinear_interpolation', 'bicubic_interpolation']:
@@ -881,8 +875,8 @@ class ImageMapper:
 
     @staticmethod
     def normalize_mapping_matrix(mapping_matrix3d, num_pixels):
-        norm_factor = np.sum(mapping_matrix3d[1:]) / float(num_pixels)
-        mapping_matrix3d[1:] /= norm_factor
+        norm_factor = np.sum(mapping_matrix3d) / float(num_pixels)
+        mapping_matrix3d /= norm_factor
         return mapping_matrix3d
 
     @staticmethod
