@@ -116,7 +116,6 @@ class CTAMLDataDumper(DL1DataDumper):
 
     def __init__(self,
                  output_filename,
-                 write_mode='parallel',
                  filter_settings=None,
                  expected_tel_types=10,
                  expected_tels=300,
@@ -130,9 +129,6 @@ class CTAMLDataDumper(DL1DataDumper):
         ----------
         output_filename : str
             String path to output file.
-        write_mode : str
-            Whether to process the data with parallel threads (one per run)
-            or in serial. Valid options are 'serial' and 'parallel'.
         filter_settings : dict
             Dictionary of filter settings (kwargs), passed to the constructor
             for tables.Filters. Determines compression settings.
@@ -160,9 +156,6 @@ class CTAMLDataDumper(DL1DataDumper):
         """
         super().__init__(output_filename)
         self.file = tables.open_file(output_filename, mode="w")
-
-        if write_mode in ['serial', 'parallel']:
-            self.write_mode = write_mode
 
         if filter_settings is None:
             self.filter_settings = {
@@ -670,6 +663,7 @@ class DL1DataWriter:
                  data_dumper_settings=None,
                  calibration_settings=None,
                  preselection_cut_function=None,
+                 write_mode='parallel',
                  output_file_size=10737418240,
                  events_per_file=None,
                  gain_thresholds=None,
@@ -701,6 +695,9 @@ class DL1DataWriter:
             ctapipe.io.containers.DataContainer describing a single event and
             returns a boolean indicating if it passes the cut. If None, no cut
             will be applied.
+        write_mode : str
+            Whether to process the data with parallel threads (one per run)
+            or in serial. Valid options are 'serial' and 'parallel'.
         output_file_size : int
             Maximum size of each output file. If the total amount of input data
             requested for a given output file exceeds this size, the output
@@ -724,6 +721,9 @@ class DL1DataWriter:
         self.data_dumper_settings['save_mc_events'] = save_mc_events
 
         self.preselection_cut_function = preselection_cut_function
+
+        if write_mode in ['serial', 'parallel']:
+            self.write_mode = write_mode
 
         self.output_file_size = output_file_size
         self.events_per_file = events_per_file
