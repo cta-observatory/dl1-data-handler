@@ -1,0 +1,35 @@
+Data Writer:
+  Settings:
+    calibration_settings:
+        r1_product: 'HESSIOR1Calibrator'
+        extractor_product: 'NeighbourPeakIntegrator'
+    #preselection_cut_function: None
+    #output_file_size: 1073741824
+    #events_per_file: 500
+    save_mc_events: False
+
+Event Source:
+  Settings: {}
+
+Data Dumper:
+  Type: 'CTAMLDataDumper'
+  Settings:
+    filter_settings:
+      complib: 'lzo'
+      complevel: 1
+    expected_tel_types: 10
+    expected_tels: 300
+    expected_events: 10000
+    expected_images_per_event:
+        'LST:LSTCam': 0.5
+        'MST:NectarCam': 2.0
+        'MST:FlashCam': 2.0
+        'MST-SCT:SCTCam': 1.5
+        'SST:DigiCam': 1.25
+        'SST:ASTRICam': 1.25
+        'SST:CHEC': 1.25
+    index_columns:
+        - ['/Events', 'mc_energy']
+        - ['/Events', 'alt']
+        - ['/Events', 'az']
+        - ['tel', 'event_index']
