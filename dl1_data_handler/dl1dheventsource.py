@@ -133,8 +133,8 @@ class DL1DHEventSource(EventSource):
                         charge = self.file.root[tel_type.decode()][idx]['charge']
                         peakpos = self.file.root[tel_type.decode()][idx]['peakpos']
 
-                        data.dl1.tel[tel_id].image = charge
-                        data.dl1.tel[tel_id].peakpos = peakpos
+                        data.dl1.tel[tel_id].image = charge[None, :]
+                        data.dl1.tel[tel_id].peakpos = peakpos[None, :]
 
                 yield data
                 counter += 1
