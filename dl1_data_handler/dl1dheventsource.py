@@ -24,8 +24,8 @@ class DL1DHEventSource(EventSource):
     """
     _count = 0
 
-    def __init__(self, config=None, parent=None, **kwargs):
-        super().__init__(config=config, parent=parent, **kwargs)
+    def __init__(self, config=None, tool=None, **kwargs):
+        super().__init__(config=config, tool=tool, **kwargs)
 
         try:
             import tables
@@ -53,7 +53,9 @@ class DL1DHEventSource(EventSource):
             # the container is initialized once, and data is replaced within
             # it after each yield
             counter = 0
-            eventstream = self.file.root.Events
+
+            max_events = len(self.file.root.Events) if self.max_events is None else self.max_events
+            eventstream = self.file.root.Events[:max_events]
             data = DataContainer()
             data.meta['origin'] = "dl1_data_handler"
 
@@ -61,9 +63,6 @@ class DL1DHEventSource(EventSource):
             data.meta['max_events'] = self.max_events
 
             tel_types = set(self.file.root.Array_Information[:]['type'])
-            run_array_direction = self.file.root._v_attrs['run_array_direction']
-            # array_alt_pointing = run_array_direction[1] * u.rad
-            # array_az_pointing = run_array_direction[0] * u.rad
 
             tel_ids = {}
             for tel_type in tel_types:
@@ -79,8 +78,8 @@ class DL1DHEventSource(EventSource):
 
                 obs_id = event['obs_id']
                 event_id = event['event_id']
-                tels_with_data = np.concatenate([tel_ids[tel_type][event[tel_type.decode() + '_indices'].nonzero()]
-                                                 for tel_type in tel_types])
+                tels_with_data = set(np.concatenate([tel_ids[tel_type][event[tel_type.decode() + '_indices'].nonzero()]
+                                                 for tel_type in tel_types]))
                 data.count = counter
                 data.r0.obs_id = obs_id
                 data.r0.event_id = event_id
@@ -139,7 +138,7 @@ class DL1DHEventSource(EventSource):
                         peakpos = self.file.root[tel_type.decode()][idx]['peakpos']
 
                         data.dl1.tel[tel_id].image = charge
-                        data.dl1.tel[tel_id].pulse_time = peakpos
+                        data.dl1.tel[tel_id].peakpos = peakpos
 
                 yield data
                 counter += 1
