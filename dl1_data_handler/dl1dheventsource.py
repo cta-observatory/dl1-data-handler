@@ -206,11 +206,3 @@ class DL1DHEventSource(EventSource):
                 data.mcheader[k] = self.file.root._v_attrs[k]
             except:
                 warnings.warn(f"item {k} does not exist in the file attributes")
-
-
-
-'''
-### TODO:
-- make a version working with ctapipe master (pulse_time)
-- unit test or check that a converted simtel file give the same info in ctapipe containers
-'''
