@@ -24,8 +24,8 @@ class DL1DHEventSource(EventSource):
     """
     _count = 0
 
-    def __init__(self, config=None, tool=None, **kwargs):
-        super().__init__(config=config, tool=tool, **kwargs)
+    def __init__(self, config=None, parent=None, **kwargs):
+        super().__init__(config=config, parent=parent, **kwargs)
 
         try:
             import tables
@@ -138,7 +138,7 @@ class DL1DHEventSource(EventSource):
                         peakpos = self.file.root[tel_type.decode()][idx]['peakpos']
 
                         data.dl1.tel[tel_id].image = charge
-                        data.dl1.tel[tel_id].peakpos = peakpos
+                        data.dl1.tel[tel_id].pulse_time = peakpos
 
                 yield data
                 counter += 1
