@@ -36,11 +36,11 @@ class DL1DHEventSource(EventSource):
 
         self.tables = tables
 
-        if DL1DHEventSource._count > 0:
-            self.log.warning("Only one DL1DH event_source allowed at a time. "
-                             "Previous DL1DH file will be closed.")
-            # self.tables.close()
-        DL1DHEventSource._count += 1
+        # if DL1DHEventSource._count > 0:
+        #     self.log.warning("Only one DL1DH event_source allowed at a time. "
+        #                      "Previous DL1DH file will be closed.")
+        #     # self.tables.close()
+        # DL1DHEventSource._count += 1
 
         self.metadata['is_simulation'] = True
 
@@ -49,9 +49,9 @@ class DL1DHEventSource(EventSource):
         '''This class should never be chosen in event_source()'''
         return False
 
-    # def __exit__(self, exc_type, exc_val, exc_tb):
-    #     DL1DHEventSource._count -= 1
-    #     self.pyhessio.close_file()
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        DL1DHEventSource._count -= 1
+        self.file.close()
 
     def _generator(self):
         with self.tables.open_file(self.input_url) as file:
