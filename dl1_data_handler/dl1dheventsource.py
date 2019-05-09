@@ -1,7 +1,7 @@
 from astropy import units as u
 from astropy.coordinates import Angle
 from ctapipe.io.eventsource import EventSource
-from ctapipe.io.containers import DataContainer, MCHeaderContainer
+from ctapipe.io.containers import DataContainer
 from ctapipe.instrument import (
     TelescopeDescription,
     SubarrayDescription,
@@ -179,7 +179,6 @@ class DL1DHEventSource(EventSource):
 
     def _build_telescope_description(self, tel_info):
 
-        # pix_x, pix_y = u.Quantity(tel['pixel_positions'].T, u.m)
         camera_name = tel_info['camera'].decode()
         optics_name = tel_info['optics'].decode()
         try:
@@ -196,8 +195,15 @@ class DL1DHEventSource(EventSource):
 
 
     def _build_mcheader(self, file, data):
+        """
+        Read the mcheader data from the DL1 file and update the data container
 
-        # for k in MCHeaderContainer().keys():
+        Parameters
+        ----------
+        file: pytables opened file
+        data: `ctapipe.io.containers.DataContainer`
+        """
+
         for k in data.mcheader.keys():
             try:
                 data.mcheader[k] = file.root._v_attrs[k]
@@ -210,5 +216,5 @@ class DL1DHEventSource(EventSource):
 ### TODO:
 - deal with close file (self.file.close() ?)
 - make a version working with ctapipe master (pulse_time)
-- unit test
+- unit test or check that a converted simtel file give the same info in ctapipe containers
 '''
