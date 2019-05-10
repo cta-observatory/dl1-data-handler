@@ -1,6 +1,3 @@
-from pkg_resources import resource_filename
-import os
-
 ## These tests should be enabled when we have a small test file
 
 # example_file_path = 'output_file_1.h5'
