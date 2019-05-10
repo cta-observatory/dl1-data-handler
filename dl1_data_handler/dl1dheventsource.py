@@ -36,7 +36,6 @@ class DL1DHEventSource(EventSource):
 
         self.tables = tables
 
-
         self.metadata['is_simulation'] = True
 
     @staticmethod
@@ -69,12 +68,10 @@ class DL1DHEventSource(EventSource):
                 tel_ids[tel_type] = self.file.root.Array_Information \
                     [self.file.root.Array_Information[:]['type'] == tel_type]['id']
 
-            for event in eventstream:
+            # load subarray info
+            data.inst.subarray = self._build_subarray_info()
 
-                if counter == 0:
-                    # subarray info is only available when an event is loaded,
-                    # so load it on the first event.
-                    data.inst.subarray = self._build_subarray_info()
+            for event in eventstream:
 
                 obs_id = event['obs_id']
                 event_id = event['event_id']
@@ -112,8 +109,7 @@ class DL1DHEventSource(EventSource):
                 data.mc.az = Angle(event['az'], u.rad)
                 data.mc.core_x = event['core_x'] * u.m
                 data.mc.core_y = event['core_y'] * u.m
-                first_int = event['h_first_int'] * u.m
-                data.mc.h_first_int = first_int
+                data.mc.h_first_int = event['h_first_int'] * u.m
                 data.mc.x_max = event['x_max'] * u.g / (u.cm**2)
                 data.mc.shower_primary_id = event['shower_primary_id']
 
@@ -137,8 +133,8 @@ class DL1DHEventSource(EventSource):
                         charge = self.file.root[tel_type.decode()][idx]['charge']
                         peakpos = self.file.root[tel_type.decode()][idx]['peakpos']
 
-                        data.dl1.tel[tel_id].image = charge
-                        data.dl1.tel[tel_id].pulse_time = peakpos
+                        data.dl1.tel[tel_id].image = charge[None, :]
+                        data.dl1.tel[tel_id].pulse_time = peakpos[None, :]
 
                 yield data
                 counter += 1
@@ -187,7 +183,6 @@ class DL1DHEventSource(EventSource):
         except ValueError:
             warnings.warn(f'Unkown optics name {optics_name}')
 
-
         return TelescopeDescription.from_name(optics_name, camera_name)
 
 
@@ -206,11 +201,3 @@ class DL1DHEventSource(EventSource):
                 data.mcheader[k] = self.file.root._v_attrs[k]
             except:
                 warnings.warn(f"item {k} does not exist in the file attributes")
-
-
-
-'''
-### TODO:
-- make a version working with ctapipe master (pulse_time)
-- unit test or check that a converted simtel file give the same info in ctapipe containers
-'''
