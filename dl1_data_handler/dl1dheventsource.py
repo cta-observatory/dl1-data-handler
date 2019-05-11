@@ -56,7 +56,7 @@ class DL1DHEventSource(EventSource):
         except:
             print("Can't read dl1_data_handler version")
             return False
-        print(version.parse(file.root._v_attrs['dl1_data_handler_version']), is_version)
+
         return is_events & is_version
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -217,3 +217,22 @@ class DL1DHEventSource(EventSource):
                 data.mcheader[k] = self.file.root._v_attrs[k]
             except:
                 warnings.warn(f"item {k} does not exist in the file attributes")
+
+        data.mcheader.run_array_direction = Angle(data.mcheader.run_array_direction, unit=u.rad)
+        data.mcheader.energy_range_min *= u.TeV
+        data.mcheader.energy_range_max *= u.TeV
+        data.mcheader.prod_site_B_total *= u.uT
+        data.mcheader.prod_site_B_declination *= u.rad
+        data.mcheader.prod_site_B_inclination *= u.rad
+        data.mcheader.prod_site_alt *= u.m
+        data.mcheader.max_alt *= u.rad
+        data.mcheader.min_alt *= u.rad
+        data.mcheader.max_az *= u.rad
+        data.mcheader.min_az *= u.rad
+        data.mcheader.max_viewcone_radius *= u.deg
+        data.mcheader.min_viewcone_radius *= u.deg
+        data.mcheader.max_scatter_range *= u.m
+        data.mcheader.min_scatter_range *= u.m
+        data.mcheader.injection_height *= u.m
+        data.mcheader.corsika_wlen_min *= u.nm
+        data.mcheader.corsika_wlen_max *= u.nm
