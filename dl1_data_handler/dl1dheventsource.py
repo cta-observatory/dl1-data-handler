@@ -12,8 +12,6 @@ from ctapipe.instrument import (
 import numpy as np
 import warnings
 
-__all__ = ['DL1DHEventSource']
-
 
 class DL1DHEventSource(EventSource):
     """
@@ -40,8 +38,26 @@ class DL1DHEventSource(EventSource):
 
     @staticmethod
     def is_compatible(file_path):
-        '''This class should never be chosen in event_source()'''
-        return False
+        import tables
+
+        try:
+            file = tables.File(file_path)
+        except tables.HDF5ExtError:
+            print("Not an HDF5 file")
+            return False
+        try:
+            is_events = type(file.root.Events) == tables.table.Table
+        except:
+            print("Can't access events table")
+            return False
+        try:
+            from packaging import version
+            is_version = version.parse(file.root._v_attrs['dl1_data_handler_version']) > version.parse("0.7")
+        except:
+            print("Can't read dl1_data_handler version")
+            return False
+        print(version.parse(file.root._v_attrs['dl1_data_handler_version']), is_version)
+        return is_events & is_version
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         DL1DHEventSource._count -= 1
