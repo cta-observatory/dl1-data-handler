@@ -127,7 +127,7 @@ class DL1DHEventSource(EventSource):
                 data.mc.core_y = event['core_y'] * u.m
                 data.mc.h_first_int = event['h_first_int'] * u.m
                 data.mc.x_max = event['x_max'] * u.g / (u.cm**2)
-                data.mc.shower_primary_id = event['shower_primary_id']
+                data.mc.shower_primary_id = int(event['shower_primary_id'])
 
                 # mc run header data
                 self._build_mcheader(data)
