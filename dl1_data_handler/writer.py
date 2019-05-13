@@ -119,7 +119,8 @@ class CTAMLDataDumper(DL1DataDumper):
                  filter_settings=None,
                  expected_tel_types=10,
                  expected_tels=300,
-                 expected_events=10000,
+                 expected_events=100,
+                 expected_mc_events=50000,
                  expected_images_per_event=None,
                  index_columns=None,
                  save_mc_events=False):
@@ -169,7 +170,8 @@ class CTAMLDataDumper(DL1DataDumper):
         self.expected_tel_types = expected_tel_types
         self.expected_tels = expected_tels
         self.expected_events = expected_events
-        
+        self.expected_mc_events = expected_mc_events
+
         if expected_images_per_event is None:
             self.expected_images_per_event = {
                      'LST:LSTCam': 0.5,
@@ -481,7 +483,7 @@ class CTAMLDataDumper(DL1DataDumper):
                                                     "Table of MC Event Information",
                                                     filters=self.filters,
                                                     expectedrows=(
-                                                     self.expected_events))
+                                                     self.expected_mc_events))
 
         for tel_type in subarray.telescope_types:
             event_table_desc.columns[
