@@ -1,25 +1,53 @@
 Data Writer:
+  # Dictionary of DL1DataWriter settings. Will be passed as a dict of kwargs to the DL1DataWriter constructor.
   Settings:
+    # Mode for writing. Valid options are 'serial' and 'parallel'. Specify 'serial' to write each output file (process each run) sequentially using a single thread.
+    # Specify 'parallel' to write to each output file (process each run) in parallel using Python Multithreading.
+    write_mode: 'parallel'
+    # Dictionary of ctapipe CameraCalibrator settings. Will be passed as a dict of kwargs to the ctapipe CameraCalibrator. 
     calibration_settings:
+        # String name indicating the R1 calibrator to use. 
         r1_product: 'HESSIOR1Calibrator'
+        # String name indicating the method to use for the trace integration. 
         extractor_product: 'NeighbourPeakIntegrator'
+    # Cut function to be used to exclude events from being dumped. Should follow
     #preselection_cut_function: None
+    # Maximum output file size (in bytes). After this limit is reached, the dumper will finish the existing file and start a new one. Comment out this setting to set no limit.
     output_file_size: 1073741824
+    # Maximum number of (triggered) events per file. After this limit is reached, the dumper will finish the existing file and start a new one. Comment out this setting to set no limit. 
     events_per_file: 500
+    # Boolean flag indicating whether to save non-triggered Monte Carlo events in a separate MC_Events table.
     save_mc_events: False
 
 Event Source:
+  # Dictionary of Event Source settings. Will be passed as a dict of kwargs to ctapipe Event Source constructor.
   Settings: {}
 
 Data Dumper:
+  # String name of the DL1DataDumper subclass to use for writing data.
   Type: 'CTAMLDataDumper'
+  # Dictionary of Data Dumper settings. Will be passed as a dict of kwargs to the Data Dumper constructor.
   Settings:
+    # Settings related to PyTables filters (compression/chunking). See PyTables documentation for a more detailed explanation.
     filter_settings:
+      # The compression method/library to be used. See PyTables documentation for a more detailed explanation.
       complib: 'lzo'
+      # The compression level to be used. See PyTables documentation for a more detailed explanation. 
       complevel: 1
+    # Expected number of telescope types (rows in the Telescope_Type_Descriptions table). This is just an approximate value which is used for
+    # optimizing the chunking.
     expected_tel_types: 10
+    # Expected number of telescopes (rows in the Array_Description table). This is just an approximate value which is used for
+    # optimizing the chunking.
     expected_tels: 300
-    expected_events: 10000
+    # Expected number of triggered events (rows in the Events table). This is just an approximate value which is used for
+    # optimizing the chunking.
+    expected_events: 100
+    # Expected number of total (triggered + non-triggered) Monte Carlo events (rows in the MC_events table). This is just an approximate value which is used for
+    # optimizing the chunking.
+    expected_mc_events: 50000
+    # Expected number of images per telescope per (triggered) event (as a float). This is just an approximate value which is used for
+    # optimizing the chunking. One entry should be provided per telescope type. If a telescope type is not present then a default value will be used.
     expected_images_per_event:
         'LST:LSTCam': 0.5
         'MST:NectarCam': 2.0
@@ -28,6 +56,9 @@ Data Dumper:
         'SST:DigiCam': 1.25
         'SST:ASTRICam': 1.25
         'SST:CHEC': 1.25
+    # A list of (table, column) pairs on which PyTables should create indexes in the output files.
+    # The tables should be specified as '/{table_name}' or 'tel' to select all telescope tables in the file (all share the same column names)
+    # The column name should be specified as it appears in the table.
     index_columns:
         - ['/Events', 'mc_energy']
         - ['/Events', 'alt']
