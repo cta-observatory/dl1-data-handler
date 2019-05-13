@@ -168,7 +168,7 @@ class DL1DataReader:
         if image_channels is None:
             image_channels = ['charge']
         self.image_channels = image_channels
-        self.image_mapper = ImageMapper(mapping_method, image_channels,
+        self.image_mapper = ImageMapper(channels=self.image_channels,
                                         **mapping_settings)
 
         if array_info is None:
@@ -190,14 +190,14 @@ class DL1DataReader:
                     'dtype': np.dtype(np.float32)
                     }
                 ]
-            for col_name in array_info:
+            for col_name in self.array_info:
                 col = f.root.Array_Information.cols._f_col(col_name)
                 self.unprocessed_example_description.append(
                     {
                         'name': col_name,
                         'tel_type': self.tel_type,
                         'base_name': col_name,
-                        'shape': col.shape[1:],
+                        'shape': (1,) + col.shape[1:],
                         'dtype': col.dtype
                         }
                     )
@@ -220,7 +220,7 @@ class DL1DataReader:
                     'dtype': np.dtype(np.int8)
                     }
                 ]
-            for col_name in array_info:
+            for col_name in self.array_info:
                 col = f.root.Array_Information.cols._f_col(col_name)
                 self.unprocessed_example_description.append(
                     {
@@ -252,7 +252,7 @@ class DL1DataReader:
                         'dtype': np.dtype(np.int8)
                         }
                     ])
-                for col_name in array_info:
+                for col_name in self.array_info:
                     col = f.root.Array_Information.cols._f_col(col_name)
                     self.unprocessed_example_description.append(
                         {
@@ -336,9 +336,10 @@ class DL1DataReader:
 
         def append_array_info(array_info, tel_id):
             query = "id == {}".format(tel_id)
-            row = [row for row in f.root.Array_Information.where(query)][0]
-            for info, column in zip(array_info, self.array_info):
-                info.append(row[column])
+            for row in f.root.Array_Information.where(query):
+                for info, column in zip(array_info, self.array_info):
+                    dtype = f.root.Array_Information.cols._f_col(column).dtype
+                    info.append(np.array(row[column], dtype=dtype))
 
         def load_tel_type_data(nrow, tel_type):
             images = []
@@ -368,7 +369,7 @@ class DL1DataReader:
 
             array_info = [[] for column in self.array_info]
             append_array_info(array_info, tel_id)
-            example.extend([info for info in array_info])
+            example.extend([np.stack(info) for info in array_info])
         elif self.mode == "stereo":
             # Get a list of images and an array of binary trigger values
             nrow = identifiers[1]
@@ -385,7 +386,8 @@ class DL1DataReader:
         # Load event info
         record = f.root.Events[nrow]
         for column in self.event_info:
-            example.append(record[column])
+            dtype = f.root.Events.cols._f_col(column).dtype
+            example.append(np.array(record[column], dtype=dtype))
 
         # Preprocess the example
         example = self.processor.process(example)
@@ -394,18 +396,25 @@ class DL1DataReader:
 
     # Return a dictionary of number of examples in the dataset, grouped by
     # the array names listed in the iterable group_by.
-    def num_examples(self, group_by=None):
-        example_indices = []
-        if group_by:
+    # If example_indices is a list of indices, consider only those examples,
+    # otherwise all examples in the reader are considered.
+    def num_examples(self, group_by=None, example_indices=None):
+        grouping_indices = []
+        if group_by is not None:
             for name in group_by:
-                index = [i for i, des in enumerate(self.example_description)
-                         if des['name'] == name][0]
-                example_indices.append(index)
-        num_examples = {}
-        for example in self:
-            group = tuple([example[index] for index in example_indices])
-            if group in num_examples:
-                num_examples[group] += 1
+                for idx, des in enumerate(self.example_description):
+                    if des['name'] == name:
+                        grouping_indices.append(idx)
+        group_nums = {}
+        if example_indices is None:
+            example_indices = list(range(len(self)))
+        for idx in example_indices:
+            example = self[idx]
+            # Use tuple() and tolist() to convert list and NumPy array
+            # to hashable keys
+            group = tuple([example[idx].tolist() for idx in grouping_indices])
+            if group in group_nums:
+                group_nums[group] += 1
             else:
-                num_examples[group] = 1
-        return num_examples
+                group_nums[group] = 1
+        return group_nums
