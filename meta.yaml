@@ -12,7 +12,10 @@ build:
 requirements:
   build:
     - python >=3.6.0
-    - setuptools 
+    - numpy >=1.15.0
+    - ctapipe >=0.6.2
+    - ctapipe-extra >=0.2.17
+    - pytables >=3.4.4 
   host:
     - python >=3.6.0
     - numpy >=1.15.0
