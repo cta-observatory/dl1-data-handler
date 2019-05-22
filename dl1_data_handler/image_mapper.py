@@ -1,4 +1,5 @@
 import numpy as np
+np.set_printoptions(threshold=np.inf)
 import logging
 import bisect
 
@@ -74,9 +75,10 @@ class ImageMapper:
         # Rotate the camera back to the actual orientation. The pixel are moved into a horizontal grid to perform the image_mapper algorithm.
         self.rot_cam = True if rotate_camera else False
 
-        # Camera geometries and mapping tables initialization
+        # Camera geometries, mapping tables and index matrixes initialization
         self.camera_geometries = {}
         self.mapping_tables = {}
+        self.index_matrixes = {}
 
         for camtype in self.camera_types:
             # Get a corresponding CameraGeometry
@@ -122,17 +124,15 @@ class ImageMapper:
                 len(channels)  # number of channels
                 )
 
+            # Initializing the indexed matrix
+            self.index_matrixes[camtype] = None
             # Calculating the mapping tables for the selected camera types
             self.mapping_tables[camtype] = self.generate_table(camtype)
 
     def map_image(self, pixels, camera_type):
         """
         :param pixels: a numpy array of values for each pixel, in order of pixel index.
-                       For future reference:
-                       The array should have dimensions [N_pixels, N_channels] where N_channels is e.g.,
-                       1 when just using charges and 2 when using charges and peak arrival times.
-        :param camera_type: a string specifying the telescope type as defined in the HDF5 format,
-                        e.g., 'SCTCam' for SCT data, which is the only currently implemented telescope type.
+        :param camera_type: a string specifying the telescope type.
         :return: a numpy array of shape [img_width, img_length, N_channels]
         """
         # Get relevant parameters
@@ -148,6 +148,18 @@ class ImageMapper:
             result.append(image_2d)
         telescope_image = np.concatenate(result, axis=-1)
         return telescope_image
+
+    def get_indexmatrix(self, camera_type):
+        """
+        :param camera_type: a string specifying the telescope type.
+        :return: a 2D numpy array [img_width,img_length]
+        """
+        # Check if axial addressing is selected in the image_mapper
+        print(self.index_matrixes[camera_type])
+        if self.index_matrixes[camera_type] is None:
+            raise ValueError("The function get_indexmatrix() can only be called, when axial addressing is selected in the image_mapper.")
+        # Return the index matrix, which has been calculated in 'generate_table()'
+        return self.index_matrixes[camera_type]
 
     def generate_table(self, camera_type):
         # Get relevant parameters
@@ -178,6 +190,11 @@ class ImageMapper:
             # Finding the nearest point in the hexagonal grid for each point in the square grid
             tree = spatial.cKDTree(hex_grid)
             nn_index = np.reshape(tree.query(table_grid)[1], (output_dim, output_dim))
+            # Store the nn_index array in the index_matrix. Replace virtual pixel indexes with -1.
+            if map_method == 'axial_addressing':
+                index_matrix = nn_index
+                index_matrix[index_matrix >= num_pixels] = -1
+                self.index_matrixes[camera_type] = index_matrix
             if map_method == 'oversampling' and camera_type not in ['ASTRICam', 'CHEC', 'SCTCam']:
                 pixel_weight = 1 / 4
             else:
