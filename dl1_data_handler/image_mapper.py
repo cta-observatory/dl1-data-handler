@@ -1,5 +1,4 @@
 import numpy as np
-np.set_printoptions(threshold=np.inf)
 import logging
 import bisect
 
