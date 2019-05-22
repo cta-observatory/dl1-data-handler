@@ -159,8 +159,7 @@ class ImageMapper:
         pos = np.column_stack([camgeom.pix_x.value, camgeom.pix_y.value]).T
 
         if camera_type in ['LSTCam', 'NectarCam', 'MAGICCam']:
-            pixel_rot = 90.0 - camgeom.pix_rotation.value
-            pos = self.rotate_pixel_pos(pos, pixel_rot)
+            pos = self.rotate_pixel_pos(pos, -camgeom.pix_rotation.value)
 
         pad = self.padding[camera_type]
         default_pad = self.default_pad
