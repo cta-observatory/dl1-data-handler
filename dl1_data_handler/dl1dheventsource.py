@@ -64,7 +64,7 @@ class DL1DHEventSource(EventSource):
         self.file.close()
 
     def _generator(self):
-        with self.tables.open_file(self.input_url) as self.file:
+        with self.tables.open_file(self.input_url, mode='r') as self.file:
             # the container is initialized once, and data is replaced within
             # it after each yield
             counter = 0
