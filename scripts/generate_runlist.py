@@ -62,6 +62,10 @@ if __name__ == "__main__":
     parser.add_argument('--output_file',
                         help='filepath/name of runlist file',
                         default="./runlist.yml")
+    parser.add_argument('--output_dir',
+                        help='path where to save generated files. By default, the input directory is used.',
+                        default=None,
+                       )
     args = parser.parse_args()
 
     runlist = []
@@ -69,6 +73,8 @@ if __name__ == "__main__":
     abs_file_dir = os.path.abspath(args.file_dir)
     filenames = glob.glob(os.path.join(abs_file_dir, "*.simtel.gz"))
     filename_groups = {}
+
+    output_dir = abs_file_dir if args.output_dir is None else os.path.abspath(args.output_dir)
 
     # Separate files by particle type, ze, az, processing info, cone
     for filename in filenames:
@@ -94,7 +100,7 @@ if __name__ == "__main__":
                 particle_type, ze, az, prod_info = key
 
                 target_filename = "{}/{}_{}deg_{}deg_runs{}___{}.h5".format(
-                    abs_file_dir,
+                    output_dir,
                     particle_type,
                     ze,
                     az,

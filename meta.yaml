@@ -1,28 +1,47 @@
 package:
   name: dl1_data_handler
-  version: "0.7.4"
+  version: "0.7.5"
 
 source:
-  git_rev: v0.7.4
   git_url: https://github.com/cta-observatory/dl1-data-handler.git
+  git_rev: v0.7.5
+
+build:
+  number: 0
 
 requirements:
-  host:
-    - python >=3.5.0
-    - setuptools
-
-  run:
-    - python >=3.5.0
-    - pyhessio >=2.1.1
+  build:
+    - python >=3.6.0
+    - numpy >=1.15.0
     - ctapipe >=0.6.2
+    - eventio >=0.16.1
+    - ctapipe-extra >=0.2.17
+    - pytables >=3.4.4 
+  host:
+    - python >=3.6.0
+    - numpy >=1.15.0
+    - ctapipe >=0.6.2
+    - eventio >=0.16.1
     - ctapipe-extra >=0.2.17
     - pytables >=3.4.4
-
+  run:
+    - python >=3.6.0
+    - numpy >=1.15.0
+    - ctapipe >=0.6.2
+    - eventio >=0.16.1
+    - ctapipe-extra >=0.2.17
+    - pytables >=3.4.4
   test:
     imports:
-      -dl1-data-handler
+      - dl1-data-handler
 
 about:
   home: https://github.com/cta-observatory/dl1-data-handler
   license: MIT
   license_file: LICENSE
+  summary: DL1 to PyTables HDF5 data dumper/writer/processor for ML studies.
+extra:
+  recipe-maintainers:
+    - bryankim96
+    - aribrill
+    - nietootein

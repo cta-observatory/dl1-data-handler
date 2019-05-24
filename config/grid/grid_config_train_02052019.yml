@@ -4,8 +4,8 @@ Data Writer:
         r1_product: 'HESSIOR1Calibrator'
         extractor_product: 'NeighbourPeakIntegrator'
     #preselection_cut_function: None
-    output_file_size: 1073741824
-    events_per_file: 500
+    #output_file_size: 1073741824
+    #events_per_file: 500
     save_mc_events: False
 
 Event Source:

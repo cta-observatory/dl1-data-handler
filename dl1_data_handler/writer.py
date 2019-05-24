@@ -119,7 +119,8 @@ class CTAMLDataDumper(DL1DataDumper):
                  filter_settings=None,
                  expected_tel_types=10,
                  expected_tels=300,
-                 expected_events=10000,
+                 expected_events=100,
+                 expected_mc_events=50000,
                  expected_images_per_event=None,
                  index_columns=None,
                  save_mc_events=False):
@@ -169,7 +170,8 @@ class CTAMLDataDumper(DL1DataDumper):
         self.expected_tel_types = expected_tel_types
         self.expected_tels = expected_tels
         self.expected_events = expected_events
-        
+        self.expected_mc_events = expected_mc_events
+
         if expected_images_per_event is None:
             self.expected_images_per_event = {
                      'LST:LSTCam': 0.5,
@@ -481,7 +483,7 @@ class CTAMLDataDumper(DL1DataDumper):
                                                     "Table of MC Event Information",
                                                     filters=self.filters,
                                                     expectedrows=(
-                                                     self.expected_events))
+                                                     self.expected_mc_events))
 
         for tel_type in subarray.telescope_types:
             event_table_desc.columns[
@@ -663,6 +665,7 @@ class DL1DataWriter:
                  data_dumper_settings=None,
                  calibration_settings=None,
                  preselection_cut_function=None,
+                 write_mode='parallel',
                  output_file_size=10737418240,
                  events_per_file=None,
                  gain_thresholds=None,
@@ -694,6 +697,9 @@ class DL1DataWriter:
             ctapipe.io.containers.DataContainer describing a single event and
             returns a boolean indicating if it passes the cut. If None, no cut
             will be applied.
+        write_mode : str
+            Whether to process the data with parallel threads (one per run)
+            or in serial. Valid options are 'serial' and 'parallel'.
         output_file_size : int
             Maximum size of each output file. If the total amount of input data
             requested for a given output file exceeds this size, the output
@@ -717,6 +723,9 @@ class DL1DataWriter:
         self.data_dumper_settings['save_mc_events'] = save_mc_events
 
         self.preselection_cut_function = preselection_cut_function
+
+        if write_mode in ['serial', 'parallel']:
+            self.write_mode = write_mode
 
         self.output_file_size = output_file_size
         self.events_per_file = events_per_file
@@ -755,10 +764,13 @@ class DL1DataWriter:
             self.gain_thresholds = gain_thresholds
 
     def process_data(self, run_list):
-        """Process data from a list of runs in parallel.
+        """Process data from a list of runs.
 
-        Creates one process for each requested run and executes them all in
-        parallel.
+        If the selected write mode is parallel, creates one process for
+        each requested run and executes them all in parallel.
+
+        If the selected write mode is sequential, executes each run sequentially,
+        writing each target one by one.
 
         Parameters
         ----------
@@ -769,30 +781,37 @@ class DL1DataWriter:
              to which the data from the input files should be written.
 
         """
-        num_processes = len(run_list)
-        logger.info("{} parallel processes requested.".format(num_processes))
+        if self.write_mode == 'parallel':
+            num_processes = len(run_list)
+            logger.info("{} parallel processes requested.".format(num_processes))
 
-        logger.info("Creating processes...")
-        jobs = []
-        for i in range(0, num_processes):
-            process = multiprocessing.Process(target=self._process_data,
-                                              args=(run_list[i]['inputs'],
-                                                    run_list[i]['target']))
-            jobs.append(process)
+            logger.info("Creating processes...")
+            jobs = []
+            for i in range(0, num_processes):
+                process = multiprocessing.Process(target=self._process_data,
+                                                  args=(run_list[i]['inputs'],
+                                                        run_list[i]['target']))
+                jobs.append(process)
 
-        logger.info("Starting processes...")
-        try:
-            # Start all parallel processes
-            for j in jobs:
-                j.start()
+            logger.info("Starting processes...")
+            try:
+                # Start all parallel processes
+                for j in jobs:
+                    j.start()
 
-            # Wait for all processes to complete
-            for j in jobs:
-                j.join()
-        except KeyboardInterrupt:
-            logger.error("Caught keyboard interrupt, killing all processes...")
-            for j in jobs:
-                j.terminate()
+                # Wait for all processes to complete
+                for j in jobs:
+                    j.join()
+            except KeyboardInterrupt:
+                logger.error("Caught keyboard interrupt, killing all processes...")
+                for j in jobs:
+                    j.terminate()
+        elif self.write_mode == 'serial':
+            logger.info("Serial processing requested.")
+
+            for run in run_list:
+                logger.info("Starting run for target: {}...".format(run['target']))
+                self._process_data(run['inputs'], run['target'])
 
         logger.info("Done!")
 
