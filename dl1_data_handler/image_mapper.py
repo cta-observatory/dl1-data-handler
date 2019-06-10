@@ -154,7 +154,6 @@ class ImageMapper:
         :return: a 2D numpy array [img_width,img_length]
         """
         # Check if axial addressing is selected in the image_mapper
-        print(self.index_matrixes[camera_type])
         if self.index_matrixes[camera_type] is None:
             raise ValueError("The function get_indexmatrix() can only be called, when axial addressing is selected in the image_mapper.")
         # Return the index matrix, which has been calculated in 'generate_table()'
@@ -193,6 +192,7 @@ class ImageMapper:
             if map_method == 'axial_addressing':
                 index_matrix = nn_index
                 index_matrix[index_matrix >= num_pixels] = -1
+                index_matrix = np.flip(index_matrix, axis=0)
                 self.index_matrixes[camera_type] = index_matrix
             if map_method == 'oversampling' and camera_type not in ['ASTRICam', 'CHEC', 'SCTCam']:
                 pixel_weight = 1 / 4
