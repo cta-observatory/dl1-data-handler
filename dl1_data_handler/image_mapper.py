@@ -218,7 +218,7 @@ class ImageMapper:
                         np.reshape(nn_index[y_grid:y_grid + grid_size_factor, x_grid:x_grid + grid_size_factor], -1))
                     pixel_index = np.array(list(counter.keys()))
                     weights = list(counter.values()) / np.sum(list(counter.values()))
-                    for key in np.arange(0, len(pixel_index), 1):
+                    for key in np.arange(len(pixel_index)):
                         mapping_matrix3d[pixel_index[key]][int(y_grid / grid_size_factor) + pad][
                             int(x_grid / grid_size_factor) + pad] = weights[key]
 
@@ -263,7 +263,7 @@ class ImageMapper:
 
                         square_points = np.array(square_points)
                         square_indexes = []
-                        for k in np.arange(0, square_points.shape[0], 1):
+                        for k in np.arange(square_points.shape[0]):
                             square_indexes.append(dict_hex_grid[(square_points[k][0], square_points[k][1])])
                         square_indexes = np.array(square_indexes)
                         dict_corner_points[(i, j)] = square_points
@@ -271,7 +271,7 @@ class ImageMapper:
 
                 corner_points = []
                 corner_indexes = []  # index in hexgrid
-                for i in np.arange(0, table_grid.shape[0], 1):
+                for i in np.arange(table_grid.shape[0]):
                     x_index = bisect.bisect_left(x_ticks, table_grid[i][0])
                     y_index = bisect.bisect_left(y_ticks, table_grid[i][1])
                     if x_index != 0:
@@ -297,9 +297,9 @@ class ImageMapper:
             corner_indexes = np.reshape(corner_indexes, (output_dim, output_dim, corner_indexes.shape[1]))
 
             mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2))
-            for i in np.arange(0, output_dim, 1):
-                for j in np.arange(0, output_dim, 1):
-                    for k in np.arange(0, corner_indexes.shape[2], 1):
+            for i in np.arange(output_dim):
+                for j in np.arange(output_dim):
+                    for k in np.arange(corner_indexes.shape[2]):
                         mapping_matrix3d[corner_indexes[j][i][k]][j + pad][i + pad] = weights[j][i][k]
 
         # Bicubic interpolation
@@ -334,7 +334,7 @@ class ImageMapper:
                     for j, y_val in enumerate(y_ticks):
                         square_points = []
                         if i == 0 or j == 0 or i >= len(x_ticks) - 2 or j >= len(y_ticks) - 2:
-                            for k in np.arange(0, 16, 1):
+                            for k in np.arange(16):
                                 square_points.append([invalid_x_val, invalid_y_val])
                         else:
                             # The square marked as '*' in the drawing above.
@@ -360,7 +360,7 @@ class ImageMapper:
 
                         square_points = np.array(square_points)
                         square_indexes = []
-                        for k in np.arange(0, square_points.shape[0], 1):
+                        for k in np.arange(square_points.shape[0]):
                             if square_points[k][0] == invalid_x_val:
                                 square_indexes.append(-1)
                             else:
@@ -375,7 +375,7 @@ class ImageMapper:
 
                 weights = []
                 corner_indexes = []  # index in hexgrid
-                for i in np.arange(0, table_grid.shape[0], 1):
+                for i in np.arange(table_grid.shape[0]):
                     x_index = bisect.bisect_left(x_ticks, table_grid[i][0])
                     y_index = bisect.bisect_left(y_ticks, table_grid[i][1])
                     if x_index != 0:
@@ -438,7 +438,7 @@ class ImageMapper:
                 # NN
                 weights_NN = []
                 simplexes_NN = []
-                for i in np.arange(0, simplex_index.shape[0], 1):
+                for i in np.arange(simplex_index.shape[0]):
                     if -1 in simplex_index_NN[i] or all(ind >= num_pixels for ind in table_simplex[i]):
                         w = np.array([0, 0, 0])
                         weights_NN.append(w)
@@ -460,10 +460,10 @@ class ImageMapper:
                 # 2NN
                 weights_2NN = []
                 simplexes_2NN = []
-                for i in np.arange(0, 3, 1):
+                for i in np.arange(3):
                     weights = []
                     simplexes = []
-                    for j in np.arange(0, simplex_index.shape[0], 1):
+                    for j in np.arange(simplex_index.shape[0]):
                         table_simplex_NN = tri.simplices[simplex_index_NN[j][i]]
                         if -1 in simplex_index_2NN[j][i] or -1 in simplex_index_NN[j] or all(
                                 ind >= num_pixels for ind in table_simplex_NN):
@@ -496,10 +496,10 @@ class ImageMapper:
                                             (simplexes_2NN.shape[0], output_dim, output_dim, simplexes_2NN.shape[2]))
 
             mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2))
-            for i in np.arange(0, 4, 1):
-                for j in np.arange(0, output_dim, 1):
-                    for k in np.arange(0, output_dim, 1):
-                        for l in np.arange(0, weights.shape[3], 1):
+            for i in np.arange(4):
+                for j in np.arange(output_dim):
+                    for k in np.arange(output_dim):
+                        for l in np.arange(weights.shape[3]):
                             if weights.shape[3] == 3:
                                 mapping_matrix3d[corner_indexes[i][k][j][l]][k + pad][j + pad] = weights[i][k][j][
                                                                                                          l] / 4
@@ -523,7 +523,7 @@ class ImageMapper:
             if map_method != 'oversampling' or camera_type in ['ASTRICam', 'CHEC', 'SCTCam']:
                 map_mat = np.zeros((mapping_matrix3d.shape[0], output_dim + (pad - default_pad) * 2,
                                     output_dim + (pad - default_pad) * 2))
-                for i in np.arange(0, mapping_matrix3d.shape[0], 1):
+                for i in np.arange(mapping_matrix3d.shape[0]):
                     map_mat[i] = mapping_matrix3d[i][default_pad:output_dim + pad * 2 - default_pad,
                                  default_pad:output_dim + pad * 2 - default_pad]
                 self.image_shapes[camera_type] = (
@@ -534,7 +534,7 @@ class ImageMapper:
             else:
                 map_mat = np.zeros((mapping_matrix3d.shape[0], output_dim + pad * 2 - default_pad * 4,
                                     output_dim + pad * 2 - default_pad * 4))
-                for i in np.arange(0, mapping_matrix3d.shape[0], 1):
+                for i in np.arange(mapping_matrix3d.shape[0]):
                     map_mat[i] = mapping_matrix3d[i][default_pad * 2:output_dim + pad * 2 - default_pad * 2,
                                  default_pad * 2:output_dim + pad * 2 - default_pad * 2]
                 self.image_shapes[camera_type] = (
@@ -544,6 +544,10 @@ class ImageMapper:
                 )
         else:
             map_mat = mapping_matrix3d
+
+        # Applying a flip to all mapping tables that the image indexing starts from the top left corner.
+        for i in np.arange(map_mat.shape[0]):
+            map_mat[i] = np.flip(map_mat[i],axis=0)
 
         sparse_map_mat = csr_matrix(map_mat.reshape(map_mat.shape[0],
                                                     self.image_shapes[camera_type][0] *
@@ -579,7 +583,7 @@ class ImageMapper:
 
         corner_points = []
         corner_simplexes = []
-        for neighbors in np.arange(0, 3, 1):
+        for neighbors in np.arange(3):
             table_simplex_NN = tri.simplices[simplex_index_NN[neighbors]]
             simplex = np.array(list(set(table_simplex_NN) - set(table_simplex)))
             simplex = np.squeeze(simplex, axis=0)
@@ -626,7 +630,7 @@ class ImageMapper:
             #
             #       w3 = 1 - w1 - w2
             #
-            for i in np.arange(0, p.shape[0], 1):
+            for i in np.arange(p.shape[0]):
                 w = [0, 0, 0]
                 divisor = float(((p[i][1][1] - p[i][2][1]) * (p[i][0][0] - p[i][2][0]) + (p[i][2][0] - p[i][1][0]) * (
                             p[i][0][1] - p[i][2][1])))
@@ -665,7 +669,7 @@ class ImageMapper:
             #       w4 = -----------------
             #             (x2-x1)*(y2-y1)
             #
-            for i in np.arange(0, p.shape[0], 1):
+            for i in np.arange(p.shape[0]):
                 w = [0, 0, 0, 0]
                 divisor = float((p[i][3][0] - p[i][0][0]) * (p[i][3][1] - p[i][0][1]))
                 w[0] = float((p[i][3][0] - target[i][0]) * (p[i][3][1] - target[i][1])) / divisor
@@ -703,33 +707,33 @@ class ImageMapper:
                 num_x_ticks = len(x_ticks)
                 remove_x_val = []
                 change_x_val = []
-                for i in np.arange(0, num_x_ticks - 1, 1):
+                for i in np.arange(num_x_ticks - 1):
                     if np.abs(x_ticks[i] - x_ticks[i + 1]) <= 0.002:
                         remove_x_val.append(x_ticks[i])
                         change_x_val.append(x_ticks[i + 1])
-                for j in np.arange(0, len(remove_x_val), 1):
+                for j in np.arange(len(remove_x_val)):
                     x_ticks.remove(remove_x_val[j])
-                    for k in np.arange(0, len(x), 1):
+                    for k in np.arange(len(x)):
                         if x[k] == remove_x_val[j]:
                             x[k] = change_x_val[j]
 
                 num_y_ticks = len(y_ticks)
                 remove_y_val = []
                 change_y_val = []
-                for i in np.arange(0, num_y_ticks - 1, 1):
+                for i in np.arange(num_y_ticks - 1):
                     if np.abs(y_ticks[i] - y_ticks[i + 1]) <= 0.002:
                         remove_y_val.append(y_ticks[i])
                         change_y_val.append(y_ticks[i + 1])
 
-                for j in np.arange(0, len(remove_y_val), 1):
+                for j in np.arange(len(remove_y_val)):
                     y_ticks.remove(remove_y_val[j])
-                    for k in np.arange(0, len(y), 1):
+                    for k in np.arange(len(y)):
                         if y[k] == remove_y_val[j]:
                             y[k] = change_y_val[j]
 
             x_dist = np.around(abs(x_ticks[0] - x_ticks[1]), decimals=3)
             y_dist = np.around(abs(y_ticks[0] - y_ticks[1]), decimals=3)
-            for i in np.arange(0, default_pad, 1):
+            for i in np.arange(default_pad):
                 x_ticks.append(np.around(x_ticks[-1] + x_dist, decimals=3))
                 x_ticks.insert(0, np.around(x_ticks[0] - x_dist, decimals=3))
                 y_ticks.append(np.around(y_ticks[-1] + y_dist, decimals=3))
@@ -768,10 +772,10 @@ class ImageMapper:
             else:
                 tick_diff = 0
                 tick_diff_each_side = 0
-            for i in np.arange(0, tick_diff_each_side + default_pad * 2, 1):
+            for i in np.arange(tick_diff_each_side + default_pad * 2):
                 second_ticks.append(np.around(second_ticks[-1] + dist_second, decimals=3))
                 second_ticks.insert(0, np.around(second_ticks[0] - dist_second, decimals=3))
-            for i in np.arange(0, default_pad, 1):
+            for i in np.arange(default_pad):
                 first_ticks.append(np.around(first_ticks[-1] + dist_first, decimals=3))
                 first_ticks.insert(0, np.around(first_ticks[0] - dist_first, decimals=3))
 
@@ -781,7 +785,7 @@ class ImageMapper:
             # Create the virtual pixels outside of the camera
             if map_method != 'axial_addressing':
                 virtual_pixels = []
-                for i in [0, 1]:
+                for i in np.arange(2):
                     if map_method in ['oversampling', 'image_shifting']:
                         if camera_type not in ['DigiCam']:
                             j = i if self.default_pad % 2 == 0 else 1 - i
@@ -810,7 +814,7 @@ class ImageMapper:
                     grid_second.append(j + dist_second / 2.0)
 
             elif map_method == 'image_shifting':
-                for i in np.arange(0, len(second_pos), 1):
+                for i in np.arange(len(second_pos)):
                     if second_pos[i] in second_ticks[::2]:
                         second_pos[i] = second_ticks[second_ticks.index(second_pos[i]) + 1]
 
@@ -822,11 +826,11 @@ class ImageMapper:
                 virtual_pixels = []
                 # manipulate y ticks with extra ticks
                 num_extra_ticks = len(y_ticks)
-                for i in np.arange(0, num_extra_ticks, 1):
+                for i in np.arange(num_extra_ticks):
                     second_ticks.append(np.around(second_ticks[-1] + dist_second, decimals=3))
                 first_ticks = reversed(first_ticks)
                 for shift, ticks in enumerate(first_ticks):
-                    for i in np.arange(0, len(second_pos), 1):
+                    for i in np.arange(len(second_pos)):
                         if first_pos[i] == ticks and second_pos[i] in second_ticks:
                             second_pos[i] = second_ticks[second_ticks.index(second_pos[i]) + shift]
 
@@ -835,10 +839,10 @@ class ImageMapper:
 
                 # Squaring the output image if grid axes have not the same length.
                 if len(grid_first) > len(grid_second):
-                    for i in np.arange(0, (len(grid_first) - len(grid_second)), 1):
+                    for i in np.arange(len(grid_first) - len(grid_second)):
                         grid_second.append(np.around(grid_second[-1] + dist_second, decimals=3))
                 elif len(grid_first) < len(grid_second):
-                    for i in np.arange(0, (len(grid_second) - len(grid_first)), 1):
+                    for i in np.arange(len(grid_second) - len(grid_first)):
                         grid_first.append(np.around(grid_first[-1] + dist_first, decimals=3))
 
                 # Creating the virtual pixels outside of the camera.
@@ -908,7 +912,7 @@ class ImageMapper:
     @staticmethod
     def rotate_mapping_table(mapping_matrix3d,angle):
         mapping_table = []
-        for i in np.arange(0,mapping_matrix3d.shape[0],1):
+        for i in np.arange(mapping_matrix3d.shape[0]):
             image = rotate(mapping_matrix3d[i],angle,reshape=False,prefilter=False)
             mapping_table.append(image)
         return np.array(mapping_table)
