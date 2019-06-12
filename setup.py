@@ -12,6 +12,6 @@ setup(name='dl1_data_handler',
           'tables>=3.4.4',
           'ctapipe @ https://api.github.com/repos/cta-observatory/ctapipe/tarball/v0.6.2',
           'eventio>=0.16.1',
-          'ctapipe-extra>=0.2.17'],
+          'ctapipe-extra @ https://api.github.com/repos/cta-observatory/ctapipe-extra/tarball/v0.2.17',],
       dependency_links=[],
       zip_safe=True)
