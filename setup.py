@@ -10,10 +10,8 @@ setup(name='dl1_data_handler',
       install_requires=[
           'numpy>=1.15.0',
           'tables>=3.4.4',
-          'ctapipe==0.6.2',
+          'ctapipe @ https://api.github.com/repos/cta-observatory/ctapipe/tarball/v0.6.2',
           'eventio>=0.16.1',
           'ctapipe-extra>=0.2.17'],
-      dependency_links=[
-      'ctapipe @ https://api.github.com/repos/cta-observatory/ctapipe/tarball/v0.6.2'
-      ],
+      dependency_links=[],
       zip_safe=True)
