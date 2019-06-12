@@ -26,7 +26,9 @@ class DL1DataReader:
                  selected_telescope_type=None,
                  selected_telescope_ids=None,
                  selection_string=None,
-                 intensity_selection=None,
+                 event_selection=None,
+                 image_selection=None,
+                 # intensity_selection=None,
                  shuffle=False,
                  seed=None,
                  image_channels=None,
@@ -59,8 +61,14 @@ class DL1DataReader:
         if selected_telescope_ids is None:
             selected_telescope_ids = {}
 
-        if intensity_selection is None:
-            intensity_selection = {}
+        # if intensity_selection is None:
+        #     intensity_selection = {}
+
+        if event_selection is None:
+            event_selection = {}
+
+        if image_selection is None:
+            image_selection = {}
 
         if mapping_settings is None:
             mapping_settings = {}
@@ -122,30 +130,27 @@ class DL1DataReader:
                 else:
                     selected_telescopes[tel_type] = available_tel_ids
 
-            selected_nrows = [row.nrow for row
-                              in f.root.Events.where(cut_condition)
-                              if self._select_event_intensity(
-                                  row, intensity_selection)]
+            selected_nrows = set([row.nrow for row
+                              in f.root.Events.where(cut_condition)])
+            selected_nrows &= self._select_event(f, event_selection)
+            selected_nrows = list(selected_nrows)
 
             # Make list of identifiers of all examples passing event selection
-            if mode in ['stereo', 'multi-stereo']:
+            if self.mode in ['stereo', 'multi-stereo']:
                 example_identifiers = [(filename, nrow) for nrow
                                        in selected_nrows]
-            elif mode == 'mono':
+            elif self.mode == 'mono':
                 example_identifiers = []
                 field = '{}_indices'.format(self.tel_type)
-                for indices in f.root.Events.read_coordinates(
-                        selected_nrows, field=field):
-                    for tel_id, index in zip(telescopes[self.tel_type],
-                                             indices):
-                        if (tel_id in selected_telescopes[self.tel_type]
-                                and index != 0
-                                and self._select_image_intensity(
-                                    f.root._f_get_child(
-                                        self.tel_type)[index]['charge'],
-                                    intensity_selection)):
-                            example_identifiers.append(
-                                (filename, index, tel_id))
+                selected_indices = f.root.Events.read_coordinates(selected_nrows, field=field)
+                for tel_id in selected_telescopes[self.tel_type]:
+                    img_ids = set(selected_indices[:, tel_id-1])
+                    img_ids.remove(0)
+                    img_ids = list(img_ids)
+                    mask = self._select_image(f.root[self.tel_type][img_ids]['charge'], image_selection)
+                    img_ids = np.array(img_ids)[mask]
+                    for index in img_ids:
+                            example_identifiers.append((filename, index, tel_id))
 
             # Confirm that the files are consistent and merge them
             if not self.telescopes:
@@ -286,19 +291,41 @@ class DL1DataReader:
         # Definition of preprocessed example
         self.example_description = self.processor.output_description
 
-    def _select_event_intensity(self, row, intensity_selection):
-        if intensity_selection is None or self.mode == 'mono':
-            return True
-        elif self.mode in ['stereo', 'multi-stereo']:
-            # TODO: define event-wise intensity
-            return True
+    def _select_event(self, file, filters):
+        """
+        Filter the data event wise.
+        Parameters
+        ----------
+            file (tables.File): the file containing the data
+            filters (dict): dictionary of `{filter_function: filter_parameters}` to apply on the data
 
-    @staticmethod
-    def _select_image_intensity(image_charge, intensity_selection):
-        intensity = np.sum(image_charge)
-        lower = intensity_selection.get('lower', -np.inf)
-        upper = intensity_selection.get('upper', np.inf)
-        return (lower < intensity < upper)
+        Returns
+        -------
+        the filtered nrows
+
+        """
+        indices = set(np.arange(len(file.root.Events[:])))
+        for filter_function, filter_parameters in filters.items():
+            indices &= filter_function(self, file, **filter_parameters)
+        return indices
+
+    def _select_image(self, images, filters):
+        """
+        Filter the data image wise.
+        Parameters
+        ----------
+            images (tables.File): the images to filter on
+            filters (dict): dictionary of `{filter_function: filter_parameters}` to apply on the data
+
+        Returns
+        -------
+        the mask of filtered images
+
+                """
+        mask = np.full(len(images), True)
+        for filter_function, filter_parameters in filters.items():
+            mask &= filter_function(self, images, **filter_parameters)
+        return mask
 
     # Get a single telescope image from a particular event, uniquely
     # identified by the filename, tel_type, and image table index.
