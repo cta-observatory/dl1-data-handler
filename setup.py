@@ -13,5 +13,7 @@ setup(name='dl1_data_handler',
           'ctapipe>=0.6.2',
           'eventio>=0.16.1',
           'ctapipe-extra>=0.2.17'],
-      dependency_links=[],
+      dependency_links=[
+      'https://github.com/cta-observatory/ctapipe/tarball/v0.6.2'
+      ],
       zip_safe=True)
