@@ -2,9 +2,9 @@ import numpy as np
 
 class ImageMapper():
 
-    def __init__(self, mapping_method, channels):#", settings=defaults, ..."):
-        self.mapping_method = mapping_method
-        self.channels = channels
+    def __init__(self, **kwargs):
+        self.mapping_method = kwargs.get('mapping_method', 'vector')
+        self.channels = kwargs['channels']
         self.mapping_tables = {}
         self.image_shape = {
             'LST_LSTCam': (110, 110, 1),

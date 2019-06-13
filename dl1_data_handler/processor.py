@@ -77,7 +77,7 @@ class ConvertShowerPrimaryIDToClassLabel(Transform):
         for i, (arr, des) in enumerate(zip(example, self.description)):
             if des['name'] == self.name:
                 class_label = np.array(
-                    self.shower_primary_id_to_class[arr],
+                    self.shower_primary_id_to_class[arr.tolist()],
                     dtype=self.dtype)
                 example[i] = class_label
         return example
