@@ -306,7 +306,8 @@ class DL1DataReader:
     # Get a single telescope image from a particular event, uniquely
     # identified by the filename, tel_type, and image table index.
     # First extract a raw 1D vector and transform it into a 2D image using a
-    # mapping table.
+    # mapping table. When 'axial addressing' is selected this function should
+    # return the unmapped vector.
     def _get_image(self, filename, tel_type, image_index):
 
         f = self.files[filename]
@@ -320,8 +321,10 @@ class DL1DataReader:
         # image of all zeros with be loaded
         for i, channel in enumerate(self.image_channels):
             vector[:, i] = record[channel]
+        # If axial addressing is selected, we only need the unmapped vector.
+        if self.image_mapper.mapping_method[get_camera_type(tel_type)] == 'axial_addressing':
+           return vector
         image = self.image_mapper.map_image(vector, get_camera_type(tel_type))
-
         return image
 
     def __len__(self):
