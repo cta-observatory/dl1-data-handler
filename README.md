@@ -1,6 +1,7 @@
 # DL1 Data Handler
 
-[![build status](https://travis-ci.org/cta-observatory/image-extractor.svg?branch=master)](https://travis-ci.org/cta-observatory/dl1-data-handler.svg?branch=master)[![Coverage Status](https://coveralls.io/repos/github/cta-observatory/dl1-data-handler/badge.svg?branch=master)](https://coveralls.io/github/cta-observatory/dl1-data-handler?branch=master)
+[![build status](https://travis-ci.org/cta-observatory/dl1-data-handler.svg?branch=master)](https://travis-ci.org/cta-observatory/dl1-data-handler.svg?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/cta-observatory/dl1-data-handler/badge.svg?branch=master)](https://coveralls.io/github/cta-observatory/dl1-data-handler?branch=master)
 
 A package of utilities for writing, reading, and applying image processing to [Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") DL1 data (calibrated images) in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data.
 
