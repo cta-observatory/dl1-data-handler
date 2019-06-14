@@ -104,6 +104,7 @@ class EnergyToLog(Transform):
         for des in self.description:
             if des['base_name'] == 'mc_energy':
                 des['unit'] = 'log(TeV)'
+        return self.description
 
     def __call__(self, example):
         for i, (val, des) in enumerate(zip(example, self.description)):
@@ -119,6 +120,7 @@ class ImpactToKm(Transform):
         for des in self.description:
             if des['base_name'] in ['core_x', 'core_y']:
                 des['unit'] = 'km'
+        return self.description
 
     def __call__(self, example):
         for i, (val, des) in enumerate(zip(example, self.description)):
@@ -134,6 +136,7 @@ class XmaxToKm(Transform):
         for des in self.description:
             if des['base_name'] == 'x_max':
                 des['unit'] = 'km'
+        return self.description
 
     def __call__(self, example):
         for i, (val, des) in enumerate(zip(example, self.description)):
@@ -149,6 +152,7 @@ class HfirstIntToKm(Transform):
         for des in self.description:
             if des['base_name'] == 'h_first_int':
                 des['unit'] = 'km'
+        return self.description
 
     def __call__(self, example):
         for i, (val, des) in enumerate(zip(example, self.description)):
@@ -164,7 +168,8 @@ class TelescopePositionToKm(Transform):
         for des in self.description:
             if des['base_name'] in ['x', 'y', 'z']:
                 des['unit'] = 'km'
-
+        return self.description
+    
     def __call__(self, example):
         for i, (val, des) in enumerate(zip(example, self.description)):
             if des['base_name'] in ['x', 'y', 'z']:
