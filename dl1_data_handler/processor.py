@@ -214,3 +214,4 @@ class DataForGammaLearn(Transform):
             elif des['base_name'] in self.array_infos:
                 array.append(val)
         return {'image': image, 'label': np.stack(labels), 'mc_energy': mc_energy, 'telescope': np.stack(array)}
+ 
