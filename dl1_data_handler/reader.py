@@ -8,6 +8,9 @@ import tables
 from dl1_data_handler.image_mapper import ImageMapper
 from dl1_data_handler.processor import DL1DataProcessor
 
+def get_camera_type(tel_type):
+    return tel_type.split('_')[1]
+
 class DL1DataReader:
 
     @staticmethod
@@ -191,7 +194,7 @@ class DL1DataReader:
                     'name': 'image',
                     'tel_type': self.tel_type,
                     'base_name': 'image',
-                    'shape': self.image_mapper.image_shape[self.tel_type],
+                    'shape': self.image_mapper.image_shapes[get_camera_type(self.tel_type)],
                     'dtype': np.dtype(np.float32)
                     }
                 ]
@@ -214,7 +217,7 @@ class DL1DataReader:
                     'tel_type': self.tel_type,
                     'base_name': 'image',
                     'shape': ((num_tels,)
-                              + self.image_mapper.image_shape[self.tel_type]),
+                              + self.image_mapper.image_shapes[get_camera_type(self.tel_type)]),
                     'dtype': np.dtype(np.float32)
                     },
                 {
@@ -246,7 +249,7 @@ class DL1DataReader:
                         'tel_type': tel_type,
                         'base_name': 'image',
                         'shape': ((num_tels,)
-                                  + self.image_mapper.image_shape[tel_type]),
+                                  + self.image_mapper.image_shapes[get_camera_type(tel_type)]),
                         'dtype': np.dtype(np.float32)
                         },
                     {
@@ -330,7 +333,8 @@ class DL1DataReader:
     # Get a single telescope image from a particular event, uniquely
     # identified by the filename, tel_type, and image table index.
     # First extract a raw 1D vector and transform it into a 2D image using a
-    # mapping table.
+    # mapping table. When 'axial addressing' is selected this function should
+    # return the unmapped vector.
     def _get_image(self, filename, tel_type, image_index):
 
         f = self.files[filename]
@@ -339,15 +343,15 @@ class DL1DataReader:
         length = [x['num_pixels'] for x
                   in f.root.Telescope_Type_Information.where(query)][0]
         num_channels = len(self.image_channels)
-        vector = np.empty(shape=(length + 1, num_channels), dtype=np.float32)
-        # An "empty" pixel at index 0 is used to fill blank areas in image
-        vector[0, :] = 0.0
+        vector = np.empty(shape=(length, num_channels), dtype=np.float32)
         # If the telescope didn't trigger, the image index is 0 and a blank
         # image of all zeros with be loaded
         for i, channel in enumerate(self.image_channels):
-            vector[1:, i] = record[channel]
-        image = self.image_mapper.map_image(vector, tel_type)
-
+            vector[:, i] = record[channel]
+        # If axial addressing is selected, we only need the unmapped vector.
+        if self.image_mapper.mapping_method[get_camera_type(tel_type)] == 'axial_addressing':
+           return vector
+        image = self.image_mapper.map_image(vector, get_camera_type(tel_type))
         return image
 
     def __len__(self):
