@@ -94,15 +94,15 @@ class DL1DataReader:
                     default = f.root.Array_Information[0]['type'].decode()
                     selected_telescope_type = default
                 self.tel_type = selected_telescope_type
-                self.selected_tel_types = [selected_telescope_type]
+                selected_tel_types = [selected_telescope_type]
             elif self.mode == 'multi-stereo':
                 if selected_telescope_type is None:
                     # Default: use all tel types
                     selected_telescope_type = list(telescopes)
                 self.tel_type = None
-                self.selected_tel_types = selected_telescope_type
+                selected_tel_types = selected_telescope_type
             multiplicity_conditions = ['(' + tel_type + '_multiplicity > 0)'
-                                       for tel_type in self.selected_tel_types]
+                                       for tel_type in selected_tel_types]
             tel_cut_string = '(' + ' | '.join(multiplicity_conditions) + ')'
             # Combine minimal telescope cut with explicit selection cuts
             if selection_string:
@@ -113,7 +113,7 @@ class DL1DataReader:
             # Select which telescopes from the full dataset to include in each
             # event by a telescope type and an optional list of telescope ids.
             selected_telescopes = {}
-            for tel_type in self.selected_tel_types:
+            for tel_type in selected_tel_types:
                 available_tel_ids = telescopes[tel_type]
                 # Keep only the selected tel ids for the tel type
                 if tel_type in selected_telescope_ids:
