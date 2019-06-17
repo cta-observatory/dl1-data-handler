@@ -31,7 +31,6 @@ class DL1DataReader:
                  selection_string=None,
                  event_selection=None,
                  image_selection=None,
-                 # intensity_selection=None,
                  shuffle=False,
                  seed=None,
                  image_channels=None,
@@ -64,9 +63,6 @@ class DL1DataReader:
         if selected_telescope_ids is None:
             selected_telescope_ids = {}
 
-        # if intensity_selection is None:
-        #     intensity_selection = {}
-
         if event_selection is None:
             event_selection = {}
 
@@ -98,15 +94,15 @@ class DL1DataReader:
                     default = f.root.Array_Information[0]['type'].decode()
                     selected_telescope_type = default
                 self.tel_type = selected_telescope_type
-                selected_tel_types = [selected_telescope_type]
+                self.selected_tel_types = [selected_telescope_type]
             elif self.mode == 'multi-stereo':
                 if selected_telescope_type is None:
                     # Default: use all tel types
                     selected_telescope_type = list(telescopes)
                 self.tel_type = None
-                selected_tel_types = selected_telescope_type
+                self.selected_tel_types = selected_telescope_type
             multiplicity_conditions = ['(' + tel_type + '_multiplicity > 0)'
-                                       for tel_type in selected_tel_types]
+                                       for tel_type in self.selected_tel_types]
             tel_cut_string = '(' + ' | '.join(multiplicity_conditions) + ')'
             # Combine minimal telescope cut with explicit selection cuts
             if selection_string:
@@ -117,7 +113,7 @@ class DL1DataReader:
             # Select which telescopes from the full dataset to include in each
             # event by a telescope type and an optional list of telescope ids.
             selected_telescopes = {}
-            for tel_type in selected_tel_types:
+            for tel_type in self.selected_tel_types:
                 available_tel_ids = telescopes[tel_type]
                 # Keep only the selected tel ids for the tel type
                 if tel_type in selected_telescope_ids:
@@ -147,9 +143,10 @@ class DL1DataReader:
                 field = '{}_indices'.format(self.tel_type)
                 selected_indices = f.root.Events.read_coordinates(selected_nrows, field=field)
                 for tel_id in selected_telescopes[self.tel_type]:
-                    img_ids = set(selected_indices[:, tel_id-1])
+                    img_ids = set(selected_indices[:, telescopes[self.tel_type].index(tel_id)])
                     img_ids.remove(0)
                     img_ids = list(img_ids)
+                    # TODO handle all selected channels
                     mask = self._select_image(f.root[self.tel_type][img_ids]['charge'], image_selection)
                     img_ids = np.array(img_ids)[mask]
                     for index in img_ids:

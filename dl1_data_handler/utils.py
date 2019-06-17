@@ -7,27 +7,9 @@ from ctapipe.instrument import CameraGeometry
 # Event Filters #
 #################
 
-def event_energy_filter(reader, file, e_min=-np.inf, e_max=np.inf):
-    """
-    Filter events on energy
-    Parameters
-    ----------
-    reader
-    file
-    e_min
-    e_max
-
-    Returns
-    -------
-    the filtered indices
-    """
-    mask1 = (file.root.Events[:]['mc_energy'] > e_min) & (file.root.Events[:]['mc_energy'] < e_max)
-    return set(np.arange(len(file.root.Events))[mask1])
-
-
 def event_intensity_filter(reader, file, i_min=-np.inf, i_max=np.inf):
     """
-    Filter events on intensity (in pe)
+    Prototype of Filter events on intensity (in pe)
     Parameters
     ----------
     reader (DL1DataReader) : the reader to filter
@@ -39,7 +21,9 @@ def event_intensity_filter(reader, file, i_min=-np.inf, i_max=np.inf):
     -------
     the filtered indices
     """
-    tel_types = [reader.tel_type] if reader.mode == 'mono' else reader.tel_type
+    # TODO define a physically correct strategy
+    # tel_types = [reader.tel_type] if reader.mode in ['mono', 'stereo'] else list(reader.selected_telescopes)
+    tel_types = reader.selected_tel_types
     total_intensity = np.zeros(len(file.root.Events))
     for tel_type in tel_types:
         indices = file.root.Events[:][tel_type + '_indices']
