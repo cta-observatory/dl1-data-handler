@@ -192,10 +192,10 @@ class DataForGammaLearn(Transform):
                 label_description.append(des['base_name'])
         if len(label_description) > 0:
             self.description.append({'name': 'label',
-                                     'tel_type': 'NA',
+                                     'tel_type': None,
                                      'base_name': 'label',
-                                     'shape': 'NA',
-                                     'dtype': 'NA',
+                                     'shape': None,
+                                     'dtype': None,
                                      'label_description': label_description})
         return self.description
 
