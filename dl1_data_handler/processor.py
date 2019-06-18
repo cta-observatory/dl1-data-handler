@@ -1,8 +1,7 @@
 import copy
 
-import numpy as np
 
-class DL1DataProcessor():
+class DL1DataProcessor:
 
     def __init__(self, mode, input_description, transforms=None,
                  validate=False):
@@ -27,7 +26,7 @@ class DL1DataProcessor():
                 transform.validate(example)
         return example
 
-class Transform():
+class Transform:
 
     def __init__(self):
         self.description = []
@@ -55,42 +54,3 @@ class Transform():
                                  "Example: {}.".format(
                                      self.__class__.__name__, des, arr))
 
-class ConvertShowerPrimaryIDToClassLabel(Transform):
-
-    def __init__(self):
-        super().__init__()
-        self.shower_primary_id_to_class = {
-            0: 1, # gamma
-            101: 0 # proton
-            }
-        self.name = 'class_label'
-        self.dtype = np.dtype('int8')
-
-    def describe(self, description):
-        self.description = [
-            {**des, 'name': self.name, 'dtype': self.dtype}
-            if des['name'] == 'shower_primary_id'
-            else des for des in description]
-        return self.description
-
-    def __call__(self, example):
-        for i, (arr, des) in enumerate(zip(example, self.description)):
-            if des['name'] == self.name:
-                class_label = np.array(
-                    self.shower_primary_id_to_class[arr.tolist()],
-                    dtype=self.dtype)
-                example[i] = class_label
-        return example
-
-class NormalizeTelescopePositions(Transform):
-
-    def __init__(self, norm_x=1.0, norm_y=1.0, norm_z=1.0):
-        super().__init__()
-        self.norms = {'x': norm_x, 'y': norm_y, 'z': norm_z}
-
-    def transform(self, example):
-        for i, (arr, des) in enumerate(zip(example, self.description)):
-            if des['base_name'] in self.norms:
-                normed_pos = arr / self.norms[des['base_name']]
-                example[i] = np.array(normed_pos, dtype=des['dtype'])
-        return example
