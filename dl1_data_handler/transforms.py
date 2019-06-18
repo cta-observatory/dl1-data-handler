@@ -153,12 +153,21 @@ class DataForGammaLearn(Transform):
         array = []
         for i, (val, des) in enumerate(zip(example, self.description)):
             if des['base_name'] == 'image':
-                image = val
+                image = val.T
             elif des['base_name'] in self.mc_infos:
+                if des['name'] == 'class_label':
+                    val = val.astype(np.float32)
                 labels.append(val)
                 if des['base_name'] == 'mc_energy':
                     mc_energy = val
             elif des['base_name'] in self.array_infos:
                 array.append(val)
-        return {'image': image, 'label': np.stack(labels), 'mc_energy': mc_energy, 'telescope': np.stack(array)}
+        sample = {'image': image}
+        if len(labels) > 0:
+            sample['label'] = np.stack(labels)
+        if mc_energy is not None:
+            sample['mc_energy'] = mc_energy
+        if len(array) > 0:
+            sample['telescope'] = np.stack(array)
+        return sample
 
