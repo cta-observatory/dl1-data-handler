@@ -23,7 +23,7 @@ install:
       - conda info -a
       - conda create -n test python=3.6
       - conda activate test
-      - pip install .
+      - python setup.py develop
 script:
       - pytest --cov=dl1_data_handler
 after_success:
