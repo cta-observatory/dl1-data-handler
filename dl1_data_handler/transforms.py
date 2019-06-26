@@ -16,7 +16,7 @@ class ConvertShowerPrimaryIDToClassLabel(Transform):
     def describe(self, description):
         self.description = [
             {**des, 'name': self.name, 'dtype': self.dtype}
-            if des['name'] == 'shower_primary_id'
+            if des['name'] == 'particle_id'
             else des for des in description]
         return self.description
 
