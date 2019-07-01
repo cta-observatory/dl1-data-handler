@@ -192,7 +192,7 @@ class SortTelescopes(Transform):
 
     def __call__(self, example):
         outputs = {des['name']: arr for arr, des
-                   in enumerate(zip(example, self.description))}
+                   in zip(example, self.description)}
         indices = np.argsort(self.key(outputs))
         for i, (arr, des) in enumerate(zip(example, self.description)):
             if des['base_name'] in ['image', 'trigger', 'x', 'y', 'z']:
