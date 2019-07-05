@@ -171,3 +171,30 @@ class DataForGammaLearn(Transform):
             sample['telescope'] = np.stack(array)
         return sample
 
+
+class SortTelescopes(Transform):
+
+    def __init__(self, sorting):
+        super().__init__()
+        params = {
+                # List triggered telescopes first
+                'trigger': {'reverse': True, 'key': lambda x: x['trigger']},
+                # List from largest to smallest sum of pixel charges
+                'size': {'reverse': True,
+                         'key': lambda x: np.sum(x['image'], (1,2,3))}
+                }
+        if sorting in params:
+            self.step = -1 if params[sorting]['reverse'] else 1
+            self.key = params[sorting]['key']
+        else:
+            raise ValueError("Invalid image sorting method: {}. Select "
+                             "'trigger' or 'size'.".format(sorting))
+
+    def __call__(self, example):
+        outputs = {des['name']: arr for arr, des
+                   in zip(example, self.description)}
+        indices = np.argsort(self.key(outputs))
+        for i, (arr, des) in enumerate(zip(example, self.description)):
+            if des['base_name'] in ['image', 'trigger', 'x', 'y', 'z']:
+                example[i] = arr[indices[::self.step]]
+        return example
