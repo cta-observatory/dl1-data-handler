@@ -379,7 +379,8 @@ class DL1DataReader:
         f = self.files[filename]
 
         def append_array_info(array_info, tel_id):
-            query = "tel_id == {}".format(tel_id)
+            query = "(tel_id == {}) & (tel_type == {})".format(tel_id,
+                    self.tel_type.encode())
             for row in f.root.Array_Info.where(query):
                 for info, column in zip(array_info, self.array_info):
                     dtype = f.root.Array_Info.cols._f_col(column).dtype
