@@ -23,15 +23,15 @@ def event_intensity_filter(reader, file, i_min=-np.inf, i_max=np.inf):
     """
     # TODO define a physically correct strategy
     tel_types = [reader.tel_type] if reader.mode in ['mono', 'stereo'] else list(reader.selected_telescopes)
-    total_intensity = np.zeros(len(file.root.Events))
+    total_intensity = np.zeros(len(file.root.Event_Info))
     for tel_type in tel_types:
-        indices = file.root.Events[:][tel_type + '_indices']
-        images = file.root._f_get_child(tel_type)[:]['charge']
+        indices = file.root.Event_Info[:][tel_type + '_indices']
+        images = file.root._f_get_child(tel_type)[:]['image_charge']
         images = images[indices]
         total_intensity += images.sum(axis=(1, 2))
     mask1 = i_min < total_intensity
     mask2 = total_intensity < i_max
-    return set(np.arange(len(file.root.Events))[mask1 & mask2])
+    return set(np.arange(len(file.root.Event_Info))[mask1 & mask2])
 
 #################
 # Image Filters #
