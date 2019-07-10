@@ -987,7 +987,6 @@ class DL1DataWriter:
             combined_image.shape = image.shape[1]
         """
 
-        # print(image.shape[0] == 2)
         assert image.shape[0] == 2
 
         self.gain_selector.thresholds[cam_id] = threshold
