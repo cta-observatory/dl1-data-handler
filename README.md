@@ -1,5 +1,6 @@
 # DL1 Data Handler
 
+[![DOI](https://zenodo.org/badge/72042185.svg)](https://zenodo.org/badge/latestdoi/72042185)
 [![build status](https://travis-ci.org/cta-observatory/dl1-data-handler.svg?branch=master)](https://travis-ci.org/cta-observatory/dl1-data-handler.svg?branch=master)
 [![Coverage Status](https://coveralls.io/repos/github/cta-observatory/dl1-data-handler/badge.svg?branch=master)](https://coveralls.io/github/cta-observatory/dl1-data-handler?branch=master)
 
