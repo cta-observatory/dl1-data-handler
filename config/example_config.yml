@@ -5,11 +5,11 @@ Data Writer:
     # Specify 'parallel' to write to each output file (process each run) in parallel using Python Multithreading.
     write_mode: 'parallel'
     # Dictionary of ctapipe CameraCalibrator settings. Will be passed as a dict of kwargs to the ctapipe CameraCalibrator. 
-    calibration_settings:
+    #calibration_settings:
         # String name indicating the R1 calibrator to use. 
-        r1_product: 'HESSIOR1Calibrator'
+        #r1_product: 'HESSIOR1Calibrator'
         # String name indicating the method to use for the trace integration. 
-        extractor_product: 'NeighbourPeakIntegrator'
+        #extractor_product: 'NeighbourPeakIntegrator'
     # Cut function to be used to exclude events from being dumped. Should follow
     #preselection_cut_function: None
     # Maximum output file size (in bytes). After this limit is reached, the dumper will finish the existing file and start a new one. Comment out this setting to set no limit.
@@ -49,13 +49,13 @@ Data Dumper:
     # Expected number of images per telescope per (triggered) event (as a float). This is just an approximate value which is used for
     # optimizing the chunking. One entry should be provided per telescope type. If a telescope type is not present then a default value will be used.
     expected_images_per_event:
-        'LST:LSTCam': 0.5
-        'MST:NectarCam': 2.0
-        'MST:FlashCam': 2.0
-        'MST-SCT:SCTCam': 1.5
-        'SST:DigiCam': 1.25
-        'SST:ASTRICam': 1.25
-        'SST:CHEC': 1.25
+        'LSTCam': 0.5,
+        'NectarCam': 2.0,
+        'FlashCam': 2.0,
+        'SCTCam': 1.5,
+        'DigiCam': 1.25,
+        'ASTRICam': 1.25,
+        'CHEC': 1.25
     # A list of (table, column) pairs on which PyTables should create indexes in the output files.
     # The tables should be specified as '/{table_name}' or 'tel' to select all telescope tables in the file (all share the same column names)
     # The column name should be specified as it appears in the table.

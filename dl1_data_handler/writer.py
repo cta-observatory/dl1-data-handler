@@ -83,19 +83,6 @@ class DL1DataDumper(ABC):
         """
         pass
 
-    @staticmethod
-    def convert_tel_name(tel_name):
-        """Strip a telescope name of ':' and  -'.
-
-        Parameters
-        ----------
-        tel_name : str
-            A ctapipe telescope name
-
-        """
-        tel_name = tel_name.replace(':', '_').replace('-', '')
-        return tel_name
-
 
 class CTAMLDataDumper(DL1DataDumper):
     """Class for dumping ctapipe DL1 data to the CTA ML data format.
@@ -174,13 +161,13 @@ class CTAMLDataDumper(DL1DataDumper):
 
         if expected_images_per_event is None:
             self.expected_images_per_event = {
-                     'LST:LSTCam': 0.5,
-                     'MST:NectarCam': 2.0,
-                     'MST:FlashCam': 2.0,
-                     'MST-SCT:SCTCam': 1.5,
-                     'SST:DigiCam': 1.25,
-                     'SST:ASTRICam': 1.25,
-                     'SST:CHEC': 1.25,
+                     'LSTCam': 0.5,
+                     'NectarCam': 2.0,
+                     'FlashCam': 2.0,
+                     'SCTCam': 1.5,
+                     'DigiCam': 1.25,
+                     'ASTRICam': 1.25,
+                     'CHEC': 1.25,
                  },
         else:
             self.expected_images_per_event = expected_images_per_event
@@ -238,7 +225,7 @@ class CTAMLDataDumper(DL1DataDumper):
                 tel_desc = subarray.tels[tel_id]
                 rows = [row for row in array_table.iterrows()
                         if row["id"] == tel_id and
-                        row["type"].decode('utf-8') == self.convert_tel_name(str(tel_desc)) and
+                        row["type"].decode('utf-8') == str(tel_desc) and
                         row["x"] == subarray.positions[tel_id].value[0] and
                         row["y"] == subarray.positions[tel_id].value[1] and
                         row["z"] == subarray.positions[tel_id].value[2]]
@@ -247,7 +234,7 @@ class CTAMLDataDumper(DL1DataDumper):
                     logger.error("Printing all entries in Array_Information...")
                     for row in array_table.iterrows():
                         logger.error("{}, {}, [{}, {}, {}]".format(row["id"], row["type"].decode('utf-8'), row["x"], row["y"], row["z"]))
-                    logger.error("Failed to find: {}, {}, {}".format(tel_id, self.convert_tel_name(str(tel_desc)), subarray.positions[tel_id].value))
+                    logger.error("Failed to find: {}, {}, {}".format(tel_id, str(tel_desc), subarray.positions[tel_id].value))
                     raise ValueError("Failed to validate telescope description in Array_Information.")
 
         else:
@@ -258,7 +245,7 @@ class CTAMLDataDumper(DL1DataDumper):
             for tel_id in subarray.tels:
                 tel_desc = subarray.tels[tel_id]
                 row["id"] = tel_id
-                row["type"] = self.convert_tel_name(str(tel_desc))
+                row["type"] = str(tel_desc)
                 row["x"] = subarray.positions[tel_id].value[0]
                 row["y"] = subarray.positions[tel_id].value[1]
                 row["z"] = subarray.positions[tel_id].value[2]
@@ -281,7 +268,7 @@ class CTAMLDataDumper(DL1DataDumper):
                 pos[0:y_len, 1] = subarray.tel[tel_id].camera.pix_y.value
 
                 rows = [row for row in tel_table.iterrows() if
-                            row["type"].decode('utf-8') == self.convert_tel_name(str(tel_desc)) and
+                            row["type"].decode('utf-8') == str(tel_desc) and
                             row["optics"].decode('utf-8') == str(tel_desc.optics) and
                             row["camera"].decode('utf-8') == str(tel_desc.camera) and
                             row["num_pixels"] == len(subarray.tel[tel_id].camera.pix_id) and
@@ -291,7 +278,7 @@ class CTAMLDataDumper(DL1DataDumper):
                     for row in tel_table.iterrows():
                         logger.error("{}, {}, {}, {}".format(row["type"].decode('utf-8'), row["optics"].decode('utf-8'), row["camera"].decode('utf-8'), row["num_pixels"]))
                         logger.error(row["pixel_positions"])
-                    logger.error("New input file: {}-{}-{}-{}".format(self.convert_tel_name(str(tel_desc)), str(tel_desc.optics), str(tel_desc.camera), len(subarray.tel[tel_id].camera.pix_id)))    
+                    logger.error("New input file: {}-{}-{}-{}".format(str(tel_desc), str(tel_desc.optics), str(tel_desc.camera), len(subarray.tel[tel_id].camera.pix_id)))    
                     logger.error(pos)
                     raise ValueError("Failed to validate telescope type description in Telescope_Type_Information.")
         else:
@@ -311,7 +298,7 @@ class CTAMLDataDumper(DL1DataDumper):
                 pos[0:x_len, 0] = subarray.tel[tel_id].camera.pix_x.value
                 pos[0:y_len, 1] = subarray.tel[tel_id].camera.pix_y.value
 
-                row["type"] = self.convert_tel_name(str(tel_description))
+                row["type"] = str(tel_description)
                 row["optics"] = str(tel_description.optics)
                 row["camera"] = str(tel_description.camera)
                 row["num_pixels"] = len(subarray.tel[tel_id].camera.pix_id)
@@ -417,7 +404,7 @@ class CTAMLDataDumper(DL1DataDumper):
 
         for tel_type in self.subarray:
             image_table = self.file.get_node(
-                '/' + self.convert_tel_name(str(tel_type)),
+                '/' + str(tel_type),
                 classname='Table')
             image_row = image_table.row
 
@@ -425,7 +412,7 @@ class CTAMLDataDumper(DL1DataDumper):
             for tel_id in self.subarray[tel_type]:
                 if tel_id in event_container.dl1.tel:
                     image_row['charge'] = event_container.dl1.tel[tel_id].image
-                    image_row['peakpos'] = event_container.dl1.tel[tel_id].peakpos
+                    image_row['pulse_time'] = event_container.dl1.tel[tel_id].pulse_time
                     image_row["event_index"] = self.event_index
                     image_row.append()
 
@@ -435,8 +422,8 @@ class CTAMLDataDumper(DL1DataDumper):
                 else:
                     index_vector.append(0)
 
-            event_row[self.convert_tel_name(tel_type) + '_indices'] = index_vector
-            event_row[self.convert_tel_name(tel_type) + '_multiplicity'] = sum(
+            event_row[str(tel_type) + '_indices'] = index_vector
+            event_row[str(tel_type) + '_multiplicity'] = sum(
                 index > 0 for index in index_vector)
 
         event_row.append()
@@ -487,11 +474,11 @@ class CTAMLDataDumper(DL1DataDumper):
 
         for tel_type in subarray.telescope_types:
             event_table_desc.columns[
-                self.convert_tel_name(tel_type) + '_indices'] = (
+                str(tel_type) + '_indices'] = (
                 tables.UInt32Col(shape=(
                     len(subarray.get_tel_ids_for_type(tel_type)))))
             event_table_desc.columns[
-                self.convert_tel_name(tel_type) + '_multiplicity'] = (
+                str(tel_type) + '_multiplicity'] = (
                 tables.UInt32Col())
 
         event_table = self.file.create_table(self.file.root,
@@ -505,16 +492,16 @@ class CTAMLDataDumper(DL1DataDumper):
     def _create_image_tables(self, subarray):
         for tel_desc in set(subarray.tels.values()):
             tel_name = str(tel_desc)
-            if ("/" + self.convert_tel_name(tel_name)) not in self.file:
+            if ("/" + tel_name) not in self.file:
                 logger.info("Creating {} image table...".format(tel_name))
-                self.image_tables.append(self.convert_tel_name(tel_name))
+                self.image_tables.append(tel_name)
 
                 image_shape = (len(tel_desc.camera.pix_id),)
 
                 columns_dict = {
                     "event_index": tables.Int32Col(),
                     "charge": tables.Float32Col(shape=image_shape),
-                    "peakpos": tables.Float32Col(shape=image_shape)
+                    "pulse_time": tables.Float32Col(shape=image_shape)
                 }
 
                 description = type('description',
@@ -532,7 +519,7 @@ class CTAMLDataDumper(DL1DataDumper):
 
                 table = self.file.create_table(
                     self.file.root,
-                    self.convert_tel_name(tel_name),
+                    tel_name,
                     description,
                     "Table of {} images".format(tel_name),
                     filters=self.filters,
@@ -543,7 +530,7 @@ class CTAMLDataDumper(DL1DataDumper):
 
                 image_row['charge'] = np.zeros(image_shape, dtype=np.float32)
                 image_row['event_index'] = -1
-                image_row['peakpos'] = np.zeros(image_shape, dtype=np.float32)
+                image_row['pulse_time'] = np.zeros(image_shape, dtype=np.float32)
 
                 image_row.append()
                 table.flush()
@@ -668,7 +655,7 @@ class DL1DataWriter:
                  write_mode='parallel',
                  output_file_size=10737418240,
                  events_per_file=None,
-                 gain_thresholds=None,
+                 #gain_thresholds=None,
                  save_mc_events=False):
         """Initialize a DL1DataWriter instance.
 
@@ -741,19 +728,9 @@ class DL1DataWriter:
                         "that this may increase the number of output "
                         "files.".format(self.events_per_file))
 
-        if calibration_settings is None:
-            self.calibration_settings = {
-                     'r1_product': 'HESSIOR1Calibrator',
-                     'extractor_product': 'NeighbourPeakIntegrator'
-                 }
-        else:
-            self.calibration_settings = calibration_settings
+        self.calibrator = calib.camera.calibrator.CameraCalibrator(gain_selector=ThresholdGainSelector(threshold = 4094))
 
-        self.calibrator = calib.camera.calibrator.CameraCalibrator(
-            None, None, **self.calibration_settings)
-
-        self.gain_selector = ThresholdGainSelector(select_by_sample=True)
-        
+        '''
         if gain_thresholds is None:
             self.gain_thresholds = {
                     'LSTCam': 4094,
@@ -762,6 +739,7 @@ class DL1DataWriter:
                 }
         else:
             self.gain_thresholds = gain_thresholds
+        '''
 
     def process_data(self, run_list):
         """Process data from a list of runs.
@@ -874,7 +852,7 @@ class DL1DataWriter:
                     filename,
                     **self.event_source_settings)
             else:
-                event_source = io.event_source(filename)
+                event_source = io.eventsource.EventSource.from_url(filename,back_seekable=True)
 
             # Write all file-level data if not present
             # Or compare to existing data if already in file
@@ -885,8 +863,7 @@ class DL1DataWriter:
 
             # Write all events sequentially
             for event in event_source:
-                self.calibrator.calibrate(event)
-                self.combine_channels(event)
+                self.calibrator(event)
                 if (self.preselection_cut_function is not None and not
                         self.preselection_cut_function(event)):
                     continue
@@ -967,59 +944,3 @@ class DL1DataWriter:
                         mcheader = temp.mcheader
                         data_dumper.prepare_file(filename, subarray, mcheader)
 
-    def gain_selection(self, waveform, image, peakpos, cam_id, threshold):
-        """
-        Based on the waveform and threshold, select the proper gain for each pixel.
-        By default, the channel 0 is kept.
-        If a pixel is saturated (value > threshold in the waveform), the channel 1 is used.
-
-        Parameters
-        ----------
-        waveform: array of waveforms of the events
-        image: array of calibrated pixel charges
-        peakpos: array of pixel peak positions
-        cam_id: str
-        threshold: int threshold to change form high gain to low gain
-
-        Returns
-        -------
-        combined_image, combined_peakpos: `(numpy.array, numpy.array)`
-            combined_image.shape = image.shape[1]
-        """
-
-        assert image.shape[0] == 2
-
-        self.gain_selector.thresholds[cam_id] = threshold
-
-        waveform, gain_mask = self.gain_selector.select_gains(cam_id, waveform)
-        signal_mask = gain_mask.max(axis=1)
-
-        combined_image = image[0].copy()
-        combined_image[signal_mask] = image[1][signal_mask]
-        combined_peakpos = peakpos[0].copy()
-        combined_peakpos[signal_mask] = peakpos[1][signal_mask]
-
-        return combined_image, combined_peakpos
-
-    def combine_channels(self, event):
-        """
-        Combine the channels for the image and peakpos arrays in the event.dl1 containers
-        The `event.dl1.tel[tel_id].image` and `event.dl1.tel[tel_id].peakpos` are replaced by their combined versions
-
-        Parameters
-        ----------
-        event: `ctapipe.io.containers.DataContainer`
-        """
-        for tel_id in event.r0.tels_with_data:
-            cam_id = event.inst.subarray.tel[tel_id].camera.cam_id
-            if cam_id in self.gain_thresholds:
-                waveform = event.r0.tel[tel_id].waveform
-                signals = event.dl1.tel[tel_id].image
-                peakpos = event.dl1.tel[tel_id].peakpos
-
-                combined_image, combined_peakpos = self.gain_selection(waveform, signals, peakpos, cam_id, self.gain_thresholds[cam_id])
-                event.dl1.tel[tel_id].image = combined_image
-                event.dl1.tel[tel_id].peakpos = combined_peakpos
-            else:
-                event.dl1.tel[tel_id].image = event.dl1.tel[tel_id].image[0]
-                event.dl1.tel[tel_id].peakpos = event.dl1.tel[tel_id].peakpos[0]
