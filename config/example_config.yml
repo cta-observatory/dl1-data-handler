@@ -49,12 +49,12 @@ Data Dumper:
     # Expected number of images per telescope per (triggered) event (as a float). This is just an approximate value which is used for
     # optimizing the chunking. One entry should be provided per telescope type. If a telescope type is not present then a default value will be used.
     expected_images_per_event:
-        'LSTCam': 0.5,
-        'NectarCam': 2.0,
-        'FlashCam': 2.0,
-        'SCTCam': 1.5,
-        'DigiCam': 1.25,
-        'ASTRICam': 1.25,
+        'LSTCam': 0.5
+        'NectarCam': 2.0
+        'FlashCam': 2.0
+        'SCTCam': 1.5
+        'DigiCam': 1.25
+        'ASTRICam': 1.25
         'CHEC': 1.25
     # A list of (table, column) pairs on which PyTables should create indexes in the output files.
     # The tables should be specified as '/{table_name}' or 'tel' to select all telescope tables in the file (all share the same column names)
