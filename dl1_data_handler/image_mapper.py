@@ -85,9 +85,9 @@ class ImageMapper:
 
             map_method = self.mapping_method[camtype]
             if map_method not in ['oversampling', 'rebinning', 'nearest_interpolation', 'bilinear_interpolation',
-                                  'bicubic_interpolation', 'image_shifting', 'axial_addressing']:
+                                  'bicubic_interpolation', 'image_shifting', 'axial_addressing', 'IndexedConv']:
                 raise ValueError("Hex conversion algorithm {} is not implemented.".format(map_method))
-            elif map_method in ['image_shifting', 'axial_addressing'] and camtype in ['ASTRICam', 'CHEC', 'SCTCam']:
+            elif map_method in ['image_shifting', 'axial_addressing', 'IndexedConv'] and camtype in ['ASTRICam', 'CHEC', 'SCTCam']:
                 raise ValueError(
                     "{} (hexagonal convolution) is not available for square pixel cameras.".format(map_method))
 
@@ -97,7 +97,7 @@ class ImageMapper:
             # At the edges of the cameras the mapping methods run into issues.
             # Therefore, we are using a default padding to ensure that the camera pixels aren't affected.
             # The default padding is removed after the conversion is finished.
-            if map_method in ['image_shifting', 'axial_addressing']:
+            if map_method in ['image_shifting', 'axial_addressing', 'IndexedConv']:
                 self.default_pad = 0
             elif map_method == 'bicubic_interpolation':
                 self.default_pad = 3
@@ -155,7 +155,7 @@ class ImageMapper:
         """
         # Check if axial addressing is selected in the image_mapper
         if self.index_matrixes[camera_type] is None:
-            raise ValueError("The function get_indexmatrix() can only be called, when axial addressing is selected in the image_mapper.")
+            raise ValueError("The function get_indexmatrix() can only be called, when 'IndexedConv' is selected in the ImageMapper.")
         # Return the index matrix, which has been calculated in 'generate_table()'
         return self.index_matrixes[camera_type]
 
@@ -184,12 +184,12 @@ class ImageMapper:
         output_dim = self.image_shapes[camera_type][0]
 
         # Oversampling and nearest interpolation
-        if map_method in ['oversampling', 'nearest_interpolation', 'image_shifting', 'axial_addressing']:
+        if map_method in ['oversampling', 'nearest_interpolation', 'image_shifting', 'axial_addressing', 'IndexedConv']:
             # Finding the nearest point in the hexagonal grid for each point in the square grid
             tree = spatial.cKDTree(hex_grid)
             nn_index = np.reshape(tree.query(table_grid)[1], (output_dim, output_dim))
             # Store the nn_index array in the index_matrix. Replace virtual pixel indexes with -1.
-            if map_method == 'axial_addressing':
+            if map_method == 'IndexedConv':
                 index_matrix = nn_index
                 index_matrix[index_matrix >= num_pixels] = -1
                 index_matrix = np.flip(index_matrix, axis=0)
@@ -513,7 +513,7 @@ class ImageMapper:
         if self.mask and map_method in ['bilinear_interpolation', 'bicubic_interpolation']:
             mapping_matrix3d = self.apply_mask_interpolation(mapping_matrix3d, nn_index, num_pixels, pad)
         # Rotating the camera back to the original orientation
-        if self.rot_cam and camera_type in ['LSTCam', 'NectarCam', 'MAGICCam'] and map_method not in ['image_shifting', 'axial_addressing']:
+        if self.rot_cam and camera_type in ['LSTCam', 'NectarCam', 'MAGICCam'] and map_method not in ['image_shifting', 'axial_addressing', 'IndexedConv']:
              mapping_matrix3d = self.rotate_mapping_table(mapping_matrix3d,90.0-CameraGeometry.from_name(camera_type).pix_rotation.deg)
         # Normalization (approximation) of the mapping table
         if map_method in ['rebinning', 'bilinear_interpolation', 'bicubic_interpolation']:
@@ -783,7 +783,7 @@ class ImageMapper:
                 second_ticks.insert(0, np.around(second_ticks[0] - dist_second, decimals=3))
 
             # Create the virtual pixels outside of the camera
-            if map_method != 'axial_addressing':
+            if map_method not in ['axial_addressing', 'IndexedConv']:
                 virtual_pixels = []
                 for i in np.arange(2):
                     if map_method in ['oversampling', 'image_shifting']:
@@ -822,7 +822,7 @@ class ImageMapper:
                 grid_second = np.unique(second_pos).tolist()
                 self.image_shapes[camera_type] = (len(grid_first), len(grid_second), self.image_shapes[camera_type][2])
 
-            elif map_method == 'axial_addressing':
+            elif map_method in ['axial_addressing', 'IndexedConv']:
                 virtual_pixels = []
                 # manipulate y ticks with extra ticks
                 num_extra_ticks = len(y_ticks)
