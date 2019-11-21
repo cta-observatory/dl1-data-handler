@@ -13,7 +13,6 @@ import numpy as np
 import tables
 
 from ctapipe import io, calib
-from ctapipe.calib.camera.gainselection import ThresholdGainSelector
 
 from dl1_data_handler import table_definitions as table_defs
 
@@ -650,12 +649,10 @@ class DL1DataWriter:
                  event_source_settings=None,
                  data_dumper_class=CTAMLDataDumper,
                  data_dumper_settings=None,
-                 calibration_settings=None,
                  preselection_cut_function=None,
                  write_mode='parallel',
                  output_file_size=10737418240,
                  events_per_file=None,
-                 #gain_thresholds=None,
                  save_mc_events=False):
         """Initialize a DL1DataWriter instance.
 
@@ -675,9 +672,6 @@ class DL1DataWriter:
         data_dumper_settings : dict
             A dictionary of kwargs which will be passed into the constructor
             for the DL1DataDumper.
-        calibration_settings : dict
-            A dictionary of kwargs which will be passed into the constructor
-            for ctapipe.calib.camera.CameraCalibrator.
         preselection_cut_function : function
             A cut function used to determine which events in the input files
             to write to the output files. Takes a
@@ -728,18 +722,7 @@ class DL1DataWriter:
                         "that this may increase the number of output "
                         "files.".format(self.events_per_file))
 
-        self.calibrator = calib.camera.calibrator.CameraCalibrator(gain_selector=ThresholdGainSelector(threshold = 4094))
-
-        '''
-        if gain_thresholds is None:
-            self.gain_thresholds = {
-                    'LSTCam': 4094,
-                    'NectarCam': 4094,
-                    'ASTRICam': 4094,
-                }
-        else:
-            self.gain_thresholds = gain_thresholds
-        '''
+        self.calibrator = calib.camera.calibrator.CameraCalibrator()
 
     def process_data(self, run_list):
         """Process data from a list of runs.
