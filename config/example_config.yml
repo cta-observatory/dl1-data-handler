@@ -4,12 +4,6 @@ Data Writer:
     # Mode for writing. Valid options are 'serial' and 'parallel'. Specify 'serial' to write each output file (process each run) sequentially using a single thread.
     # Specify 'parallel' to write to each output file (process each run) in parallel using Python Multithreading.
     write_mode: 'parallel'
-    # Dictionary of ctapipe CameraCalibrator settings. Will be passed as a dict of kwargs to the ctapipe CameraCalibrator. 
-    #calibration_settings:
-        # String name indicating the R1 calibrator to use. 
-        #r1_product: 'HESSIOR1Calibrator'
-        # String name indicating the method to use for the trace integration. 
-        #extractor_product: 'NeighbourPeakIntegrator'
     # Cut function to be used to exclude events from being dumped. Should follow
     #preselection_cut_function: None
     # Maximum output file size (in bytes). After this limit is reached, the dumper will finish the existing file and start a new one. Comment out this setting to set no limit.
