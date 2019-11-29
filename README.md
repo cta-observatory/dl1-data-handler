@@ -16,7 +16,26 @@ DL1DataWriter implements a standardized format for storing simulated CTA DL1 eve
 
 ## Installation
 
-The following installation method (for Linux) is recommended:
+For now please install the current ctapipe master (after the fix [ctapipe PR #1143](https://github.com/cta-observatory/ctapipe/pull/1143)) from source: 
+
+```bash
+git clone https://github.com/cta-observatory/ctapipe
+cd ctapipe
+
+conda env create -n dl1dh -f environment.yml
+conda activate dl1dh
+
+python setup.py install
+```
+Install DL1 Data Handler on top of ctapipe also from source:
+```bash
+git clone https://github.com/cta-observatory/dl1-data-handler.git
+cd dl1-data-handler
+
+python setup.py install
+```
+
+The following installation suggestions are not working. We are working on a fix!
 
 ### Installing with pip/setuptools from source
 
