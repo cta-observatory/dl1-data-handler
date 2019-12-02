@@ -173,7 +173,27 @@ class DL1DataReader:
         if image_channels is None:
             image_channels = ['charge']
         self.image_channels = image_channels
+
+        # Opening the first hdf5 file in file_list to extract the camera geometries
+        h5 = tables.open_file(file_list[0], 'r')
+        self.pixel_positions = None
+        if "/Telescope_Type_Information" in h5:
+            cameras = [x['camera'].decode() for x in h5.root.Telescope_Type_Information]
+            num_pixels = [x['num_pixels'] for x in h5.root.Telescope_Type_Information]
+            pixel_positions = [x['pixel_positions'] for x in h5.root.Telescope_Type_Information]
+            self.pixel_positions = {}
+            for i, cam in enumerate(cameras):
+                self.pixel_positions[cam] = pixel_positions[i][:num_pixels[i]].T
+                # For now hardcoded, since this information is not in the h5 files.
+                # The official CTA DL1 format will contain this information.
+                if cam in ['LSTCam', 'NectarCam', 'MAGICCam']:
+                    rotation_angle = -70.9 * np.pi/180.0 if cam == 'MAGICCam' else -100.893 * np.pi/180.0
+                    rotation_matrix = np.matrix([[np.cos(rotation_angle), -np.sin(rotation_angle)],
+                                                [np.sin(rotation_angle), np.cos(rotation_angle)]], dtype=float)
+                    self.pixel_positions[cam] = np.squeeze(np.asarray(np.dot(rotation_matrix, self.pixel_positions[cam])))
+                
         self.image_mapper = ImageMapper(channels=self.image_channels,
+                                        pixel_positions=self.pixel_positions,
                                         **mapping_settings)
 
         if array_info is None:

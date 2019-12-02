@@ -1,7 +1,4 @@
 import numpy as np
-import ctapipe.image.cleaning as cleaning
-from ctapipe.instrument import CameraGeometry
-
 
 #################
 # Event Filters #
@@ -70,8 +67,17 @@ def image_cleaning_filter(reader, images, **opts):
     -------
     mask
     """
+    
+    try:
+        from ctapipe.image import cleaning
+    except ImportError:
+        raise ImportError("The `ctapipe.image.cleaning` python module is required to perform cleaning operation")
+    try:
+        from ctapipe.instrument.camera import CameraGeometry
+    except ImportError:
+        raise ImportError("The `ctapipe.instrument.CameraGeometry` python module is required to perform cleaning operation")
 
-    geom = CameraGeometry.from_name(reader.tel_type.split('_')[1])
+    geom = CameraGeometry.from_name(reader.tel_type.split('_')[2])
 
     def clean(img):
         return cleaning.tailcuts_clean(geom, img, **opts)
