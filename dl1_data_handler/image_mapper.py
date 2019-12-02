@@ -8,8 +8,6 @@ from scipy.ndimage import rotate
 from astropy import units as u
 from collections import Counter
 
-from ctapipe.instrument.camera import CameraGeometry
-
 logger = logging.getLogger(__name__)
 
 
@@ -17,10 +15,11 @@ class ImageMapper:
 
     def __init__(self,
                  camera_types=None,
+                 pixel_positions=None,
                  mapping_method=None,
                  padding=None,
                  interpolation_image_shape=None,
-                 rotate_camera=False,
+                 rotate_back=None,
                  mask_interpolation=False,
                  channels=['charge']):
 
@@ -45,7 +44,7 @@ class ImageMapper:
         if camera_types:
             self.camera_types = []
             for camera_type in camera_types:
-                if camera_type in CameraGeometry.get_known_camera_names():
+                if camera_type in self.image_shapes:
                     self.camera_types.append(camera_type)
                 else:
                     logger.error("Camera type {} isn't supported.".format(camera_type))
@@ -72,16 +71,36 @@ class ImageMapper:
         self.mask = True if mask_interpolation else False
 
         # Rotate the camera back to the actual orientation. The pixel are moved into a horizontal grid to perform the image_mapper algorithm.
-        self.rot_cam = True if rotate_camera else False
+        self.rotate_camera = True if rotate_back else False
 
-        # Camera geometries, mapping tables and index matrixes initialization
-        self.camera_geometries = {}
+        # Pixel positions, number of pixels, mapping tables and index matrixes initialization
+        self.pixel_positions = {}
+        self.num_pixels = {}
         self.mapping_tables = {}
         self.index_matrixes = {}
 
         for camtype in self.camera_types:
-            # Get a corresponding CameraGeometry
-            self.camera_geometries[camtype] = CameraGeometry.from_name(camtype)
+            # Get a corresponding pixel positions
+            if pixel_positions is None:
+                try:
+                    from ctapipe.instrument.camera import CameraGeometry
+                except ImportError:
+                    raise ImportError("The `ctapipe.instrument.camera` python module is required, if pixel_positions is `None`.")
+                camgeo = CameraGeometry.from_name(camtype)
+                self.num_pixels[camtype] = len(camgeo.pix_id)
+                self.pixel_positions[camtype] = np.column_stack([camgeo.pix_x.value, camgeo.pix_y.value]).T
+                if camtype in ['LSTCam', 'NectarCam', 'MAGICCam']:
+                    rotation_angle = -camgeo.pix_rotation.value * np.pi/180.0
+                    rotation_matrix = np.matrix([[np.cos(rotation_angle), -np.sin(rotation_angle)],
+                                                 [np.sin(rotation_angle), np.cos(rotation_angle)]], dtype=float)
+                    self.pixel_positions[camtype] = np.squeeze(np.asarray(np.dot(rotation_matrix, self.pixel_positions[camtype])))
+                    if self.rotate_camera:
+                        self.rotate_back_angle = 90.0-camgeo.pix_rotation.deg
+            else:
+                self.pixel_positions[camtype] = pixel_positions[camtype]
+                self.num_pixels[camtype] = pixel_positions[camtype].shape[1]
+                if camtype in ['LSTCam', 'NectarCam', 'MAGICCam'] and self.rotate_camera:
+                    self.rotate_back_angle = rotate_back
 
             map_method = self.mapping_method[camtype]
             if map_method not in ['oversampling', 'rebinning', 'nearest_interpolation', 'bilinear_interpolation',
@@ -162,15 +181,9 @@ class ImageMapper:
     def generate_table(self, camera_type):
         # Get relevant parameters
         output_dim = self.image_shapes[camera_type][0]
-        num_pixels = len(CameraGeometry.from_name(camera_type).pix_id)
+        num_pixels = self.num_pixels[camera_type]
         # Get telescope pixel positions and padding for the given tel type
-        camgeom = self.camera_geometries[camera_type]
-
-        pos = np.column_stack([camgeom.pix_x.value, camgeom.pix_y.value]).T
-
-        if camera_type in ['LSTCam', 'NectarCam', 'MAGICCam']:
-            pos = self.rotate_pixel_pos(pos, -camgeom.pix_rotation.value)
-
+        pos = self.pixel_positions[camera_type]
         pad = self.padding[camera_type]
         default_pad = self.default_pad
         map_method = self.mapping_method[camera_type]
@@ -513,8 +526,8 @@ class ImageMapper:
         if self.mask and map_method in ['bilinear_interpolation', 'bicubic_interpolation']:
             mapping_matrix3d = self.apply_mask_interpolation(mapping_matrix3d, nn_index, num_pixels, pad)
         # Rotating the camera back to the original orientation
-        if self.rot_cam and camera_type in ['LSTCam', 'NectarCam', 'MAGICCam'] and map_method not in ['image_shifting', 'axial_addressing', 'indexed_conv']:
-             mapping_matrix3d = self.rotate_mapping_table(mapping_matrix3d,90.0-CameraGeometry.from_name(camera_type).pix_rotation.deg)
+        if self.rotate_camera and camera_type in ['LSTCam', 'NectarCam', 'MAGICCam'] and map_method not in ['image_shifting', 'axial_addressing', 'indexed_conv']:
+             mapping_matrix3d = self.rotate_mapping_table(mapping_matrix3d,self.rotate_back_angle)
         # Normalization (approximation) of the mapping table
         if map_method in ['rebinning', 'bilinear_interpolation', 'bicubic_interpolation']:
             mapping_matrix3d = self.normalize_mapping_matrix(mapping_matrix3d, num_pixels)
@@ -786,19 +799,10 @@ class ImageMapper:
             if map_method not in ['axial_addressing', 'indexed_conv']:
                 virtual_pixels = []
                 for i in np.arange(2):
-                    if map_method in ['oversampling', 'image_shifting']:
-                        if camera_type not in ['DigiCam']:
-                            j = i if self.default_pad % 2 == 0 else 1 - i
-                        else:
-                            j = 1 - i if self.default_pad % 2 == 0 else i
-                    else:
-                        if camera_type not in ['LSTCam', 'NectarCam', 'DigiCam']:
-                            j = i if self.default_pad % 2 == 0 else 1 - i
-                        else:
-                            j = 1 - i if self.default_pad % 2 == 0 else i
-                    virtual_pixels.append(self.get_virtual_pixels(
-                        first_ticks[i::2], second_ticks[j::2],
-                        first_pos, second_pos))
+                    vp1 = self.get_virtual_pixels(first_ticks[i::2], second_ticks[0::2],first_pos, second_pos)
+                    vp2 = self.get_virtual_pixels(first_ticks[i::2], second_ticks[1::2],first_pos, second_pos)
+                    virtual_pixels.append(vp1) if vp1.shape[0] < vp2.shape[0] else virtual_pixels.append(vp2)
+
                 virtual_pixels = np.concatenate(virtual_pixels)
 
                 first_pos = np.concatenate((first_pos, np.array(virtual_pixels[:, 0])))
@@ -916,13 +920,3 @@ class ImageMapper:
             image = rotate(mapping_matrix3d[i],angle,reshape=False,prefilter=False)
             mapping_table.append(image)
         return np.array(mapping_table)
-
-    @staticmethod
-    def rotate_pixel_pos(pos, angle_deg):
-        angle = angle_deg * np.pi/180.0
-        rotation_matrix = np.matrix([[np.cos(angle), -np.sin(angle)],
-                                     [np.sin(angle), np.cos(angle)]], dtype=float)
-        pos_rotated = np.squeeze(np.asarray(np.dot(rotation_matrix, pos)))
-        return pos_rotated
-
-
