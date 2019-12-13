@@ -1,8 +1,9 @@
 import numpy as np
+import itertools
 from .processor import Transform
 
 
-class ConvertShowerPrimaryIDToClassLabel(Transform):
+class ConvertShowerPrimaryIDToParticleType(Transform):
 
     def __init__(self):
         super().__init__()
@@ -10,7 +11,7 @@ class ConvertShowerPrimaryIDToClassLabel(Transform):
             0: 1,  # gamma
             101: 0  # proton
         }
-        self.name = 'class_label'
+        self.name = 'particletype'
         self.dtype = np.dtype('int8')
 
     def describe(self, description):
@@ -23,10 +24,10 @@ class ConvertShowerPrimaryIDToClassLabel(Transform):
     def __call__(self, example):
         for i, (arr, des) in enumerate(zip(example, self.description)):
             if des['name'] == self.name:
-                class_label = np.array(
+                particletype = np.array(
                     self.shower_primary_id_to_class[arr.tolist()],
                     dtype=self.dtype)
-                example[i] = class_label
+                example[i] = particletype
         return example
 
 
@@ -60,7 +61,43 @@ class EnergyToLog(Transform):
         return example
 
 
-class ImpactToKm(Transform):
+class AltAzToDirection(Transform):
+
+    def __init__(self):
+        super().__init__()
+        self.name = 'direction'
+        self.shape = (2)
+        self.dtype = np.dtype('float32')
+        self.unit = 'rad'
+
+    def describe(self, description):
+        self.description = description
+        self.description.append(
+            {
+                'name': self.name,
+                'tel_type': None,
+                'base_name': self.name,
+                'shape': self.shape,
+                'dtype': self.dtype,
+                'unit': self.unit
+                }
+            )
+        return self.description
+
+    def __call__(self, example):
+        alt = []
+        az = []
+        for i, (val, des) in enumerate(itertools.zip_longest(example, self.description)):
+            if des['base_name'] == 'alt':
+                alt = example[i]
+            elif des['base_name'] == 'az':
+                az = example[i]
+            elif des['base_name'] == self.name:
+                example.append(np.array([alt,az]))
+        return example
+
+
+class CoreXYToKm(Transform):
 
     def describe(self, description):
         self.description = description
@@ -73,6 +110,44 @@ class ImpactToKm(Transform):
         for i, (val, des) in enumerate(zip(example, self.description)):
             if des['base_name'] in ['core_x', 'core_y']:
                 example[i] = val / 1000
+        return example
+
+
+class ImpactToKm(Transform):
+
+    def __init__(self):
+        super().__init__()
+        self.name = 'impact'
+        self.shape = (2)
+        self.dtype = np.dtype('float32')
+        self.unit = 'km'
+
+    def describe(self, description):
+        self.description = description
+        self.description.append(
+            {
+                'name': self.name,
+                'tel_type': None,
+                'base_name': self.name,
+                'shape': self.shape,
+                'dtype': self.dtype,
+                'unit': self.unit
+                }
+            )
+        return self.description
+
+    def __call__(self, example):
+        core_x_km = []
+        core_y_km = []
+        for i, (val, des) in enumerate(itertools.zip_longest(example, self.description)):
+            if des['base_name'] == 'core_x':
+                example[i] = val / 1000
+                core_x_km = example[i]
+            elif des['base_name'] == 'core_y':
+                example[i] = val / 1000
+                core_y_km = example[i]
+            elif des['base_name'] == self.name:
+                example.append(np.array([core_x_km,core_y_km]))
         return example
 
 
