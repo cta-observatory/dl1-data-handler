@@ -113,7 +113,7 @@ class CoreXYToKm(Transform):
         return example
 
 
-class ImpactToKm(Transform):
+class CoreXYToImpactInKm(Transform):
 
     def __init__(self):
         super().__init__()
