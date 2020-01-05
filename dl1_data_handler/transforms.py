@@ -3,7 +3,7 @@ import itertools
 from .processor import Transform
 
 
-class ConvertShowerPrimaryIDToParticleType(Transform):
+class ShowerPrimaryIDToParticleType(Transform):
 
     def __init__(self):
         super().__init__()
@@ -45,7 +45,7 @@ class NormalizeTelescopePositions(Transform):
         return example
 
 
-class EnergyToLog(Transform):
+class MCEnergyInLog(Transform):
 
     def describe(self, description):
         self.description = description
@@ -57,6 +57,35 @@ class EnergyToLog(Transform):
     def __call__(self, example):
         for i, (val, des) in enumerate(zip(example, self.description)):
             if des['base_name'] == 'mc_energy':
+                example[i] = np.log10(val)
+        return example
+        
+        
+class MCEnergyToEnergyInLog(Transform):
+    def __init__(self):
+          super().__init__()
+          self.name = 'energy'
+          self.shape = (1)
+          self.dtype = np.dtype('float32')
+          self.unit = 'log(TeV)'
+          
+    def describe(self, description):
+        self.description = description
+        self.description.append(
+            {
+                'name': self.name,
+                'tel_type': None,
+                'base_name': self.name,
+                'shape': self.shape,
+                'dtype': self.dtype,
+                'unit': self.unit
+                }
+            )
+        return self.description
+
+    def __call__(self, example):
+        for i, (val, des) in enumerate(zip(example, self.description)):
+            if des['base_name'] == self.name:
                 example[i] = np.log10(val)
         return example
 
@@ -97,7 +126,7 @@ class AltAzToDirection(Transform):
         return example
 
 
-class CoreXYToKm(Transform):
+class CoreXYInKm(Transform):
 
     def describe(self, description):
         self.description = description
@@ -151,7 +180,7 @@ class CoreXYToImpactInKm(Transform):
         return example
 
 
-class XmaxToKm(Transform):
+class XmaxInKm(Transform):
 
     def describe(self, description):
         self.description = description
@@ -165,9 +194,37 @@ class XmaxToKm(Transform):
             if des['base_name'] == 'x_max':
                 example[i] = val / 1000
         return example
+        
+class XmaxToShowerMaximumInKm(Transform):
+    def __init__(self):
+          super().__init__()
+          self.name = 'showermaximum'
+          self.shape = (1)
+          self.dtype = np.dtype('float32')
+          self.unit = 'km'
+          
+    def describe(self, description):
+        self.description = description
+        self.description.append(
+            {
+                'name': self.name,
+                'tel_type': None,
+                'base_name': self.name,
+                'shape': self.shape,
+                'dtype': self.dtype,
+                'unit': self.unit
+                }
+            )
+        return self.description
+
+    def __call__(self, example):
+        for i, (val, des) in enumerate(zip(example, self.description)):
+            if des['base_name'] == self.name:
+                example[i] = val / 1000
+        return example
 
 
-class HfirstIntToKm(Transform):
+class HfirstIntInKm(Transform):
 
     def describe(self, description):
         self.description = description
@@ -183,7 +240,7 @@ class HfirstIntToKm(Transform):
         return example
 
 
-class TelescopePositionToKm(Transform):
+class TelescopePositionInKm(Transform):
 
     def describe(self, description):
         self.description = description
