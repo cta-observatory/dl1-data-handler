@@ -65,27 +65,19 @@ class MCEnergyToEnergyInLog(Transform):
     def __init__(self):
           super().__init__()
           self.name = 'energy'
-          self.shape = (1)
           self.dtype = np.dtype('float32')
           self.unit = 'log(TeV)'
           
     def describe(self, description):
-        self.description = description
-        self.description.append(
-            {
-                'name': self.name,
-                'tel_type': None,
-                'base_name': self.name,
-                'shape': self.shape,
-                'dtype': self.dtype,
-                'unit': self.unit
-                }
-            )
+        self.description = [
+            {**des, 'name': self.name, 'dtype': self.dtype, 'unit': self.unit}
+            if des['name'] == 'mc_energy'
+            else des for des in description]
         return self.description
 
     def __call__(self, example):
         for i, (val, des) in enumerate(zip(example, self.description)):
-            if des['base_name'] == self.name:
+            if des['base_name'] == 'mc_energy':
                 example[i] = np.log10(val)
         return example
 
@@ -199,27 +191,19 @@ class XmaxToShowerMaximumInKm(Transform):
     def __init__(self):
           super().__init__()
           self.name = 'showermaximum'
-          self.shape = (1)
           self.dtype = np.dtype('float32')
           self.unit = 'km'
           
     def describe(self, description):
-        self.description = description
-        self.description.append(
-            {
-                'name': self.name,
-                'tel_type': None,
-                'base_name': self.name,
-                'shape': self.shape,
-                'dtype': self.dtype,
-                'unit': self.unit
-                }
-            )
+        self.description = [
+            {**des, 'name': self.name, 'dtype': self.dtype, 'unit': self.unit}
+            if des['name'] == 'showermaximum'
+            else des for des in description]
         return self.description
 
     def __call__(self, example):
         for i, (val, des) in enumerate(zip(example, self.description)):
-            if des['base_name'] == self.name:
+            if des['base_name'] == 'showermaximum':
                 example[i] = val / 1000
         return example
 
