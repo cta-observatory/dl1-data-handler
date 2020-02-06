@@ -72,6 +72,8 @@ class ImageMapper:
 
         # Rotate the camera back to the actual orientation. The pixel are moved into a horizontal grid to perform the image_mapper algorithm.
         self.rotate_camera = True if rotate_back else False
+        if self.rotate_camera and pixel_positions is None:
+            self.rotate_back_angle = {}
 
         # Pixel positions, number of pixels, mapping tables and index matrixes initialization
         self.pixel_positions = {}
@@ -95,7 +97,7 @@ class ImageMapper:
                                                  [np.sin(rotation_angle), np.cos(rotation_angle)]], dtype=float)
                     self.pixel_positions[camtype] = np.squeeze(np.asarray(np.dot(rotation_matrix, self.pixel_positions[camtype])))
                     if self.rotate_camera:
-                        self.rotate_back_angle = 90.0-camgeo.pix_rotation.deg
+                        self.rotate_back_angle[camtype] = 90.0-camgeo.pix_rotation.deg
             else:
                 self.pixel_positions[camtype] = pixel_positions[camtype]
                 self.num_pixels[camtype] = pixel_positions[camtype].shape[1]
@@ -527,7 +529,7 @@ class ImageMapper:
             mapping_matrix3d = self.apply_mask_interpolation(mapping_matrix3d, nn_index, num_pixels, pad)
         # Rotating the camera back to the original orientation
         if self.rotate_camera and camera_type in ['LSTCam', 'NectarCam', 'MAGICCam'] and map_method not in ['image_shifting', 'axial_addressing', 'indexed_conv']:
-             mapping_matrix3d = self.rotate_mapping_table(mapping_matrix3d,self.rotate_back_angle)
+             mapping_matrix3d = self.rotate_mapping_table(mapping_matrix3d,self.rotate_back_angle[camera_type])
         # Normalization (approximation) of the mapping table
         if map_method in ['rebinning', 'bilinear_interpolation', 'bicubic_interpolation']:
             mapping_matrix3d = self.normalize_mapping_matrix(mapping_matrix3d, num_pixels)
