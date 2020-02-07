@@ -213,7 +213,7 @@ class ImageMapper:
                 pixel_weight = 1 / 4
             else:
                 pixel_weight = 1
-            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2))
+            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2), dtype=np.float32)
             for y_grid in np.arange(output_dim):
                 for x_grid in np.arange(output_dim):
                     mapping_matrix3d[nn_index[y_grid][x_grid]][y_grid + pad][x_grid + pad] = pixel_weight
@@ -226,7 +226,7 @@ class ImageMapper:
                                   (output_dim * grid_size_factor, output_dim * grid_size_factor))
 
             # Calculating the overlapping area/weights for each square pixel
-            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2))
+            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2), dtype=np.float32)
             for y_grid in np.arange(0, output_dim * grid_size_factor, grid_size_factor):
                 for x_grid in np.arange(0, output_dim * grid_size_factor, grid_size_factor):
                     counter = Counter(
@@ -311,7 +311,7 @@ class ImageMapper:
             weights = np.reshape(weights, (output_dim, output_dim, weights.shape[1]))
             corner_indexes = np.reshape(corner_indexes, (output_dim, output_dim, corner_indexes.shape[1]))
 
-            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2))
+            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2), dtype=np.float32)
             for i in np.arange(output_dim):
                 for j in np.arange(output_dim):
                     for k in np.arange(corner_indexes.shape[2]):
@@ -510,7 +510,7 @@ class ImageMapper:
                 corner_indexes = np.reshape(simplexes_2NN,
                                             (simplexes_2NN.shape[0], output_dim, output_dim, simplexes_2NN.shape[2]))
 
-            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2))
+            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2), dtype=np.float32)
             for i in np.arange(4):
                 for j in np.arange(output_dim):
                     for k in np.arange(output_dim):
@@ -537,7 +537,7 @@ class ImageMapper:
         if (pad + default_pad) != 0:
             if map_method != 'oversampling' or camera_type in ['ASTRICam', 'CHEC', 'SCTCam']:
                 map_mat = np.zeros((mapping_matrix3d.shape[0], output_dim + (pad - default_pad) * 2,
-                                    output_dim + (pad - default_pad) * 2))
+                                    output_dim + (pad - default_pad) * 2), dtype=np.float32)
                 for i in np.arange(mapping_matrix3d.shape[0]):
                     map_mat[i] = mapping_matrix3d[i][default_pad:output_dim + pad * 2 - default_pad,
                                  default_pad:output_dim + pad * 2 - default_pad]
@@ -548,7 +548,7 @@ class ImageMapper:
                 )
             else:
                 map_mat = np.zeros((mapping_matrix3d.shape[0], output_dim + pad * 2 - default_pad * 4,
-                                    output_dim + pad * 2 - default_pad * 4))
+                                    output_dim + pad * 2 - default_pad * 4), dtype=np.float32)
                 for i in np.arange(mapping_matrix3d.shape[0]):
                     map_mat[i] = mapping_matrix3d[i][default_pad * 2:output_dim + pad * 2 - default_pad * 2,
                                  default_pad * 2:output_dim + pad * 2 - default_pad * 2]
@@ -566,7 +566,7 @@ class ImageMapper:
 
         sparse_map_mat = csr_matrix(map_mat.reshape(map_mat.shape[0],
                                                     self.image_shapes[camera_type][0] *
-                                                    self.image_shapes[camera_type][1]))
+                                                    self.image_shapes[camera_type][1]), dtype=np.float32)
 
         return sparse_map_mat
 
@@ -693,7 +693,7 @@ class ImageMapper:
                 w[3] = float((target[i][0] - p[i][0][0]) * (target[i][1] - p[i][0][1])) / divisor
                 weights.append(w)
 
-        return np.array(weights)
+        return np.array(weights, dtype=np.float32)
 
     def get_grids(self, pos, camera_type, grid_size_factor):
         """
@@ -906,7 +906,7 @@ class ImageMapper:
 
     @staticmethod
     def apply_mask_interpolation(mapping_matrix3d, nn_index, num_pixels, pad):
-        mask = np.zeros((nn_index.shape[0] + pad * 2, nn_index.shape[1] + pad * 2))
+        mask = np.zeros((nn_index.shape[0] + pad * 2, nn_index.shape[1] + pad * 2), dtype=np.float32)
         for i in range(nn_index.shape[0]):
             for j in range(nn_index.shape[1]):
                 if nn_index[j][i] < num_pixels:
