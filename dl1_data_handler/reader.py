@@ -171,7 +171,7 @@ class DL1DataReader:
 
         if image_channels is None:
             image_channels = ['charge']
-        self.image_channels = mapping_settings['channels'] = image_channels
+        self.image_channels = image_channels
         
         rotate_back = mapping_settings['rotate_back'] if 'rotate_back' in mapping_settings else False
         if rotate_back:
@@ -200,6 +200,12 @@ class DL1DataReader:
             mapping_settings['rotate_back'] = rotate_back_angle[cam]
         self.image_mapper = ImageMapper(pixel_positions=self.pixel_positions,
                                         **mapping_settings)
+
+        self.image_mapper.image_shapes[get_camera_type(self.tel_type)] = (
+                self.image_mapper.image_shapes[get_camera_type(self.tel_type)][0],
+                self.image_mapper.image_shapes[get_camera_type(self.tel_type)][1],
+                len(self.image_channels)  # number of channels
+                )
 
         if array_info is None:
             array_info = []
