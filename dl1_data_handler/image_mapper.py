@@ -20,8 +20,7 @@ class ImageMapper:
                  padding=None,
                  interpolation_image_shape=None,
                  rotate_back=None,
-                 mask_interpolation=False,
-                 channels=['charge']):
+                 mask_interpolation=False):
 
         # image_shapes should be a non static field to prevent problems
         # when multiple instances of ImageMapper are created
@@ -129,13 +128,13 @@ class ImageMapper:
                 self.image_shapes[camtype] = (
                     self.image_shapes[camtype][0] + self.default_pad * 2,
                     self.image_shapes[camtype][1] + self.default_pad * 2,
-                    len(channels)  # number of channels
+                    self.image_shapes[camtype][2]
                 )
             else:
                 self.image_shapes[camtype] = (
                     self.image_shapes[camtype][0] + self.default_pad * 4,
                     self.image_shapes[camtype][1] + self.default_pad * 4,
-                    len(channels)  # number of channels
+                    self.image_shapes[camtype][2]
                 )
 
             # Initializing the indexed matrix
@@ -151,23 +150,19 @@ class ImageMapper:
 
         Usage:
 
-        >>> # Use the ImageMapper with one channel (charge or peak position):
         >>> IM = dl1_data_handler.image_mapper.ImageMapper(camera_types=['LSTCam'])
-        >>> test_pixel_values = np.expand_dims(1855, axis=1)
-        >>> images = IM.map_image(test_pixel_values, 'LSTCam')
-
+        >>> one_channel = np.expand_dims(np.arange(1855), axis=1)
+        >>> # Use the ImageMapper with one channel (charge or peak position):
+        >>> image = IM.map_image(one_channel, 'LSTCam')
         >>> # Use the ImageMapper with two channels (charge and peak position):
-        >>> IM = dl1_data_handler.image_mapper.ImageMapper(camera_types=['LSTCam'], channels=['charge', 'peak_pos'])
-        >>> test_pixel_values = np.expand_dims(np.arange(1855), axis=1)
-        >>> test_pixel_values = np.concatenate((test_pixel_values, test_pixel_values[::-1]),axis=1) 
-        >>> images = IM.map_image(test_pixel_values, 'LSTCam')
+        >>> two_channels = np.concatenate((one_channel, one_channel[::-1]),axis=1) 
+        >>> images = IM.map_image(two_channels, 'LSTCam')
         """
 
         # Get relevant parameters
         map_tab = self.mapping_tables[camera_type]
         n_channels = pixels.shape[1]
         if n_channels != self.image_shapes[camera_type][2]:
-            print("WARNING:ctlearn:ImageMapper.map_image: The channel dimension of the ImageMapper (dim={}) mismatchs with the dimension of 'pixels' (dim={}). self.image_shapes['{}'][2] will be overwritten by the dimension 'pixels'.".format(self.image_shapes[camera_type][2], n_channels, camera_type))
             self.image_shapes[camera_type] = (
                 self.image_shapes[camera_type][0],
                 self.image_shapes[camera_type][1],
