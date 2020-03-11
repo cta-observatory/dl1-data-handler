@@ -121,7 +121,6 @@ def leakage_filter(reader, images, leakage_value=1.0, leakage_number=2, **opts):
         mask = False
         if any(cleanmask):
             # ctapipe v0.7.0
-            print(leakage(geom, img, cleanmask)['leakage{}_intensity'.format(lknum)])
             mask = leakage(geom, img, cleanmask)['leakage{}_intensity'.format(lknum)] <= lkval
         return mask
             
