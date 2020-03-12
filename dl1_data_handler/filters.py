@@ -48,11 +48,49 @@ def image_intensity_filter(reader, images, i_min=-np.inf, i_max=np.inf):
     -------
     mask (Array of bool)
     """
+
     amps = images.sum(axis=-1)
     mask1 = i_min < amps
     mask2 = amps < i_max
     return mask1 & mask2
 
+def image_intensity_after_cleaning_filter(reader, images, i_min=-np.inf, i_max=np.inf, **opts):
+    """
+    Filter images on intensity (in pe) after cleaning
+
+    Parameters
+    ----------
+    reader: `DL1DataReader`
+    images
+    options for image cleaning
+    i_min
+    i_max
+
+    Returns
+    -------
+    mask (Array of bool)
+    """
+
+    try:
+        from ctapipe.image import cleaning
+    except ImportError:
+        raise ImportError("The `ctapipe.image.cleaning` python module is required to perform cleaning operation")
+    try:
+        from ctapipe.instrument.camera import CameraGeometry
+    except ImportError:
+        raise ImportError("The `ctapipe.instrument.CameraGeometry` python module is required to perform cleaning operation")
+
+    geom = CameraGeometry.from_name(reader.tel_type.split('_')[2])
+
+    def int_after_clean(img):
+        cleanmask = cleaning.tailcuts_clean(geom, img, **opts)
+        clean = img.copy()
+        clean[~cleanmask] = 0.0
+        amps = np.sum(clean)
+        return (i_min < amps) & (amps < i_max)
+
+    int_mask = np.apply_along_axis(int_after_clean, 1, images)
+    return int_mask
 
 def image_cleaning_filter(reader, images, **opts):
     """
@@ -62,12 +100,13 @@ def image_cleaning_filter(reader, images, **opts):
     ----------
     reader: `DL1DataReader`
     images
+    options for image cleaning
 
     Returns
     -------
-    mask
+    mask (Array of bool)
     """
-    
+
     try:
         from ctapipe.image import cleaning
     except ImportError:
@@ -94,12 +133,13 @@ def leakage_filter(reader, images, leakage_value=1.0, leakage_number=2, **opts):
     ----------
     reader: `DL1DataReader`
     images
+    options for image cleaning
     leakage_value
     leakage_number
 
     Returns
     -------
-    mask
+    mask (Array of bool)
     """
 
     try:
@@ -121,20 +161,8 @@ def leakage_filter(reader, images, leakage_value=1.0, leakage_number=2, **opts):
         mask = False
         if any(cleanmask):
             # ctapipe v0.7.0
-            print(leakage(geom, img, cleanmask)['leakage{}_intensity'.format(leakage_number)])
             mask = leakage(geom, img, cleanmask)['leakage{}_intensity'.format(leakage_number)] <= leakage_value
         return mask
     leakage_mask = np.apply_along_axis(leak, 1, images)
-
-
-    #def leak(geom, img, lkval, lknum, **opts):
-    #    cleanmask = cleaning.tailcuts_clean(geom, img, **opts)
-    #    mask = False
-    #    if any(cleanmask):
-    #        # ctapipe v0.7.0
-    #        mask = leakage(geom, img, cleanmask)['leakage{}_intensity'.format(lknum)] <= lkval
-    #    return mask
-    #
-    #leakage_mask = np.array([leak(geom, image, leakage_value, leakage_number, **opts) for image in images])
     return leakage_mask
 
