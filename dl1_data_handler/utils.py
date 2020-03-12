@@ -94,14 +94,14 @@ def leakage_filter(reader, images, leakage_value=1.0, leakage_number=2, **opts):
     ----------
     reader: `DL1DataReader`
     images
-    leakage_val
+    leakage_value
     leakage_number
 
     Returns
     -------
     mask
     """
-    
+
     try:
         from ctapipe.image import cleaning, leakage
     except ImportError:
@@ -116,14 +116,25 @@ def leakage_filter(reader, images, leakage_value=1.0, leakage_number=2, **opts):
 
     geom = CameraGeometry.from_name(reader.tel_type.split('_')[2])
 
-    def leak(geom, img, lkval, lknum, **opts):
+    def leak(img):
         cleanmask = cleaning.tailcuts_clean(geom, img, **opts)
         mask = False
         if any(cleanmask):
             # ctapipe v0.7.0
-            mask = leakage(geom, img, cleanmask)['leakage{}_intensity'.format(lknum)] <= lkval
+            print(leakage(geom, img, cleanmask)['leakage{}_intensity'.format(leakage_number)])
+            mask = leakage(geom, img, cleanmask)['leakage{}_intensity'.format(leakage_number)] <= leakage_value
         return mask
-            
-    leakage_mask = np.array([leak(geom, image, leakage_value, leakage_number, **opts) for image in images])
+    leakage_mask = np.apply_along_axis(leak, 1, images)
+
+
+    #def leak(geom, img, lkval, lknum, **opts):
+    #    cleanmask = cleaning.tailcuts_clean(geom, img, **opts)
+    #    mask = False
+    #    if any(cleanmask):
+    #        # ctapipe v0.7.0
+    #        mask = leakage(geom, img, cleanmask)['leakage{}_intensity'.format(lknum)] <= lkval
+    #    return mask
+    #
+    #leakage_mask = np.array([leak(geom, image, leakage_value, leakage_number, **opts) for image in images])
     return leakage_mask
 
