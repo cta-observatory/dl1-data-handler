@@ -160,8 +160,11 @@ def leakage_filter(reader, images, leakage_value=1.0, leakage_number=2, **opts):
         cleanmask = cleaning.tailcuts_clean(geom, img, **opts)
         mask = False
         if any(cleanmask):
-            # ctapipe v0.7.0
-            mask = leakage(geom, img, cleanmask)['leakage{}_intensity'.format(leakage_number)] <= leakage_value
+            leakage_values = leakage(geom, img, cleanmask)
+            if hasattr(leakage_values, 'leakage{}_intensity'.format(leakage_number)):
+                mask = leakage_values['leakage{}_intensity'.format(leakage_number)] <= leakage_value
+            elif hasattr(leakage_values, 'intensity_width_{}'.format(leakage_number)):
+                mask = leakage_values['intensity_width_{}'.format(leakage_number)] <= leakage_value
         return mask
     leakage_mask = np.apply_along_axis(leak, 1, images)
     return leakage_mask
