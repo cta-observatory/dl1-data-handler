@@ -180,6 +180,7 @@ class DL1DataReader:
         # Opening the first hdf5 file in file_list to extract the camera geometries
         h5 = tables.open_file(file_list[0], 'r')
         self.pixel_positions = None
+        cameras = None
         if "/Telescope_Type_Information" in h5:
             cameras = [x['camera'].decode() for x in h5.root.Telescope_Type_Information]
             num_pixels = [x['num_pixels'] for x in h5.root.Telescope_Type_Information]
@@ -198,7 +199,9 @@ class DL1DataReader:
                     self.pixel_positions[cam] = np.squeeze(np.asarray(np.dot(rotation_matrix, self.pixel_positions[cam])))
         if rotate_back:
             mapping_settings['rotate_back'] = rotate_back_angle[cam]
-        self.image_mapper = ImageMapper(pixel_positions=self.pixel_positions, camera_types = cameras, **mapping_settings)
+        self.image_mapper = ImageMapper(pixel_positions=self.pixel_positions, 
+                                        camera_types = cameras, 
+                                        **mapping_settings)
 
         if array_info is None:
             array_info = []
