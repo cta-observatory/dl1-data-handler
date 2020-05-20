@@ -172,18 +172,22 @@ class DL1DataReader:
         if image_channels is None:
             image_channels = ['charge']
         self.image_channels = image_channels
-        
+
         rotate_back = mapping_settings['rotate_back'] if 'rotate_back' in mapping_settings else False
         if rotate_back:
             rotate_back_angle = {}
 
-        # Opening the first hdf5 file in file_list to extract the camera geometries
-        h5 = tables.open_file(file_list[0], 'r')
+        self.tel_pointing = np.array([0.0, 0.0], dtype=np.float32)
+        for transform in transforms:
+            if transform.name == 'deltaAltAz_direction':
+                self.tel_pointing = f.root._v_attrs.run_array_direction
+                transform.set_tel_pointing(self.tel_pointing)
+
         self.pixel_positions = None
-        if "/Telescope_Type_Information" in h5:
-            cameras = [x['camera'].decode() for x in h5.root.Telescope_Type_Information]
-            num_pixels = [x['num_pixels'] for x in h5.root.Telescope_Type_Information]
-            pixel_positions = [x['pixel_positions'] for x in h5.root.Telescope_Type_Information]
+        if "/Telescope_Type_Information" in f:
+            cameras = [x['camera'].decode() for x in f.root.Telescope_Type_Information]
+            num_pixels = [x['num_pixels'] for x in f.root.Telescope_Type_Information]
+            pixel_positions = [x['pixel_positions'] for x in f.root.Telescope_Type_Information]
             self.pixel_positions = {}
             for i, cam in enumerate(cameras):
                 self.pixel_positions[cam] = pixel_positions[i][:num_pixels[i]].T

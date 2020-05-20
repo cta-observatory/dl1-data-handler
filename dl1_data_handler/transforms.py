@@ -2,7 +2,6 @@ import numpy as np
 import itertools
 from .processor import Transform
 
-
 class ShowerPrimaryIDToParticleType(Transform):
 
     def __init__(self):
@@ -44,6 +43,19 @@ class NormalizeTelescopePositions(Transform):
                 example[i] = np.array(normed_pos, dtype=des['dtype'])
         return example
 
+class MCEnergyToEnergy(Transform):
+    def __init__(self):
+          super().__init__()
+          self.name = 'energy'
+          self.dtype = np.dtype('float32')
+          self.unit = 'TeV'
+
+    def describe(self, description):
+        self.description = [
+            {**des, 'name': self.name, 'dtype': self.dtype, 'unit': self.unit}
+            if des['name'] == 'mc_energy'
+            else des for des in description]
+        return self.description
 
 class MCEnergyInLog(Transform):
 
@@ -59,15 +71,28 @@ class MCEnergyInLog(Transform):
             if des['base_name'] == 'mc_energy':
                 example[i] = np.log10(val)
         return example
-        
-        
+
+class MCEnergyToEnergy(Transform):
+    def __init__(self):
+          super().__init__()
+          self.name = 'energy'
+          self.dtype = np.dtype('float32')
+          self.unit = 'TeV'
+
+    def describe(self, description):
+        self.description = [
+            {**des, 'name': self.name, 'dtype': self.dtype, 'unit': self.unit}
+            if des['name'] == 'mc_energy'
+            else des for des in description]
+        return self.description
+
 class MCEnergyToEnergyInLog(Transform):
     def __init__(self):
           super().__init__()
           self.name = 'energy'
           self.dtype = np.dtype('float32')
           self.unit = 'log(TeV)'
-          
+
     def describe(self, description):
         self.description = [
             {**des, 'name': self.name, 'dtype': self.dtype, 'unit': self.unit}
@@ -81,6 +106,44 @@ class MCEnergyToEnergyInLog(Transform):
                 example[i] = np.log10(val)
         return example
 
+class AltAzToDeltaAltAzDirection(Transform):
+
+    def __init__(self):
+        super().__init__()
+        self.name = 'deltaAltAz_direction'
+        self.base_name = 'direction'
+        self.shape = (2)
+        self.dtype = np.dtype('float32')
+        self.unit = 'rad'
+        self.tel_pointing = np.array([0.0, 0.0], dtype=np.float32)
+
+    def describe(self, description):
+        self.description = description
+        self.description.append(
+            {
+                'name': self.base_name,
+                'tel_type': None,
+                'base_name': self.base_name,
+                'shape': self.shape,
+                'dtype': self.dtype,
+                'unit': self.unit
+                }
+            )
+        return self.description
+
+    def set_tel_pointing(self, tel_pointing):
+        self.tel_pointing = tel_pointing
+        return
+
+    def __call__(self, example):
+        for i, (val, des) in enumerate(itertools.zip_longest(example, self.description)):
+            if des['base_name'] == 'alt':
+                alt = example[i] - self.tel_pointing[1]
+            elif des['base_name'] == 'az':
+                az = example[i] - self.tel_pointing[0]
+            elif des['base_name'] == self.base_name:
+                example.append(np.array([alt,az]))
+        return example
 
 class AltAzToDirection(Transform):
 
@@ -106,8 +169,6 @@ class AltAzToDirection(Transform):
         return self.description
 
     def __call__(self, example):
-        alt = []
-        az = []
         for i, (val, des) in enumerate(itertools.zip_longest(example, self.description)):
             if des['base_name'] == 'alt':
                 alt = example[i]
@@ -158,8 +219,6 @@ class CoreXYToImpactInKm(Transform):
         return self.description
 
     def __call__(self, example):
-        core_x_km = []
-        core_y_km = []
         for i, (val, des) in enumerate(itertools.zip_longest(example, self.description)):
             if des['base_name'] == 'core_x':
                 example[i] = val / 1000
