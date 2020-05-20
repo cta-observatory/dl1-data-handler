@@ -72,20 +72,6 @@ class MCEnergyInLog(Transform):
                 example[i] = np.log10(val)
         return example
 
-class MCEnergyToEnergy(Transform):
-    def __init__(self):
-          super().__init__()
-          self.name = 'energy'
-          self.dtype = np.dtype('float32')
-          self.unit = 'TeV'
-
-    def describe(self, description):
-        self.description = [
-            {**des, 'name': self.name, 'dtype': self.dtype, 'unit': self.unit}
-            if des['name'] == 'mc_energy'
-            else des for des in description]
-        return self.description
-
 class MCEnergyToEnergyInLog(Transform):
     def __init__(self):
           super().__init__()
