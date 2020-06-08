@@ -155,7 +155,7 @@ class ImageMapper:
         >>> # Use the ImageMapper with one channel (charge or peak position):
         >>> image = IM.map_image(one_channel, 'LSTCam')
         >>> # Use the ImageMapper with two channels (charge and peak position):
-        >>> two_channels = np.concatenate((one_channel, one_channel[::-1]),axis=1) 
+        >>> two_channels = np.concatenate((one_channel, one_channel[::-1]),axis=1)
         >>> images = IM.map_image(two_channels, 'LSTCam')
         """
 
@@ -541,7 +541,7 @@ class ImageMapper:
         if self.rotate_camera and camera_type in ['LSTCam', 'NectarCam', 'MAGICCam'] and map_method not in ['image_shifting', 'axial_addressing', 'indexed_conv']:
              mapping_matrix3d = self.rotate_mapping_table(mapping_matrix3d,self.rotate_back_angle[camera_type])
         # Normalization (approximation) of the mapping table
-        if map_method in ['rebinning', 'bilinear_interpolation', 'bicubic_interpolation']:
+        if map_method in ['rebinning', 'nearest_interpolation', 'bilinear_interpolation', 'bicubic_interpolation']:
             mapping_matrix3d = self.normalize_mapping_matrix(mapping_matrix3d, num_pixels)
 
         if (pad + default_pad) != 0:
