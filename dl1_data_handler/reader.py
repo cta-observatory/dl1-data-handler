@@ -9,7 +9,7 @@ from dl1_data_handler.image_mapper import ImageMapper
 from dl1_data_handler.processor import DL1DataProcessor
 
 def get_camera_type(tel_type):
-    return tel_type.split('_')[1]
+    return tel_type.split('_')[-1]
 
 class DL1DataReader:
 

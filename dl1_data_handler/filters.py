@@ -80,7 +80,7 @@ def image_intensity_after_cleaning_filter(reader, images, i_min=-np.inf, i_max=n
     except ImportError:
         raise ImportError("The `ctapipe.instrument.CameraGeometry` python module is required to perform cleaning operation")
 
-    geom = CameraGeometry.from_name(reader.tel_type.split('_')[2])
+    geom = CameraGeometry.from_name(reader.tel_type.split('_')[-1])
 
     def int_after_clean(img):
         cleanmask = cleaning.tailcuts_clean(geom, img, **opts)
@@ -116,7 +116,7 @@ def image_cleaning_filter(reader, images, **opts):
     except ImportError:
         raise ImportError("The `ctapipe.instrument.CameraGeometry` python module is required to perform cleaning operation")
 
-    geom = CameraGeometry.from_name(reader.tel_type.split('_')[2])
+    geom = CameraGeometry.from_name(reader.tel_type.split('_')[-1])
 
     def clean(img):
         return cleaning.tailcuts_clean(geom, img, **opts)
@@ -154,7 +154,7 @@ def leakage_filter(reader, images, leakage_value=1.0, leakage_number=2, **opts):
     if leakage_number not in [1,2]:
         raise ValueError("The leakage_number is {}. Valid options are 1 or 2.".format(leakage_number))
 
-    geom = CameraGeometry.from_name(reader.tel_type.split('_')[2])
+    geom = CameraGeometry.from_name(reader.tel_type.split('_')[-1])
 
     def leak(img):
         cleanmask = cleaning.tailcuts_clean(geom, img, **opts)
