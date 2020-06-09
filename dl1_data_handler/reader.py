@@ -174,10 +174,11 @@ class DL1DataReader:
         self.image_channels = image_channels
 
         self.tel_pointing = np.array([0.0, 0.0], dtype=np.float32)
-        for transform in transforms:
-            if transform.name == 'deltaAltAz_direction':
-                self.tel_pointing = f.root._v_attrs.run_array_direction
-                transform.set_tel_pointing(self.tel_pointing)
+        if transforms is not None:
+            for transform in transforms:
+                if transform.name == 'deltaAltAz_direction':
+                    self.tel_pointing = f.root._v_attrs.run_array_direction
+                    transform.set_tel_pointing(self.tel_pointing)
 
         self.pixel_positions = None
         if "/Telescope_Type_Information" in f:
