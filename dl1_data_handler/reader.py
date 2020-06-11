@@ -142,14 +142,17 @@ class DL1DataReader:
                 field = '{}_indices'.format(self.tel_type)
                 selected_indices = f.root.Events.read_coordinates(selected_nrows, field=field)
                 for tel_id in selected_telescopes[self.tel_type]:
-                    img_ids = set(selected_indices[:, telescopes[self.tel_type].index(tel_id)])
-                    img_ids.remove(0)
-                    img_ids = list(img_ids)
+                    tel_index = telescopes[self.tel_type].index(tel_id)
+                    img_ids = np.array(selected_indices[:, tel_index])
+                    mask = (img_ids == 0)
                     # TODO handle all selected channels
-                    mask = self._select_image(f.root[self.tel_type][img_ids]['charge'], image_selection)
-                    img_ids = np.array(img_ids)[mask]
-                    for index in img_ids:
-                            example_identifiers.append((filename, index, tel_id))
+                    mask[mask] &= self._select_image(
+                        f.root[self.tel_type][img_ids[mask]]['charge'],
+                        image_selection)
+                    for image_index, nrow in zip(img_ids[mask],
+                                               np.array(selected_nrows)[mask]):
+                        example_identifiers.append((filename, nrow,
+                                                    image_index, tel_id))
 
             # Confirm that the files are consistent and merge them
             if not self.telescopes:
@@ -186,8 +189,10 @@ class DL1DataReader:
             num_pixels = [x['num_pixels'] for x in h5.root.Telescope_Type_Information]
             pixel_positions = [x['pixel_positions'] for x in h5.root.Telescope_Type_Information]
             self.pixel_positions = {}
+            self.num_pixels = {}
             for i, cam in enumerate(cameras):
                 self.pixel_positions[cam] = pixel_positions[i][:num_pixels[i]].T
+                self.num_pixels[cam] = num_pixels[i]
                 # For now hardcoded, since this information is not in the h5 files.
                 # The official CTA DL1 format will contain this information.
                 if cam in ['LSTCam', 'NectarCam', 'MAGICCam']:
@@ -359,15 +364,12 @@ class DL1DataReader:
     # First extract a raw 1D vector and transform it into a 2D image using a
     # mapping table. When 'indexed_conv' is selected this function should
     # return the unmapped vector.
-    def _get_image(self, filename, tel_type, image_index):
+    def _get_image(self, child, tel_type, image_index):
 
-        f = self.files[filename]
-        record = f.root._f_get_child(tel_type)[image_index]
-        query = "type == '{}'".format(tel_type)
-        length = [x['num_pixels'] for x
-                  in f.root.Telescope_Type_Information.where(query)][0]
+        record = child[image_index]
+        num_pixels = self.num_pixels[get_camera_type(tel_type)]
         num_channels = len(self.image_channels)
-        vector = np.empty(shape=(length, num_channels), dtype=np.float32)
+        vector = np.empty(shape=(num_pixels, num_channels), dtype=np.float32)
         # If the telescope didn't trigger, the image index is 0 and a blank
         # image of all zeros with be loaded
         for i, channel in enumerate(self.image_channels):
@@ -378,6 +380,33 @@ class DL1DataReader:
         image = self.image_mapper.map_image(vector, get_camera_type(tel_type))
         return image
 
+
+    def _append_array_info(self, filename, array_info, tel_id):
+        query = "id == {}".format(tel_id)
+        f = self.files[filename]
+        for row in f.root.Array_Information.where(query):
+            for info, column in zip(array_info, self.array_info):
+                dtype = f.root.Array_Information.cols._f_col(column).dtype
+                info.append(np.array(row[column], dtype=dtype))
+
+    def _load_tel_type_data(self, filename, nrow, tel_type):
+        images = []
+        triggers = []
+        array_info = [[] for column in self.array_info]
+        child = self.files[filename].root._f_get_child(tel_type)
+        for tel_id in self.selected_telescopes[tel_type]:
+            tel_index = self.telescopes[tel_type].index(tel_id)
+            image_index = self.files[filename].root.Events[nrow][
+                tel_type + '_indices'][tel_index]
+            image = self._get_image(child, tel_type, image_index)
+            trigger = 0 if image_index == 0 else 1
+            images.append(image)
+            triggers.append(trigger)
+            self._append_array_info(filename, array_info, tel_id)
+        example = [np.stack(images), np.array(triggers, dtype=np.int8)]
+        example.extend([np.stack(info) for info in array_info])
+        return example
+
     def __len__(self):
         return len(self.example_identifiers)
 
@@ -387,62 +416,37 @@ class DL1DataReader:
 
         # Get record for the event
         filename = identifiers[0]
-        f = self.files[filename]
-
-        def append_array_info(array_info, tel_id):
-            query = "id == {}".format(tel_id)
-            for row in f.root.Array_Information.where(query):
-                for info, column in zip(array_info, self.array_info):
-                    dtype = f.root.Array_Information.cols._f_col(column).dtype
-                    info.append(np.array(row[column], dtype=dtype))
-
-        def load_tel_type_data(nrow, tel_type):
-            images = []
-            triggers = []
-            array_info = [[] for column in self.array_info]
-            for tel_id in self.selected_telescopes[tel_type]:
-                tel_index = self.telescopes[tel_type].index(tel_id)
-                image_index = f.root.Events[nrow][
-                    tel_type + '_indices'][tel_index]
-                image = self._get_image(filename, tel_type, image_index)
-                trigger = 0 if image_index == 0 else 1
-                images.append(image)
-                triggers.append(trigger)
-                append_array_info(array_info, tel_id)
-            example = [np.stack(images), np.array(triggers, dtype=np.int8)]
-            example.extend([np.stack(info) for info in array_info])
-            return example
 
         # Load the data and any selected array info
         if self.mode == "mono":
             # Get a single image
-            image_index, tel_id = identifiers[1:3]
-            nrow = f.root._f_get_child(self.tel_type)[image_index]['event_index']
-
-            image = self._get_image(filename, self.tel_type, image_index)
+            nrow, image_index, tel_id = identifiers[1:4]
+            child = self.files[filename].root._f_get_child(self.tel_type)
+            image = self._get_image(child, self.tel_type, image_index)
             example = [image]
 
             array_info = [[] for column in self.array_info]
-            append_array_info(array_info, tel_id)
+            self._append_array_info(filename, array_info, tel_id)
             example.extend([np.stack(info) for info in array_info])
         elif self.mode == "stereo":
             # Get a list of images and an array of binary trigger values
             nrow = identifiers[1]
-            example = load_tel_type_data(nrow, self.tel_type)
+            example = self._load_tel_type_data(filename, nrow, self.tel_type)
         elif self.mode == "multi-stereo":
             # Get a list of images and an array of binary trigger values
             # for each selected telescope type
             nrow = identifiers[1]
             example = []
             for tel_type in self.selected_telescopes:
-                tel_type_example = load_tel_type_data(nrow, tel_type)
+                tel_type_example = self._load_tel_type_data(filename, nrow,
+                                                            tel_type)
                 example.extend(tel_type_example)
 
         # Load event info
-        record = f.root.Events[nrow]
+        events = self.files[filename].root.Events
         for column in self.event_info:
-            dtype = f.root.Events.cols._f_col(column).dtype
-            example.append(np.array(record[column], dtype=dtype))
+            dtype = events.cols._f_col(column).dtype
+            example.append(np.array(events[nrow][column], dtype=dtype))
 
         # Preprocess the example
         example = self.processor.process(example)
