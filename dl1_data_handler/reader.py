@@ -144,7 +144,7 @@ class DL1DataReader:
                 for tel_id in selected_telescopes[self.tel_type]:
                     tel_index = telescopes[self.tel_type].index(tel_id)
                     img_ids = np.array(selected_indices[:, tel_index])
-                    mask = (img_ids == 0)
+                    mask = (img_ids != 0)
                     # TODO handle all selected channels
                     mask[mask] &= self._select_image(
                         f.root[self.tel_type][img_ids[mask]]['charge'],
