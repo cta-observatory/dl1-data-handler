@@ -8,20 +8,13 @@ import tables
 from dl1_data_handler.image_mapper import ImageMapper
 from dl1_data_handler.processor import DL1DataProcessor
 
+lock = threading.Lock()
+
 def get_camera_type(tel_type):
     return tel_type.split('_')[1]
 
 class DL1DataReader:
 
-    @staticmethod
-    def __synchronized_open_file(*args, **kwargs):
-        with threading.Lock() as lock:
-            return tables.open_file(*args, **kwargs)
-
-    @staticmethod
-    def __synchronized_close_file(*args, **kwargs):
-        with threading.Lock() as lock:
-            return self.close(*args, **kwargs)
 
     def __init__(self,
                  file_list,
@@ -44,8 +37,7 @@ class DL1DataReader:
         # Construct dict of filename:file_handle pairs
         self.files = OrderedDict()
         for filename in file_list:
-            self.files[filename] = \
-                self.__synchronized_open_file(filename, mode='r')
+            self.files[filename] = tables.open_file(filename, mode='r')
 
         # Set data loading mode
         # Mono: single images of one telescope type
@@ -366,14 +358,15 @@ class DL1DataReader:
     # return the unmapped vector.
     def _get_image(self, child, tel_type, image_index):
 
-        record = child[image_index]
         num_pixels = self.num_pixels[get_camera_type(tel_type)]
         num_channels = len(self.image_channels)
         vector = np.empty(shape=(num_pixels, num_channels), dtype=np.float32)
         # If the telescope didn't trigger, the image index is 0 and a blank
         # image of all zeros with be loaded
-        for i, channel in enumerate(self.image_channels):
-            vector[:, i] = record[channel]
+        with lock:
+            record = child[image_index]
+            for i, channel in enumerate(self.image_channels):
+                vector[:, i] = record[channel]
         # If 'indexed_conv' is selected, we only need the unmapped vector.
         if self.image_mapper.mapping_method[get_camera_type(tel_type)] == 'indexed_conv':
            return vector
@@ -382,18 +375,20 @@ class DL1DataReader:
 
 
     def _append_array_info(self, filename, array_info, tel_id):
-        query = "id == {}".format(tel_id)
-        f = self.files[filename]
-        for row in f.root.Array_Information.where(query):
-            for info, column in zip(array_info, self.array_info):
-                dtype = f.root.Array_Information.cols._f_col(column).dtype
-                info.append(np.array(row[column], dtype=dtype))
+        with lock:
+            query = "id == {}".format(tel_id)
+            f = self.files[filename]
+            for row in f.root.Array_Information.where(query):
+                for info, column in zip(array_info, self.array_info):
+                    dtype = f.root.Array_Information.cols._f_col(column).dtype
+                    info.append(np.array(row[column], dtype=dtype))
 
     def _load_tel_type_data(self, filename, nrow, tel_type):
         images = []
         triggers = []
         array_info = [[] for column in self.array_info]
-        child = self.files[filename].root._f_get_child(tel_type)
+        with lock:
+            child = self.files[filename].root._f_get_child(tel_type)
         for tel_id in self.selected_telescopes[tel_type]:
             tel_index = self.telescopes[tel_type].index(tel_id)
             image_index = self.files[filename].root.Events[nrow][
@@ -421,7 +416,8 @@ class DL1DataReader:
         if self.mode == "mono":
             # Get a single image
             nrow, image_index, tel_id = identifiers[1:4]
-            child = self.files[filename].root._f_get_child(self.tel_type)
+            with lock:
+                child = self.files[filename].root._f_get_child(self.tel_type)
             image = self._get_image(child, self.tel_type, image_index)
             example = [image]
 
@@ -443,10 +439,11 @@ class DL1DataReader:
                 example.extend(tel_type_example)
 
         # Load event info
-        events = self.files[filename].root.Events
-        for column in self.event_info:
-            dtype = events.cols._f_col(column).dtype
-            example.append(np.array(events[nrow][column], dtype=dtype))
+        with lock:
+            events = self.files[filename].root.Events
+            for column in self.event_info:
+                dtype = events.cols._f_col(column).dtype
+                example.append(np.array(events[nrow][column], dtype=dtype))
 
         # Preprocess the example
         example = self.processor.process(example)
