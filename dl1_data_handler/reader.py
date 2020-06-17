@@ -197,8 +197,9 @@ class DL1DataReader:
                     self.pixel_positions[cam] = np.squeeze(np.asarray(np.dot(rotation_matrix, self.pixel_positions[cam])))
         if rotate_back:
             mapping_settings['rotate_back'] = rotate_back_angle[cam]
-        self.image_mapper = ImageMapper(pixel_positions=self.pixel_positions, 
-                                        camera_types = cameras, 
+        if 'camera_types' not in mapping_settings:
+            mapping_settings['camera_types'] = cameras
+        self.image_mapper = ImageMapper(pixel_positions=self.pixel_positions,
                                         **mapping_settings)
 
         if array_info is None:
