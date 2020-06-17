@@ -393,8 +393,9 @@ class DL1DataReader:
             child = self.files[filename].root._f_get_child(tel_type)
         for tel_id in self.selected_telescopes[tel_type]:
             tel_index = self.telescopes[tel_type].index(tel_id)
-            image_index = self.files[filename].root.Events[nrow][
-                tel_type + '_indices'][tel_index]
+            with lock:
+                image_index = self.files[filename].root.Events[nrow][
+                    tel_type + '_indices'][tel_index]
             image = self._get_image(child, tel_type, image_index)
             trigger = 0 if image_index == 0 else 1
             images.append(image)
