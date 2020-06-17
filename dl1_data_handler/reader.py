@@ -37,7 +37,8 @@ class DL1DataReader:
         # Construct dict of filename:file_handle pairs
         self.files = OrderedDict()
         for filename in file_list:
-            self.files[filename] = tables.open_file(filename, mode='r')
+            with lock:
+                self.files[filename] = tables.open_file(filename, mode='r')
 
         # Set data loading mode
         # Mono: single images of one telescope type
