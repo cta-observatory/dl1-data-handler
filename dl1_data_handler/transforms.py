@@ -2,15 +2,16 @@ import numpy as np
 import itertools
 from .processor import Transform
 
-class ShowerPrimaryIDToParticleType(Transform):
 
-    def __init__(self):
+class ShowerPrimaryIDToClassLabel(Transform):
+
+    def __init__(self, class_label_name='class_label'):
         super().__init__()
         self.shower_primary_id_to_class = {
             0: 1,  # gamma
             101: 0  # proton
         }
-        self.name = 'particletype'
+        self.name = class_label_name
         self.dtype = np.dtype('int8')
 
     def describe(self, description):
