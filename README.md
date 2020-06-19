@@ -1,5 +1,6 @@
 # DL1 Data Handler
 
+[![DOI](https://zenodo.org/badge/72042185.svg)](https://zenodo.org/badge/latestdoi/72042185)
 [![build status](https://travis-ci.org/cta-observatory/dl1-data-handler.svg?branch=master)](https://travis-ci.org/cta-observatory/dl1-data-handler.svg?branch=master)
 [![Coverage Status](https://coveralls.io/repos/github/cta-observatory/dl1-data-handler/badge.svg?branch=master)](https://coveralls.io/github/cta-observatory/dl1-data-handler?branch=master)
 
@@ -15,9 +16,34 @@ DL1DataWriter implements a standardized format for storing simulated CTA DL1 eve
 
 ## Installation
 
-The following installation method (for Linux) is recommended:
+### Light installation without DL1DataWriter
 
-### Installing with pip/setuptools from source
+You can install DL1DataHandler using setuptools after cloning the repository:
+
+```bash
+git clone https://github.com/cta-observatory/dl1-data-handler.git
+cd dl1-data-handler
+
+python setup.py install
+```
+
+### Full installation
+
+In case you want to produce DL1 data (calibrated images) in a standardized format using the DL1DataWriter, please install the ctapipe v0.7.0.post21 (after the bug fix [ctapipe PR #1143](https://github.com/cta-observatory/ctapipe/pull/1143)) from source: 
+
+```bash
+git clone https://github.com/cta-observatory/ctapipe
+cd ctapipe
+git checkout f350a04
+
+conda env create -n dl1dh -f environment.yml
+conda activate dl1dh
+
+python setup.py install
+```
+Install DL1DataHandler on top of ctapipe v0.7.0.post21 also from source, following the procedure above.
+
+<!--### Installing with pip/setuptools from source
 
 You can install DL1 Data Handler using pip after cloning the repository:
 
@@ -38,10 +64,10 @@ pip install .
 
 To install it as a conda package, first install Anaconda by following the instructions here: https://www.anaconda.com/distribution/.
 
-Then, create and enter a new Python 3.6 environment with:
+Then, create and enter a new Python 3.7 environment with:
 
 ```bash
-conda create -n [ENVIRONMENT_NAME] python=3.6
+conda create -n [ENVIRONMENT_NAME] python=3.7
 source activate [ENVIRONMENT_NAME]
 ```
 
@@ -68,25 +94,24 @@ git clone https://github.com/cta-observatory/dl1-data-handler.git
 git checkout -b v0.7.3 v0.7.3
 ```
 
-DL1 Data Handler should already have been installed in your environment by Conda, so no further installation steps (i.e. with setuptools or pip) are necessary and you should be able to run scripts/write_data.py directly.
+DL1 Data Handler should already have been installed in your environment by Conda, so no further installation steps (i.e. with setuptools or pip) are necessary and you should be able to run scripts/write_data.py directly.-->
 
 ## Dependencies
 
 The main dependencies are:
 
-for dl1-data-writer:
-
 * PyTables >= 3.4.4
 * NumPy >= 1.15.0
-* ctapipe >= 0.6.2
-* ctapipe-extra >= 0.2.16
-* pyhessio >= 2.1.1
 
 Also see setup.py.
 
+Addtional dependencies for DL1DataWriter:
+
+* ctapipe == 0.7.0.post21 
+
 ## Usage
 
-### DL1 Data Writer
+### DL1DataWriter
 
 #### From the Command Line:
 
@@ -131,13 +156,9 @@ data_writer = dl1_data_writer.DL1DataWriter(event_source_class=event_source_clas
     event_source_settings=event_source_settings,
     data_dumper_class=data_dumper_class,
     data_dumper_settings=dumper_settings,
-    calibration_settings={
-         'r1_product': 'HESSIOR1Calibrator',
-         'extractor_product': 'NeighbourPeakIntegrator'
-     },
-     preselection_cut_function=my_cut_function,
-     output_file_size=10737418240,
-     events_per_file=500)
+    preselection_cut_function=my_cut_function,
+    output_file_size=10737418240,
+    events_per_file=500)
 
 run_list = [
  {'inputs': ['file1.simtel.gz', 'file2.simtel.gz'],
@@ -173,7 +194,7 @@ All other scripts located in the scripts/deprecated directory are not currently 
 
 ## Known Issues/Troubleshooting
 
-* As of v0.7.2 there appears to be an issue when processing files containing SCT data. A fix is planned for v0.7.3.
+* As of v0.7.2 there appears to be an issue when processing files containing SCT data. A fix is planned for a future version.
 * ViTables PyQt5 dependency confict (pip vs. conda): [relevent issue thread](https://github.com/ContinuumIO/anaconda-issues/issues/1554)
 
 ## Links
