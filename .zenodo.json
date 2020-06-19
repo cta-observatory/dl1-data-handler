@@ -1,0 +1,56 @@
+{
+    "license": "MIT", 
+    "contributors": [
+        {
+            "affiliation": "Laboratoire d'Annecy de Physique des Particules, CNRS, and LISTIC,Universit\u00e9 Savoie Mont-Blanc, Annecy, France", 
+            "type": "Researcher", 
+            "name": "Mika\u00ebl Jacquemont"
+        }, 
+        {
+            "orcid": "0000-0002-5686-2078", 
+            "affiliation": "Laboratoire d'Annecy de Physique des Particules, CNRS, Universit\u00e9 Savoie Mont-Blanc, Annecy, France", 
+            "type": "Researcher", 
+            "name": "Thomas Vuillaume"
+        }, 
+        {
+            "orcid": "0000-0001-7282-2394", 
+            "affiliation": "Instituto de F\u00edsica de Part\u00edculas y del Cosmos and Departamento de EMFTEL, Universidad Complutense de Madrid, Madrid, Spain", 
+            "type": "Researcher", 
+            "name": "Jos\u00e9 Luis Contreras"
+        }
+    ], 
+    "language": "eng", 
+    "title": "DL1-Data-Handler: DL1 HDF5 writer, reader, and processor for IACT data", 
+    "upload_type": "software", 
+    "keywords": [
+        "Imaging atmospheric Cherenkov telescopes", 
+        "Data format", 
+        "HDF5", 
+        "PyTables"
+    ], 
+     "creators": [
+        {
+            "affiliation": "University of California Los Angeles, Division of Astronomy and Astrophysics, Los Angeles, CA, USA", 
+            "name": "Bryan Kim"
+        }, 
+        {
+            "affiliation": "Columbia University, Department of Physics, New York, NY, USA", 
+            "name": "Ari Brill"
+        }, 
+        {
+            "affiliation": "Instituto de F\u00edsica de Part\u00edculas y del Cosmos and Departamento de EMFTEL, Universidad Complutense de Madrid, Madrid, Spain", 
+            "name": "Tjark Miener"
+        }, 
+        {
+            "orcid": "0000-0003-3343-0755", 
+            "affiliation": "Instituto de F\u00edsica de Part\u00edculas y del Cosmos and Departamento de EMFTEL, Universidad Complutense de Madrid, Madrid, Spain", 
+            "name": "Daniel Nieto"
+        }, 
+        {
+            "affiliation": "Columbia University, Department of Physics, New York, NY, USA", 
+            "name": "Qi Feng"
+        }
+    ], 
+    "access_right": "open", 
+    "description": "<p>A package of utilities for writing, reading, and applying image processing to&nbsp;calibrated data from imaging atmospheric Cherenkov telescopes in a standardized format.</p>"
+}
