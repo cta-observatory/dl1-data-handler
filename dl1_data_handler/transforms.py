@@ -293,12 +293,12 @@ class SortTelescopes(Transform):
     def __init__(self, sorting):
         super().__init__()
         params = {
-                # List triggered telescopes first
-                'trigger': {'reverse': True, 'key': lambda x: x['trigger']},
-                # List from largest to smallest sum of pixel charges
-                'size': {'reverse': True,
-                         'key': lambda x: np.sum(x['image'], (1,2,3))}
-                }
+            # List triggered telescopes first
+            'trigger': {'reverse': True, 'key': lambda x: x['trigger']},
+            # List from largest to smallest sum of pixel charges
+            'size': {'reverse': True,
+                     'key': lambda x: np.sum(x['image'][..., 0], (1, 2))}
+            }
         if sorting in params:
             self.step = -1 if params[sorting]['reverse'] else 1
             self.key = params[sorting]['key']
