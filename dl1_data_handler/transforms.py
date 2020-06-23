@@ -3,15 +3,15 @@ import itertools
 from .processor import Transform
 
 
-class ShowerPrimaryIDToClassLabel(Transform):
+class ShowerPrimaryID(Transform):
 
-    def __init__(self, class_label_name='class_label'):
+    def __init__(self, name='particletype'):
         super().__init__()
         self.shower_primary_id_to_class = {
             0: 1,  # gamma
             101: 0  # proton
         }
-        self.name = class_label_name
+        self.name = name
         self.dtype = np.dtype('int8')
 
     def describe(self, description):
@@ -44,41 +44,14 @@ class NormalizeTelescopePositions(Transform):
                 example[i] = np.array(normed_pos, dtype=des['dtype'])
         return example
 
-class MCEnergyToEnergy(Transform):
-    def __init__(self):
-          super().__init__()
-          self.name = 'energy'
+
+class MCEnergy(Transform):
+    def __init__(self, name='energy', unit='log(TeV)'):
+          super().__init__():
+          self.name = name
+          self.shape = (1)
           self.dtype = np.dtype('float32')
-          self.unit = 'TeV'
-
-    def describe(self, description):
-        self.description = [
-            {**des, 'name': self.name, 'dtype': self.dtype, 'unit': self.unit}
-            if des['name'] == 'mc_energy'
-            else des for des in description]
-        return self.description
-
-class MCEnergyInLog(Transform):
-
-    def describe(self, description):
-        self.description = description
-        for des in self.description:
-            if des['base_name'] == 'mc_energy':
-                des['unit'] = 'log(TeV)'
-        return self.description
-
-    def __call__(self, example):
-        for i, (val, des) in enumerate(zip(example, self.description)):
-            if des['base_name'] == 'mc_energy':
-                example[i] = np.log10(val)
-        return example
-
-class MCEnergyToEnergyInLog(Transform):
-    def __init__(self):
-          super().__init__()
-          self.name = 'energy'
-          self.dtype = np.dtype('float32')
-          self.unit = 'log(TeV)'
+          self.unit = unit
 
     def describe(self, description):
         self.description = [
@@ -90,14 +63,15 @@ class MCEnergyToEnergyInLog(Transform):
     def __call__(self, example):
         for i, (val, des) in enumerate(zip(example, self.description)):
             if des['base_name'] == 'mc_energy':
-                example[i] = np.log10(val)
+                example[i] = np.array([np.log10(val)]) if self.unit == 'log(TeV)' else np.array([val])
         return example
 
-class AltAzToDeltaAltAzDirection(Transform):
+
+class DeltaAltAz(Transform):
 
     def __init__(self):
         super().__init__()
-        self.name = 'deltaAltAz_direction'
+        self.name = 'deltaAltAz'
         self.base_name = 'direction'
         self.shape = (2)
         self.dtype = np.dtype('float32')
@@ -132,11 +106,12 @@ class AltAzToDeltaAltAzDirection(Transform):
                 example.append(np.array([alt,az]))
         return example
 
-class AltAzToDirection(Transform):
 
-    def __init__(self):
+class AltAz(Transform):
+
+    def __init__(self, , name='direction'):
         super().__init__()
-        self.name = 'direction'
+        self.name = name
         self.shape = (2)
         self.dtype = np.dtype('float32')
         self.unit = 'rad'
@@ -166,27 +141,11 @@ class AltAzToDirection(Transform):
         return example
 
 
-class CoreXYInKm(Transform):
+class CoreXY(Transform):
 
-    def describe(self, description):
-        self.description = description
-        for des in self.description:
-            if des['base_name'] in ['core_x', 'core_y']:
-                des['unit'] = 'km'
-        return self.description
-
-    def __call__(self, example):
-        for i, (val, des) in enumerate(zip(example, self.description)):
-            if des['base_name'] in ['core_x', 'core_y']:
-                example[i] = val / 1000
-        return example
-
-
-class CoreXYToImpactInKm(Transform):
-
-    def __init__(self):
+    def __init__(self, name='impact'):
         super().__init__()
-        self.name = 'impact'
+        self.name = name
         self.shape = (2)
         self.dtype = np.dtype('float32')
         self.unit = 'km'
@@ -218,28 +177,15 @@ class CoreXYToImpactInKm(Transform):
         return example
 
 
-class XmaxInKm(Transform):
+class Xmax(Transform):
 
-    def describe(self, description):
-        self.description = description
-        for des in self.description:
-            if des['base_name'] == 'x_max':
-                des['unit'] = 'km'
-        return self.description
-
-    def __call__(self, example):
-        for i, (val, des) in enumerate(zip(example, self.description)):
-            if des['base_name'] == 'x_max':
-                example[i] = val / 1000
-        return example
-        
-class XmaxToShowerMaximumInKm(Transform):
-    def __init__(self):
-          super().__init__()
-          self.name = 'showermaximum'
+    def __init__(self, name='showermaximum'):
+          super().__init__():
+          self.name = name
+          self.shape = (1)
           self.dtype = np.dtype('float32')
           self.unit = 'km'
-          
+
     def describe(self, description):
         self.description = [
             {**des, 'name': self.name, 'dtype': self.dtype, 'unit': self.unit}
@@ -250,23 +196,30 @@ class XmaxToShowerMaximumInKm(Transform):
     def __call__(self, example):
         for i, (val, des) in enumerate(zip(example, self.description)):
             if des['base_name'] == 'showermaximum':
-                example[i] = val / 1000
+                example[i] = np.array([val/1000]) if self.unit == 'km' else np.array([val])
         return example
 
 
-class HfirstIntInKm(Transform):
+class HfirstInt(Transform):
+
+        def __init__(self, name='h_first_int'):
+          super().__init__():
+          self.name = name
+          self.shape = (1)
+          self.dtype = np.dtype('float32')
+          self.unit = 'km'
 
     def describe(self, description):
-        self.description = description
-        for des in self.description:
-            if des['base_name'] == 'h_first_int':
-                des['unit'] = 'km'
+        self.description = [
+            {**des, 'name': self.name, 'dtype': self.dtype, 'unit': self.unit}
+            if des['name'] == 'h_first_int'
+            else des for des in description]
         return self.description
 
     def __call__(self, example):
         for i, (val, des) in enumerate(zip(example, self.description)):
             if des['base_name'] == 'h_first_int':
-                example[i] = val / 1000
+                example[i] = np.array([val/1000]) if self.unit == 'km' else np.array([val])
         return example
 
 
