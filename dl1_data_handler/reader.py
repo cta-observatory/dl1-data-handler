@@ -172,7 +172,7 @@ class DL1DataReader:
         self.tel_pointing = np.array([0.0, 0.0], dtype=np.float32)
         if transforms is not None:
             for transform in transforms:
-                if transform.name == 'deltaAltAz_direction':
+                if transform.name == 'deltaAltAz':
                     self.tel_pointing = f.root._v_attrs.run_array_direction
                     transform.set_tel_pointing(self.tel_pointing)
 
