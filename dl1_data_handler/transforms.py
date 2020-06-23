@@ -46,12 +46,13 @@ class NormalizeTelescopePositions(Transform):
 
 
 class MCEnergy(Transform):
+
     def __init__(self, name='energy', unit='log(TeV)'):
-          super().__init__():
-          self.name = name
-          self.shape = (1)
-          self.dtype = np.dtype('float32')
-          self.unit = unit
+        super().__init__()
+        self.name = name
+        self.shape = (1)
+        self.dtype = np.dtype('float32')
+        self.unit = unit
 
     def describe(self, description):
         self.description = [
@@ -109,7 +110,7 @@ class DeltaAltAz(Transform):
 
 class AltAz(Transform):
 
-    def __init__(self, , name='direction'):
+    def __init__(self, name='direction'):
         super().__init__()
         self.name = name
         self.shape = (2)
@@ -180,11 +181,11 @@ class CoreXY(Transform):
 class Xmax(Transform):
 
     def __init__(self, name='showermaximum'):
-          super().__init__():
-          self.name = name
-          self.shape = (1)
-          self.dtype = np.dtype('float32')
-          self.unit = 'km'
+        super().__init__()
+        self.name = name
+        self.shape = (1)
+        self.dtype = np.dtype('float32')
+        self.unit = 'km'
 
     def describe(self, description):
         self.description = [
@@ -202,12 +203,12 @@ class Xmax(Transform):
 
 class HfirstInt(Transform):
 
-        def __init__(self, name='h_first_int'):
-          super().__init__():
-          self.name = name
-          self.shape = (1)
-          self.dtype = np.dtype('float32')
-          self.unit = 'km'
+    def __init__(self, name='h_first_int'):
+        super().__init__()
+        self.name = name
+        self.shape = (1)
+        self.dtype = np.dtype('float32')
+        self.unit = 'km'
 
     def describe(self, description):
         self.description = [
