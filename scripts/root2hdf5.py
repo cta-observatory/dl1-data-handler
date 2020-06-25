@@ -85,8 +85,8 @@ def root2hdf5(filename1,filename2, output):
 	mc_energy = np.asarray(event["MMcEvt.fEnergy"].array())
 	h_first_int = np.asarray(event["MMcEvt.fZFirstInteraction"].array())
 	k = 1
-	event_index = np.zeros(shape = (157,1))
-
+	stereo_total = np.max(eventid1)
+	event_index = np.zeros(shape = (stereo_total,1))
 	#Image table
 
 	charge1 = event["MCerPhotEvt.fPixels.fPhot"].array()
@@ -103,7 +103,8 @@ def root2hdf5(filename1,filename2, output):
 	image["event_index"] = -1
 	image.append()
 	k=1
-	for i in range(0,230):
+	total_events = len(charge1)
+	for i in range(0,total_events):
 		if eventid1[i] != 0:
 			i2 = np.where(eventid2==eventid1[i])
 			i2 = int(i2[0])
