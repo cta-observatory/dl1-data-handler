@@ -69,7 +69,7 @@ def root2hdf5(filename1,filename2, output):
 	eventM2 = file2["Events"]
 	mask = r".*_M\d_za\d+to\d+_\d_(\d+)_Y_.*"
 	parsed_info = re.findall(mask, filename1)
-	obs_id = parsed_info
+	obs_id = parsed_info[0]
 
 	#Event table
 
@@ -105,7 +105,7 @@ def root2hdf5(filename1,filename2, output):
 	k=1
 	total_events = len(chargeM1)
 	for i in range(0,total_events):
-		if eventid1[i] != 0:
+		if eventidM1[i] != 0:
 			i2 = np.where(eventidM2==eventidM1[i])
 			i2 = int(i2[0])
 			row["LST_MAGIC_MAGICCam_multiplicity"] = 2
