@@ -8,14 +8,13 @@ import re
 import multiprocessing
 import logging
 import math
-
+import glob
 import numpy as np
 import tables
-
+import uproot
 from ctapipe import io, calib
-
 from dl1_data_handler import table_definitions as table_defs
-
+from dl1_data_handler import MAGICEventSource
 logger = logging.getLogger(__name__)
 
 
@@ -167,6 +166,7 @@ class CTAMLDataDumper(DL1DataDumper):
                      'DigiCam': 1.25,
                      'ASTRICam': 1.25,
                      'CHEC': 1.25,
+                     'MAGICCam': 2.0,
                  },
         else:
             self.expected_images_per_event = expected_images_per_event
@@ -222,19 +222,20 @@ class CTAMLDataDumper(DL1DataDumper):
             logger.info("Array_Information table already present. Validating...")
             for tel_id in subarray.tels:
                 tel_desc = subarray.tels[tel_id]
-                rows = [row for row in array_table.iterrows()
-                        if row["id"] == tel_id and
-                        row["type"].decode('utf-8') == str(tel_desc) and
-                        row["x"] == subarray.positions[tel_id].value[0] and
-                        row["y"] == subarray.positions[tel_id].value[1] and
-                        row["z"] == subarray.positions[tel_id].value[2]]
+                if tel_id != "LST_MAGIC_MAGICCam":
+                    rows = [row for row in array_table.iterrows()
+                            if row["id"] == tel_id and
+                            row["type"].decode('utf-8') == str(tel_desc) and
+                            row["x"] == subarray.positions[tel_id].value[0] and
+                            row["y"] == subarray.positions[tel_id].value[1] and
+                            row["z"] == subarray.positions[tel_id].value[2]]
 
-                if len(rows) != 1:
-                    logger.error("Printing all entries in Array_Information...")
-                    for row in array_table.iterrows():
-                        logger.error("{}, {}, [{}, {}, {}]".format(row["id"], row["type"].decode('utf-8'), row["x"], row["y"], row["z"]))
-                    logger.error("Failed to find: {}, {}, {}".format(tel_id, str(tel_desc), subarray.positions[tel_id].value))
-                    raise ValueError("Failed to validate telescope description in Array_Information.")
+                    if len(rows) != 1:
+                        logger.error("Printing all entries in Array_Information...")
+                        for row in array_table.iterrows():
+                            logger.error("{}, {}, [{}, {}, {}]".format(row["id"], row["type"].decode('utf-8'), row["x"], row["y"], row["z"]))
+                        logger.error("Failed to find: {}, {}, {}".format(tel_id, str(tel_desc), subarray.positions[tel_id].value))
+                        raise ValueError("Failed to validate telescope description in Array_Information.")
 
         else:
             array_table = self._create_array_table()
@@ -828,14 +829,22 @@ class DL1DataWriter:
         data_dumper = self.data_dumper_class(
             output_filename,
             **self.data_dumper_settings)
+        filetype = "root"
+        try:
+            uproot.open(glob.glob(file_list[0])[0])
+        except ValueError:
+            # uproot raises ValueError if the file is not a ROOT file
+            filetype = "simtel"
 
         for filename in file_list:
             if self.event_source_class:
                 event_source = self.event_source_class(
                     filename,
                     **self.event_source_settings)
-            else:
-                event_source = io.eventsource.EventSource.from_url(filename,back_seekable=True)
+            elif filetype == "root":
+                event_source = MAGICEventSource.MAGICEventSource(input_url=filename)
+            elif filetype == "simtel":
+                event_source = io.eventsource.EventSource.from_url(filename, back_seekable = True)
 
             # Write all file-level data if not present
             # Or compare to existing data if already in file
@@ -926,4 +935,3 @@ class DL1DataWriter:
                         event_source.fill_mc_information(temp, mc_event)
                         mcheader = temp.mcheader
                         data_dumper.prepare_file(filename, subarray, mcheader)
-
