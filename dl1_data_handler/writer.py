@@ -254,7 +254,7 @@ class CTAMLDataDumper(DL1DataDumper):
 
         if "/Telescope_Type_Information" in self.file:
             tel_table = self.file.root.Telescope_Type_Information
-            max_px = max([len(x.camera.pix_id) for x in subarray.tel.values()])
+            max_px = max([len(x.camera.geometry.pix_id) for x in subarray.tel.values()])
 
             logger.info("Telescope_Type_Information table already present. Validating...")
             for tel_type in subarray.telescope_types:
@@ -262,16 +262,16 @@ class CTAMLDataDumper(DL1DataDumper):
                 tel_desc = subarray.tels[tel_id]
 
                 pos = np.zeros(shape=(max_px, 2))
-                x_len = subarray.tel[tel_id].camera.pix_x.value.shape[0]
-                y_len = subarray.tel[tel_id].camera.pix_y.value.shape[0]
-                pos[0:x_len, 0] = subarray.tel[tel_id].camera.pix_x.value
-                pos[0:y_len, 1] = subarray.tel[tel_id].camera.pix_y.value
+                x_len = subarray.tel[tel_id].camera.geometry.pix_x.value.shape[0]
+                y_len = subarray.tel[tel_id].camera.geometry.pix_y.value.shape[0]
+                pos[0:x_len, 0] = subarray.tel[tel_id].camera.geometry.pix_x.value
+                pos[0:y_len, 1] = subarray.tel[tel_id].camera.geometry.pix_y.value
 
                 rows = [row for row in tel_table.iterrows() if
                             row["type"].decode('utf-8') == str(tel_desc) and
                             row["optics"].decode('utf-8') == str(tel_desc.optics) and
                             row["camera"].decode('utf-8') == str(tel_desc.camera) and
-                            row["num_pixels"] == len(subarray.tel[tel_id].camera.pix_id) and
+                            row["num_pixels"] == len(subarray.tel[tel_id].camera.geometry.pix_id) and
                             np.allclose(row["pixel_positions"], pos)]
 
                 if len(rows) != 1:
@@ -283,7 +283,7 @@ class CTAMLDataDumper(DL1DataDumper):
                     raise ValueError("Failed to validate telescope type description in Telescope_Type_Information.")
         else:
             # Compute maximum number of pixels across all camera types
-            max_px = max([len(x.camera.pix_id) for x in subarray.tel.values()])
+            max_px = max([len(x.camera.geometry.pix_id) for x in subarray.tel.values()])
             tel_table = self._create_tel_table(subarray, max_px)
             row = tel_table.row
 
@@ -293,15 +293,15 @@ class CTAMLDataDumper(DL1DataDumper):
                 tel_description = subarray.tels[tel_id]
 
                 pos = np.zeros(shape=(max_px, 2))
-                x_len = subarray.tel[tel_id].camera.pix_x.value.shape[0]
-                y_len = subarray.tel[tel_id].camera.pix_y.value.shape[0]
-                pos[0:x_len, 0] = subarray.tel[tel_id].camera.pix_x.value
-                pos[0:y_len, 1] = subarray.tel[tel_id].camera.pix_y.value
+                x_len = subarray.tel[tel_id].camera.geometry.pix_x.value.shape[0]
+                y_len = subarray.tel[tel_id].camera.geometry.pix_y.value.shape[0]
+                pos[0:x_len, 0] = subarray.tel[tel_id].geometry.camera.pix_x.value
+                pos[0:y_len, 1] = subarray.tel[tel_id].geometry.camera.pix_y.value
 
                 row["type"] = str(tel_description)
                 row["optics"] = str(tel_description.optics)
                 row["camera"] = str(tel_description.camera)
-                row["num_pixels"] = len(subarray.tel[tel_id].camera.pix_id)
+                row["num_pixels"] = len(subarray.tel[tel_id].camera.geometry.pix_id)
                 row["pixel_positions"] = pos
                 row.append()
             tel_table.flush()
@@ -388,8 +388,8 @@ class CTAMLDataDumper(DL1DataDumper):
         """
         event_row = self.file.root.Events.row
 
-        event_row['event_id'] = event_container.dl0.event_id
-        event_row['obs_id'] = event_container.dl0.obs_id
+        event_row['event_id'] = event_container.index.event_id
+        event_row['obs_id'] = event_container.index.obs_id
 
         if event_container.mc:
             event_row['shower_primary_id'] = (
@@ -412,7 +412,7 @@ class CTAMLDataDumper(DL1DataDumper):
             for tel_id in self.subarray[tel_type]:
                 if tel_id in event_container.dl1.tel:
                     image_row['charge'] = event_container.dl1.tel[tel_id].image
-                    image_row['pulse_time'] = event_container.dl1.tel[tel_id].pulse_time
+                    image_row['peak_time'] = event_container.dl1.tel[tel_id].peak_time
                     image_row["event_index"] = self.event_index
                     image_row.append()
 
@@ -496,12 +496,12 @@ class CTAMLDataDumper(DL1DataDumper):
                 logger.info("Creating {} image table...".format(tel_name))
                 self.image_tables.append(tel_name)
 
-                image_shape = (len(tel_desc.camera.pix_id),)
+                image_shape = (len(tel_desc.camera.geometry.pix_id),)
 
                 columns_dict = {
                     "event_index": tables.Int32Col(),
                     "charge": tables.Float32Col(shape=image_shape),
-                    "pulse_time": tables.Float32Col(shape=image_shape)
+                    "peak_time": tables.Float32Col(shape=image_shape)
                 }
 
                 description = type('description',
@@ -530,7 +530,7 @@ class CTAMLDataDumper(DL1DataDumper):
 
                 image_row['charge'] = np.zeros(image_shape, dtype=np.float32)
                 image_row['event_index'] = -1
-                image_row['pulse_time'] = np.zeros(image_shape, dtype=np.float32)
+                image_row['peak_time'] = np.zeros(image_shape, dtype=np.float32)
 
                 image_row.append()
                 table.flush()
@@ -723,7 +723,6 @@ class DL1DataWriter:
                         "that this may increase the number of output "
                         "files.".format(self.events_per_file))
 
-        self.calibrator = calib.camera.calibrator.CameraCalibrator()
 
     def process_data(self, run_list):
         """Process data from a list of runs.
@@ -849,13 +848,14 @@ class DL1DataWriter:
             # Write all file-level data if not present
             # Or compare to existing data if already in file
             example_event = next(event_source._generator())
-            subarray = example_event.inst.subarray
+            subarray = event_source.subarray
+            calibrator = calib.camera.calibrator.CameraCalibrator(subarray=subarray)
             mcheader = example_event.mcheader
             data_dumper.prepare_file(filename, subarray, mcheader)
 
             # Write all events sequentially
             for event in event_source:
-                self.calibrator(event)
+                calibrator(event)
                 if (self.preselection_cut_function is not None and not
                         self.preselection_cut_function(event)):
                     continue
