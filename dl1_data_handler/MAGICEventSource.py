@@ -1,12 +1,13 @@
 from ctapipe.io.eventsource import EventSource
 import uproot
-from ctapipe.io.containers import DataContainer, TelescopePointingContainer
-from ctapipe.instrument import TelescopeDescription, SubarrayDescription, OpticsDescription, CameraGeometry
+from ctapipe.containers import DataContainer, TelescopePointingContainer
+from ctapipe.instrument import TelescopeDescription, SubarrayDescription, OpticsDescription, CameraGeometry, CameraReadout, CameraDescription
 import glob
 import re
 import numpy as np
 from astropy import units as u
 from astropy.coordinates import Angle
+from scipy.stats import norm
 X_MAX_UNIT = u.g / (u.cm ** 2)
 class MAGICEventSource(EventSource):
     def __init__(self, **kwargs):
@@ -45,14 +46,69 @@ class MAGICEventSource(EventSource):
         # MAGIC telescope description
         optics = OpticsDescription.from_name('MAGIC')
         geom = CameraGeometry.from_name('MAGICCam')
-        self.magic_tel_description = TelescopeDescription(name='MAGIC', tel_type = 'LST', optics=optics, camera=geom)
+        # Camera Readout for NectarCam used as a placeholder
+        readout = CameraReadout('MAGICCam', sampling_rate = u.Quantity(1, u.GHz), reference_pulse_shape = np.array([norm.pdf(np.arange(96),48,6)]), reference_pulse_sample_width = u.Quantity(1, u.ns))
+        camera = CameraDescription('MAGICCam', geom, readout)
+        self.magic_tel_description = TelescopeDescription(name='MAGIC', tel_type = 'LST', optics=optics, camera=camera)
         self.magic_tel_descriptions = {1: self.magic_tel_description, 2: self.magic_tel_description}
         self.magic_subarray = SubarrayDescription('MAGIC', self.magic_tel_positions, self.magic_tel_descriptions)
+        # Open ROOT files
         file1 = uproot.open(self.file_list[0])
         self.eventM1 = file1["Events"]
         file2 = uproot.open(self.file_list[1])
         self.eventM2 = file2["Events"]
         
+    @property
+    def is_simulation(self):
+        """
+        Whether the currently open file is simulated
+
+
+        Returns
+        -------
+        bool
+
+        """
+        return True
+
+    @property
+    def datalevels(self):
+        """
+        The datalevels provided by this event source
+
+
+        Returns
+        -------
+        tuple[str]
+
+        """
+        return ('R0','R1','DL0')
+    @property
+    def subarray(self):
+        """
+        Obtain the subarray from the EventSource
+
+
+        Returns
+        -------
+        ctapipe.instrument.SubarrayDescription
+
+        """
+        return self.magic_subarray
+
+    @property
+    def obs_id(self):
+        """
+        The current observation id
+
+
+        Returns
+        -------
+        int
+
+        """
+        return self.run_number
+
     @staticmethod
     def is_compatible(file_mask):
         """
@@ -136,14 +192,14 @@ class MAGICEventSource(EventSource):
         #Reading data from root file for Image table
         
         chargeM1 = self.eventM1["MCerPhotEvt.fPixels.fPhot"].array()
-        pulse_timeM1 = self.eventM1["MArrivalTime.fData"].array()
+        peak_timeM1 = self.eventM1["MArrivalTime.fData"].array()
         chargeM1 = np.asarray(chargeM1)
-        pulse_timeM1 = np.asarray(pulse_timeM1)
+        peak_timeM1 = np.asarray(peak_timeM1)
         
         chargeM2 = self.eventM2["MCerPhotEvt.fPixels.fPhot"].array()
-        pulse_timeM2 = self.eventM2["MArrivalTime.fData"].array()
+        peak_timeM2 = self.eventM2["MArrivalTime.fData"].array()
         chargeM2 = np.asarray(chargeM2)
-        pulse_timeM2 = np.asarray(pulse_timeM2)
+        peak_timeM2 = np.asarray(peak_timeM2)
         
         total_events = len(self.eventM1["MCerPhotEvt.fPixels.fPhot"].array())
         #Iterating over all events, and saving only stereo ones
@@ -156,35 +212,26 @@ class MAGICEventSource(EventSource):
                 i2 = np.where(eventidM2==eventidM1[i])
                 i2 = int(i2[0])
                 data.count = counter
-                # Setting up the R0 container
-                data.r0.obs_id = obs_id
-                data.r0.event_id = event_id
-                data.r0.tel.clear()
 
-                # Setting up the R1 container
-                data.r1.obs_id = obs_id
-                data.r1.event_id = event_id
+                # Setting up the Data container
+                data.index.obs_id = obs_id
+                data.index.event_id = event_id
+                data.r0.tel.clear()
                 data.r1.tel.clear()
-                
-                # Setting up the DL0 container
-                data.dl0.obs_id = obs_id
-                data.dl0.event_id = event_id
                 data.dl0.tel.clear()
                 
                 # Filling the DL1 container with the event data
                 for tel_i, tel_id in enumerate(tels_in_file):
                     
-                    #Creating telescope pointing container
-                    pointing = TelescopePointingContainer()
-                    pointing.azimuth = u.Quantity(np.deg2rad(pointing_azimuth[i]), u.rad)
-                    pointing.altitude = u.Quantity(np.deg2rad(90 - pointing_altitude[i]), u.rad)
+                    #Adding telescope pointing container
+
+                    data.pointing.tel[tel_i+1].azimuth = u.Quantity(np.deg2rad(pointing_azimuth[i]), u.rad)
+                    data.pointing.tel[tel_i+1].altitude = u.Quantity(np.deg2rad(90 - pointing_altitude[i]), u.rad)
                     
-                    # Adding pointing container to event data
-                    data.pointing[tel_i+1] = pointing
                     
                     #Adding MC data
-                    data.mc.alt = Angle(zenith[i], u.rad)
-                    data.mc.az = Angle(azimuth[i], u.rad)
+                    data.mc.alt = Angle(np.pi/2 - zenith[i], u.rad)
+                    data.mc.az = Angle(np.deg2rad(180-7) - azimuth[i], u.rad)
                     data.mc.x_max = u.Quantity(0, X_MAX_UNIT)
                     data.mc.h_first_int = u.Quantity(h_first_int[i], u.m)
                     data.mc.core_x = u.Quantity(core_x[i], u.m)
@@ -194,19 +241,16 @@ class MAGICEventSource(EventSource):
                     # Adding event charge and peak positions per pixel
                     if tel_i == 0:
                         data.dl1.tel[tel_i + 1].image = chargeM1[i][:1039]
-                        data.dl1.tel[tel_i + 1].pulse_time = pulse_timeM1[i][:1039]
+                        data.dl1.tel[tel_i + 1].peak_time = peak_timeM1[i][:1039]
                     else:
                         data.dl1.tel[tel_i + 1].image = chargeM2[i][:1039]
-                        data.dl1.tel[tel_i + 1].pulse_time = pulse_timeM2[i][:1039]                      
+                        data.dl1.tel[tel_i + 1].peak_time = peak_timeM2[i][:1039]                      
                 
                 # Setting the telescopes with data
                 data.r0.tels_with_data = tels_with_data
                 data.r1.tels_with_data = tels_with_data
                 data.dl0.tels_with_data = tels_with_data
-                data.trig.tels_with_trigger = tels_with_data
 
-                # Setting the instrument sub-array
-                data.inst.subarray = self.magic_subarray
 
                 yield data
                 counter += 1
