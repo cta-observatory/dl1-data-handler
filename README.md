@@ -20,21 +20,25 @@ The following installation method (for Linux) is recommended:
 
 ### Installing with pip/setuptools from source
 
-You can install DL1DataHandler using pip after cloning the repository:
+You can install dl1-data-handler using pip after cloning the repository:
 
 ```bash
 git clone https://github.com/cta-observatory/dl1-data-handler.git
 cd dl1-data-handler
 ```
 
-Please use setup_light.py for a light installation without ctapipe v0.8.0. The ImageMapper requires [ctapipe-extra](https://github.com/cta-observatory/ctapipe-extra) outside the DL1DataHandler.
-
-Or to install into a virtualenv environment using pip:
+To install into a virtualenv environment using pip:
 
 ```bash
 virtualenv /path/to/ENV
 source /path/to/ENV/bin/activate
 pip install .
+```
+
+For users that require other ctapipe version than the default one (v0.8.0) setup_light.py won’t install ctapipe along dl1-data-handler, thus allowing the user to install the ctapipe version of her/his choice (compatibility is not guaranteed for all ctapipe versions, though):
+
+```bash
+python setup_light.py install
 ```
 
 ### Installing as a conda package
@@ -64,14 +68,14 @@ conda install -c ctlearn-project dl1_data_handler
 
 This should automatically install all dependencies (NOTE: this may take some time, as by default MKL is included as a dependency of NumPy and it is very large).
 
-If you want to import any functionality from DL1DataHandler into your own Python scripts, then you are all set. However, if you wish to make use of any of the scripts in dl1-data-handler/scripts (like write_data.py), you should also clone the repository locally and checkout the corresponding tag (i.e. for version v0.8.2): 
+If you want to import any functionality from dl1-data-handler into your own Python scripts, then you are all set. However, if you wish to make use of any of the scripts in dl1-data-handler/scripts (like write_data.py), you should also clone the repository locally and checkout the corresponding tag (i.e. for version v0.8.2): 
 
 ```bash
 git clone https://github.com/cta-observatory/dl1-data-handler.git
 git checkout v0.8.2
 ```
 
-DL1DataHandler should already have been installed in your environment by Conda, so no further installation steps (i.e. with setuptools or pip) are necessary and you should be able to run scripts/write_data.py directly.
+dl1-data-handler should already have been installed in your environment by Conda, so no further installation steps (i.e. with setuptools or pip) are necessary and you should be able to run scripts/write_data.py directly.
 
 ## Dependencies
 
@@ -158,9 +162,13 @@ scripts/generate_runlist.py [file_dir] [--num_inputs_per_run NUM_INPUTS_PER_RUN]
 
 It will automatically sort the simtel files in the file_dir directory into groups with matching particle_type, zenith, azimuth, and production parameters. Within each of these groups, it will group together input files in sequential order into runs of size NUM_INPUTS_PER_RUN. The output filename for each run will be automatically generated as ``[particle_type]_[ze]deg_[az]deg_runs[run_number_range]___[production info].h5``. The output YAML file will be written to output_file.
 
+### ImageMapper
+
+The ImageMapper class transforms the hexagonal input pixels into a 2D Cartesian output image. The basic usage is demonstrated in the [ImageMapper tutorial](https://github.com/cta-observatory/dl1-data-handler/blob/master/notebooks/test_image_mapper.ipynb). It requires [ctapipe-extra](https://github.com/cta-observatory/ctapipe-extra) outside of the dl1-data-handler. See this publication for a detailed description: [arXiv:1912.09898](https://arxiv.org/abs/1912.09898)
+
 ### Other scripts
 
-All other scripts located in the scripts/deprecated directory are not currently updated to be compatible with DL1DataHandler >= 0.7.0 and should not be used.
+All other scripts located in the scripts/deprecated directory are not currently updated to be compatible with dl1-data-handler >= 0.7.0 and should not be used.
 
 ## Examples/Tips
 
