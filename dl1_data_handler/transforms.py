@@ -290,7 +290,7 @@ class DataForGammaLearn(Transform):
 
 class SortTelescopes(Transform):
 
-    def __init__(self, sorting):
+    def __init__(self, sorting='trigger'):
         super().__init__()
         params = {
             # List triggered telescopes first
