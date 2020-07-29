@@ -37,23 +37,6 @@ source /path/to/ENV/bin/activate
 pip install .
 ```
 
-### Installing with pip/setuptools from source
-
-You can install DL1DataHandler using pip after cloning the repository:
-
-```bash
-git clone https://github.com/cta-observatory/dl1-data-handler.git
-cd dl1-data-handler
-```
-
-To install into a virtualenv environment:
-
-```bash
-virtualenv /path/to/ENV
-source /path/to/ENV/bin/activate
-pip install .
-```
-
 ### Installing as a conda package
 
 To install it as a conda package, first install Anaconda by following the instructions here: https://www.anaconda.com/distribution/.
