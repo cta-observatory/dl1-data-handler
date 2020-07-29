@@ -16,36 +16,30 @@ DL1DataWriter implements a standardized format for storing simulated CTA DL1 eve
 
 ## Installation
 
-### Light installation without DL1DataWriter
+The following installation method (for Linux) is recommended:
 
-You can install DL1DataHandler using setuptools after cloning the repository:
+### Installing with pip/setuptools from source
+
+You can install DL1DataHandler using pip after cloning the repository:
 
 ```bash
 git clone https://github.com/cta-observatory/dl1-data-handler.git
 cd dl1-data-handler
-
-python setup.py install
 ```
 
-### Full installation
+Please use setup_light.py for a light installation without ctapipe v0.8.0. The ImageMapper requires [ctapipe-extra](https://github.com/cta-observatory/ctapipe-extra) outside the DL1DataHandler.
 
-In case you want to produce DL1 data (calibrated images) in a standardized format using the DL1DataWriter, please install the ctapipe v0.7.0.post21 (after the bug fix [ctapipe PR #1143](https://github.com/cta-observatory/ctapipe/pull/1143)) from source: 
+Or to install into a virtualenv environment using pip:
 
 ```bash
-git clone https://github.com/cta-observatory/ctapipe
-cd ctapipe
-git checkout f350a04
-
-conda env create -n dl1dh -f environment.yml
-conda activate dl1dh
-
-python setup.py install
+virtualenv /path/to/ENV
+source /path/to/ENV/bin/activate
+pip install .
 ```
-Install DL1DataHandler on top of ctapipe v0.7.0.post21 also from source, following the procedure above.
 
-<!--### Installing with pip/setuptools from source
+### Installing with pip/setuptools from source
 
-You can install DL1 Data Handler using pip after cloning the repository:
+You can install DL1DataHandler using pip after cloning the repository:
 
 ```bash
 git clone https://github.com/cta-observatory/dl1-data-handler.git
@@ -82,19 +76,19 @@ conda config --add channels cta-observatory
 Install the package:
 
 ```bash
-conda install -c bryankim96 dl1_data_handler
+conda install -c ctlearn-project dl1_data_handler
 ```
 
 This should automatically install all dependencies (NOTE: this may take some time, as by default MKL is included as a dependency of NumPy and it is very large).
 
-If you want to import any functionality from DL1 Data Handler into your own Python scripts, then you are all set. However, if you wish to make use of any of the scripts in dl1-data-handler/scripts (like write_data.py), you should also clone the repository locally and checkout the corresponding tag (i.e. for version v0.7.3): 
+If you want to import any functionality from DL1DataHandler into your own Python scripts, then you are all set. However, if you wish to make use of any of the scripts in dl1-data-handler/scripts (like write_data.py), you should also clone the repository locally and checkout the corresponding tag (i.e. for version v0.8.2): 
 
 ```bash
 git clone https://github.com/cta-observatory/dl1-data-handler.git
-git checkout -b v0.7.3 v0.7.3
+git checkout v0.8.2
 ```
 
-DL1 Data Handler should already have been installed in your environment by Conda, so no further installation steps (i.e. with setuptools or pip) are necessary and you should be able to run scripts/write_data.py directly.-->
+DL1DataHandler should already have been installed in your environment by Conda, so no further installation steps (i.e. with setuptools or pip) are necessary and you should be able to run scripts/write_data.py directly.
 
 ## Dependencies
 
@@ -102,12 +96,9 @@ The main dependencies are:
 
 * PyTables >= 3.4.4
 * NumPy >= 1.15.0
+* ctapipe == 0.8.0
 
 Also see setup.py.
-
-Addtional dependencies for DL1DataWriter:
-
-* ctapipe == 0.7.0.post21 
 
 ## Usage
 
@@ -186,7 +177,7 @@ It will automatically sort the simtel files in the file_dir directory into group
 
 ### Other scripts
 
-All other scripts located in the scripts/deprecated directory are not currently updated to be compatible with dl1-data-handler >= 0.7.0 and should not be used.
+All other scripts located in the scripts/deprecated directory are not currently updated to be compatible with DL1DataHandler >= 0.7.0 and should not be used.
 
 ## Examples/Tips
 
@@ -200,6 +191,6 @@ All other scripts located in the scripts/deprecated directory are not currently 
 ## Links
 
 * [Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") - Homepage of the CTA collaboration
-* [Deep Learning for CTA Analysis](https://github.com/bryankim96/deep-learning-CTA "Deep Learning for CTA Repository") - Repository of code for studies on applying deep learning to CTA analysis tasks. Maintained by groups at Columbia University and Barnard College.
+* [CTLearn](https://github.com/ctlearn-project/ctlearn "CTLearn Repository") and [GammaLearn](https://gitlab.lapp.in2p3.fr/GammaLearn/GammaLearn "GammaLearn Repository") - Repository of code for studies on applying deep learning to IACT analysis tasks. Maintained by groups at Columbia University, Universidad Complutense de Madrid, Barnard College (CTLearn) and LAPP (GammaLearn).
 * [ctapipe](https://cta-observatory.github.io/ctapipe/ "ctapipe Official Documentation Page") - Official documentation for the ctapipe analysis package (in development)
 * [ViTables](http://vitables.org/ "ViTables Homepage") - Homepage for ViTables application for Pytables HDF5 file visualization
