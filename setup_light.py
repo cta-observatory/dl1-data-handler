@@ -13,8 +13,7 @@ setup(name='dl1_data_handler',
           'numpy>=1.15.0',
           'scipy',
           'tables>=3.4.4',
-          'pytest-cov',
-          'ctapipe==0.8.0',
+          'pytest-cov'
           ],
       dependency_links=[],
       zip_safe=True)
