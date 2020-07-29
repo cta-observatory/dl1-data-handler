@@ -180,12 +180,12 @@ class CoreXY(Transform):
 
 class Xmax(Transform):
 
-    def __init__(self, name='showermaximum'):
+    def __init__(self, name='showermaximum', unit='km'):
         super().__init__()
         self.name = name
         self.shape = (1)
         self.dtype = np.dtype('float32')
-        self.unit = 'km'
+        self.unit = unit
 
     def describe(self, description):
         self.description = [
@@ -203,12 +203,12 @@ class Xmax(Transform):
 
 class HfirstInt(Transform):
 
-    def __init__(self, name='h_first_int'):
+    def __init__(self, name='h_first_int', unit='km'):
         super().__init__()
         self.name = name
         self.shape = (1)
         self.dtype = np.dtype('float32')
-        self.unit = 'km'
+        self.unit = unit
 
     def describe(self, description):
         self.description = [
