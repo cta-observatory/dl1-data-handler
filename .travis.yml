@@ -1,6 +1,6 @@
 language: python
 python:
-      - "3.6"
+      - "3.7"
 notifications:
     email:
         on_success: change # default: change
@@ -21,7 +21,7 @@ install:
       - conda update -q conda
         # Useful for debugging any issues with conda
       - conda info -a
-      - conda create -n test python=3.6
+      - conda create -n test python=3.7
       - conda activate test
       - python setup.py develop
 script:
