@@ -5,10 +5,54 @@ from ctapipe.instrument import TelescopeDescription, SubarrayDescription, Optics
 import glob
 import re
 import numpy as np
+from ctapipe.core import Container, Field
+from numpy import nan
 from astropy import units as u
 from astropy.coordinates import Angle
 from scipy.stats import norm
 X_MAX_UNIT = u.g / (u.cm ** 2)
+
+class MCHeaderContainer(Container):
+    corsika_version = Field(nan, "CORSIKA version *  1000")
+    refl_version = Field(nan, "refl version")
+    cam_version = Field(nan, "camera version")
+    run_number = Field(nan, "MC Run Number")
+    prod_site = Field(nan, "Production site")
+    date_run_mmcs = Field(nan, "Date Run MMCs")
+    date_run_cam = Field(nan, "Date Run Camera")
+    shower_theta_max = Field(nan * u.deg, "Shower Theta Maximum", unit = u.deg)
+    shower_theta_min = Field(nan * u.deg, "Shower Theta Minimum", unit = u.deg)
+    shower_phi_max = Field(nan * u.deg, "Shower Phi Maximum", unit = u.deg)
+    shower_phi_min = Field(nan * u.deg, "Shower Phi Minimum", unit = u.deg)
+    c_wave_lower = Field(nan, "C Wave Lower")
+    c_wave_upper = Field(nan, "C Wave Upper")
+    num_obs_lev = Field(nan, "Number Observations Level")
+    height_lev = Field([], "Height Level")
+    slope_spec = Field(nan, "Slope Spec")
+    rand_pointing_cone_semi_angle = Field(nan * u.deg, "Random Pointing Cone Semi Angle", unit = u.deg)
+    impact_max = Field(nan, "Imapact Maximum")
+    star_field_rotate = Field(nan, "Star Field Rotate")
+    star_field_ra_h = Field(nan, "Star Field RA H")
+    star_field_ra_m = Field(nan, "Star Field RA M")
+    star_field_ra_s = Field(nan, "Star Field RA S")
+    star_field_dec_d = Field(nan, "Star Field DEC D")
+    star_field_dec_m = Field(nan, "Star Field DEC M")
+    star_field_dec_s = Field(nan, "Star Field DEC S")
+    num_trig_cond = Field(nan, "Number Trigger Condition")
+    all_evts_trig = Field(nan,  "All Events Triggered")
+    mc_evt = Field(nan, "MC Event")
+    mc_trig = Field(nan, "MC Trigger")
+    mc_fadc = Field(nan, "MC Fadc")
+    raw_evt = Field(nan, "Raw Event")
+    num_analised_pix = Field(nan, "Number of Analised Pixels")
+    num_simulated_showers = Field(nan, "Number of Simulated Showers")
+    num_stored_showers = Field(nan, "Number of Stored Showers")
+    num_events = Field(nan, "Number of Events")
+    num_phe_from_dnsb = Field(nan, "Number Phe from DNSB")
+    elec_noise = Field(nan, "Elec Noise")
+    optic_links_noise = Field(nan, "Optic Links Noise")
+
+
 class MAGICEventSource(EventSource):
     def __init__(self, **kwargs):
         """
@@ -57,6 +101,8 @@ class MAGICEventSource(EventSource):
         self.eventM1 = file1["Events"]
         file2 = uproot.open(self.file_list[1])
         self.eventM2 = file2["Events"]
+        self.meta = file1["RunHeaders"]
+        self._mc_header = self._parse_mc_header()
         
     @property
     def is_simulation(self):
@@ -162,7 +208,7 @@ class MAGICEventSource(EventSource):
         data.meta['origin'] = "MAGIC"
         data.meta['input_url'] = self.input_url
         data.meta['is_simulation'] = True
-        
+        data.mcheader = self._mc_header
         #Reading data from root file for Events table
         eventidM1 = np.asarray(self.eventM1["MRawEvtHeader.fStereoEvtNumber"].array())
         eventidM2 = np.asarray(self.eventM2["MRawEvtHeader.fStereoEvtNumber"].array())
@@ -255,3 +301,43 @@ class MAGICEventSource(EventSource):
                 yield data
                 counter += 1
         return
+    def _parse_mc_header(self):
+        return MCHeaderContainer(
+            corsika_version = self.meta["MMcRunHeader.fCorsikaVersion"].array()[0],
+            refl_version = self.meta["MMcRunHeader.fReflVersion"].array()[0],
+            cam_version = self.meta["MMcRunHeader.fCamVersion"].array()[0],
+            run_number = self.meta["MMcRunHeader.fMcRunNumber"].array()[0],
+            prod_site = self.meta["MMcRunHeader.fProductionSite"].array()[0],
+            date_run_mmcs = self.meta["MMcRunHeader.fDateRunMMCs"].array()[0],
+            date_run_cam = self.meta["MMcRunHeader.fDateRunCamera"].array()[0],
+            shower_theta_max = Angle(self.meta["MMcRunHeader.fShowerThetaMax"].array()[0], u.deg),
+            shower_theta_min = Angle(self.meta["MMcRunHeader.fShowerThetaMin"].array()[0], u.deg),
+            shower_phi_max = Angle(self.meta["MMcRunHeader.fShowerPhiMax"].array()[0], u.deg),
+            shower_phi_min = Angle(self.meta["MMcRunHeader.fShowerPhiMin"].array()[0], u.deg),
+            c_wave_lower = self.meta["MMcRunHeader.fCWaveLower"].array()[0],
+            c_wave_upper = self.meta["MMcRunHeader.fCWaveUpper"].array()[0],
+            num_obs_lev = self.meta["MMcRunHeader.fNumObsLev"].array()[0],
+            height_lev = self.meta["MMcRunHeader.fHeightLev[10]"].array(),
+            slope_spec = self.meta["MMcRunHeader.fSlopeSpec"].array()[0],
+            rand_pointing_cone_semi_angle = Angle(self.meta["MMcRunHeader.fRandomPointingConeSemiAngle"].array()[0], u.deg),
+            impact_max = self.meta["MMcRunHeader.fImpactMax"].array()[0],
+            star_field_rotate = self.meta["MMcRunHeader.fStarFieldRotate"].array()[0],
+            star_field_ra_h = self.meta["MMcRunHeader.fStarFieldRaH"].array()[0],
+            star_field_ra_m = self.meta["MMcRunHeader.fStarFieldRaM"].array()[0],
+            star_field_ra_s = self.meta["MMcRunHeader.fStarFieldRaS"].array()[0],
+            star_field_dec_d = self.meta["MMcRunHeader.fStarFieldDeD"].array()[0],
+            star_field_dec_m = self.meta["MMcRunHeader.fStarFieldDeM"].array()[0],
+            star_field_dec_s = self.meta["MMcRunHeader.fStarFieldDeS"].array()[0],
+            num_trig_cond = self.meta["MMcRunHeader.fNumTrigCond"].array()[0],
+            all_evts_trig = self.meta["MMcRunHeader.fAllEvtsTriggered"].array()[0],
+            mc_evt = self.meta["MMcRunHeader.fMcEvt"].array()[0],
+            mc_trig = self.meta["MMcRunHeader.fMcTrig"].array()[0],
+            mc_fadc = self.meta["MMcRunHeader.fMcFadc"].array()[0],
+            raw_evt = self.meta["MMcRunHeader.fRawEvt"].array()[0],
+            num_analised_pix = self.meta["MMcRunHeader.fNumAnalisedPixels"].array()[0],
+            num_simulated_showers = self.meta["MMcRunHeader.fNumSimulatedShowers"].array()[0],
+            num_stored_showers = self.meta["MMcRunHeader.fNumStoredShowers"].array()[0],
+            num_events = self.meta["MMcRunHeader.fNumEvents"].array()[0],
+            num_phe_from_dnsb = self.meta["MMcRunHeader.fNumPheFromDNSB"].array()[0],
+            elec_noise = self.meta["MMcRunHeader.fElecNoise"].array()[0],
+            optic_links_noise = self.meta["MMcRunHeader.fOpticLinksNoise"].array()[0] )
