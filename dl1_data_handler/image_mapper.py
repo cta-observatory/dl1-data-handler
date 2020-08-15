@@ -19,9 +19,7 @@ class ImageMapper:
                  mapping_method=None,
                  padding=None,
                  interpolation_image_shape=None,
-                 rotate_back=None,
-                 mask_interpolation=False,
-                 channels=['charge']):
+                 mask_interpolation=False):
 
         # image_shapes should be a non static field to prevent problems
         # when multiple instances of ImageMapper are created
@@ -70,11 +68,6 @@ class ImageMapper:
         # Mask interpolation
         self.mask = True if mask_interpolation else False
 
-        # Rotate the camera back to the actual orientation. The pixel are moved into a horizontal grid to perform the image_mapper algorithm.
-        self.rotate_camera = True if rotate_back else False
-        if self.rotate_camera and pixel_positions is None:
-            self.rotate_back_angle = {}
-
         # Pixel positions, number of pixels, mapping tables and index matrixes initialization
         self.pixel_positions = {}
         self.num_pixels = {}
@@ -96,13 +89,9 @@ class ImageMapper:
                     rotation_matrix = np.matrix([[np.cos(rotation_angle), -np.sin(rotation_angle)],
                                                  [np.sin(rotation_angle), np.cos(rotation_angle)]], dtype=float)
                     self.pixel_positions[camtype] = np.squeeze(np.asarray(np.dot(rotation_matrix, self.pixel_positions[camtype])))
-                    if self.rotate_camera:
-                        self.rotate_back_angle[camtype] = 90.0-camgeo.pix_rotation.deg
             else:
                 self.pixel_positions[camtype] = pixel_positions[camtype]
                 self.num_pixels[camtype] = pixel_positions[camtype].shape[1]
-                if camtype in ['LSTCam', 'NectarCam', 'MAGICCam'] and self.rotate_camera:
-                    self.rotate_back_angle = rotate_back
 
             map_method = self.mapping_method[camtype]
             if map_method not in ['oversampling', 'rebinning', 'nearest_interpolation', 'bilinear_interpolation',
@@ -138,12 +127,6 @@ class ImageMapper:
                     self.image_shapes[camtype][2]
                 )
 
-            self.image_shapes[camtype] = (
-                self.image_shapes[camtype][0],
-                self.image_shapes[camtype][1],
-                len(channels)  # number of channels
-                )
-
             # Initializing the indexed matrix
             self.index_matrixes[camtype] = None
             # Calculating the mapping tables for the selected camera types
@@ -154,10 +137,27 @@ class ImageMapper:
         :param pixels: a numpy array of values for each pixel, in order of pixel index.
         :param camera_type: a string specifying the telescope type.
         :return: a numpy array of shape [img_width, img_length, N_channels]
+
+        Usage:
+
+        >>> IM = dl1_data_handler.image_mapper.ImageMapper(camera_types=['LSTCam'])
+        >>> one_channel = np.expand_dims(np.arange(1855), axis=1)
+        >>> # Use the ImageMapper with one channel (charge or peak position):
+        >>> image = IM.map_image(one_channel, 'LSTCam')
+        >>> # Use the ImageMapper with two channels (charge and peak position):
+        >>> two_channels = np.concatenate((one_channel, one_channel[::-1]),axis=1)
+        >>> images = IM.map_image(two_channels, 'LSTCam')
         """
+
         # Get relevant parameters
         map_tab = self.mapping_tables[camera_type]
         n_channels = pixels.shape[1]
+        if n_channels != self.image_shapes[camera_type][2]:
+            self.image_shapes[camera_type] = (
+                self.image_shapes[camera_type][0],
+                self.image_shapes[camera_type][1],
+                n_channels  # number of channels
+                )
 
         # We reshape each channel and then stack the result
         result = []
@@ -527,11 +527,8 @@ class ImageMapper:
         # Mask interpolation
         if self.mask and map_method in ['bilinear_interpolation', 'bicubic_interpolation']:
             mapping_matrix3d = self.apply_mask_interpolation(mapping_matrix3d, nn_index, num_pixels, pad)
-        # Rotating the camera back to the original orientation
-        if self.rotate_camera and camera_type in ['LSTCam', 'NectarCam', 'MAGICCam'] and map_method not in ['image_shifting', 'axial_addressing', 'indexed_conv']:
-             mapping_matrix3d = self.rotate_mapping_table(mapping_matrix3d,self.rotate_back_angle[camera_type])
         # Normalization (approximation) of the mapping table
-        if map_method in ['rebinning', 'bilinear_interpolation', 'bicubic_interpolation']:
+        if map_method in ['rebinning', 'nearest_interpolation', 'bilinear_interpolation', 'bicubic_interpolation']:
             mapping_matrix3d = self.normalize_mapping_matrix(mapping_matrix3d, num_pixels)
 
         if (pad + default_pad) != 0:
@@ -914,11 +911,3 @@ class ImageMapper:
         for i in range(1, mapping_matrix3d.shape[0]):
             mapping_matrix3d[i] *= mask
         return mapping_matrix3d
-
-    @staticmethod
-    def rotate_mapping_table(mapping_matrix3d,angle):
-        mapping_table = []
-        for i in np.arange(mapping_matrix3d.shape[0]):
-            image = rotate(mapping_matrix3d[i],angle,reshape=False,prefilter=False)
-            mapping_table.append(image)
-        return np.array(mapping_table)

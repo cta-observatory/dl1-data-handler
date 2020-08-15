@@ -361,7 +361,6 @@ class CTAMLDataDumper(DL1DataDumper):
             ctapipe container of all event data for a given event.
         """
         event_row = self.file.root.Events.row
-
         event_row['event_id'] = event_container.index.event_id
         event_row['obs_id'] = event_container.index.obs_id
 
@@ -802,6 +801,7 @@ class DL1DataWriter:
             # Write all file-level data if not present
             # Or compare to existing data if already in file
             example_event = next(event_source._generator())
+
             subarray = event_source.subarray
             if filetype == "simtel":
                 calibrator = calib.camera.calibrator.CameraCalibrator(subarray=subarray)
