@@ -53,7 +53,7 @@ class MCHeaderContainer(Container):
     optic_links_noise = Field(nan, "Optic Links Noise")
 
 
-class MAGICEventSource(EventSource):
+class DLMAGICEventSource(EventSource):
     def __init__(self, **kwargs):
         """
         Constructor
