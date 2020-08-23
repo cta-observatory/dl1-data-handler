@@ -14,7 +14,7 @@ import tables
 import uproot
 from ctapipe import io, calib
 from dl1_data_handler import table_definitions as table_defs
-from dl1_data_handler import MAGICEventSource
+from dl1_data_handler import dl_eventsources
 logger = logging.getLogger(__name__)
 
 
@@ -794,7 +794,7 @@ class DL1DataWriter:
                     filename,
                     **self.event_source_settings)
             elif filetype == "root":
-                event_source = MAGICEventSource.MAGICEventSource(input_url=filename)
+                event_source = dl_eventsources.DLMAGICEventSource(input_url=filename)
             elif filetype == "simtel":
                 event_source = io.eventsource.EventSource.from_url(filename, back_seekable = True)
 
