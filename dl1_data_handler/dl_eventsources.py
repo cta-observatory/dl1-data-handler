@@ -1,15 +1,15 @@
-from ctapipe.io.eventsource import EventSource
-import uproot
-from ctapipe.containers import DataContainer, TelescopePointingContainer
-from ctapipe.instrument import TelescopeDescription, SubarrayDescription, OpticsDescription, CameraGeometry, CameraReadout, CameraDescription
-import glob
-import re
-import numpy as np
-from ctapipe.core import Container, Field
-from numpy import nan
 from astropy import units as u
+from ctapipe.containers import DataContainer, TelescopePointingContainer
 from astropy.coordinates import Angle
+from ctapipe.core import Container, Field
+from ctapipe.instrument import TelescopeDescription, SubarrayDescription, OpticsDescription, CameraGeometry, CameraReadout, CameraDescription
+from ctapipe.io.eventsource import EventSource
+from numpy import nan
+import glob
+import numpy as np
 from scipy.stats import norm
+import uproot
+import re
 X_MAX_UNIT = u.g / (u.cm ** 2)
 
 class MCHeaderContainer(Container):
@@ -98,9 +98,9 @@ class DLMAGICEventSource(EventSource):
         self.magic_subarray = SubarrayDescription('MAGIC', self.magic_tel_positions, self.magic_tel_descriptions)
         # Open ROOT files
         file1 = uproot.open(self.file_list[0])
-        self.eventM1 = file1["Events"]
+        self.event_M1 = file1["Events"]
         file2 = uproot.open(self.file_list[1])
-        self.eventM2 = file2["Events"]
+        self.event_M2 = file2["Events"]
         self.meta = file1["RunHeaders"]
         self._mc_header = self._parse_mc_header()
         
@@ -210,52 +210,52 @@ class DLMAGICEventSource(EventSource):
         data.meta['is_simulation'] = True
         data.mcheader = self._mc_header
         #Reading data from root file for Events table
-        eventidM1 = np.asarray(self.eventM1["MRawEvtHeader.fStereoEvtNumber"].array())
-        eventidM2 = np.asarray(self.eventM2["MRawEvtHeader.fStereoEvtNumber"].array())
+        eventid_M1 = np.asarray(self.event_M1["MRawEvtHeader.fStereoEvtNumber"].array())
+        eventid_M2 = np.asarray(self.event_M2["MRawEvtHeader.fStereoEvtNumber"].array())
         
-        zenith = np.asarray(self.eventM1["MMcEvt.fTheta"].array())
+        zenith = np.asarray(self.event_M1["MSrcPosCam.fY"].array())
         
-        pointing_altitude = np.asarray(self.eventM1["MPointingPos.fZd"].array())
+        pointing_altitude = np.asarray(self.event_M1["MPointingPos.fZd"].array())
         
-        azimuth = np.asarray(self.eventM1["MMcEvt.fPhi"].array())
+        azimuth = np.asarray(self.event_M1["MSrcPosCam.fX"].array())
         
-        pointing_azimuth = np.asarray(self.eventM1["MPointingPos.fAz"].array())
+        pointing_azimuth = np.asarray(self.event_M1["MPointingPos.fAz"].array())
         
-        core_x = np.asarray(self.eventM1["MMcEvt.fCoreX"].array())
-        core_y = np.asarray(self.eventM1["MMcEvt.fCoreY"].array())
+        core_x = np.asarray(self.event_M1["MMcEvt.fCoreX"].array())
+        core_y = np.asarray(self.event_M1["MMcEvt.fCoreY"].array())
         
-        mc_energy = np.asarray(self.eventM1["MMcEvt.fEnergy"].array())/1000
-        h_first_int = np.asarray(self.eventM1["MMcEvt.fZFirstInteraction"].array())
+        mc_energy = np.asarray(self.event_M1["MMcEvt.fEnergy"].array())/1000.0
+        h_first_int = np.asarray(self.event_M1["MMcEvt.fZFirstInteraction"].array())
         
         mask = r".([A-Z]+)_M\d_za\d+to\d+_\d_\d+_Y_.*"
         primary_id = re.findall(mask, self.file_list[0])[0]
         if primary_id == 'GA':
             shower_primary_id = 1
             
-        stereo_total = np.max(eventidM1)
+        stereo_total = np.max(eventid_M1)
         event_index = np.zeros(shape = (stereo_total,1))
         
         #Reading data from root file for Image table
         
-        chargeM1 = self.eventM1["MCerPhotEvt.fPixels.fPhot"].array()
-        peak_timeM1 = self.eventM1["MArrivalTime.fData"].array()
-        chargeM1 = np.asarray(chargeM1)
-        peak_timeM1 = np.asarray(peak_timeM1)
+        charge_M1 = self.event_M1["MCerPhotEvt.fPixels.fPhot"].array()
+        peak_time_M1 = self.event_M1["MArrivalTime.fData"].array()
+        charge_M1 = np.asarray(charge_M1)
+        peak_time_M1 = np.asarray(peak_time_M1)
         
-        chargeM2 = self.eventM2["MCerPhotEvt.fPixels.fPhot"].array()
-        peak_timeM2 = self.eventM2["MArrivalTime.fData"].array()
-        chargeM2 = np.asarray(chargeM2)
-        peak_timeM2 = np.asarray(peak_timeM2)
+        charge_M2 = self.event_M2["MCerPhotEvt.fPixels.fPhot"].array()
+        peak_time_M2 = self.event_M2["MArrivalTime.fData"].array()
+        charge_M2 = np.asarray(charge_M2)
+        peak_time_M2 = np.asarray(peak_time_M2)
         
-        total_events = len(self.eventM1["MCerPhotEvt.fPixels.fPhot"].array())
+        total_events = len(self.event_M1["MCerPhotEvt.fPixels.fPhot"].array())
         #Iterating over all events, and saving only stereo ones
         tels_in_file = ["m1", "m2"]
         tels_with_data = {1,2}
         for i in range(0, total_events):
             if eventidM1[i] != 0:
                 obs_id = self.run_number
-                event_id = eventidM1[i]
-                i2 = np.where(eventidM2==eventidM1[i])
+                event_id = eventid_M1[i]
+                i2 = np.where(eventid_M2==eventid_M1[i])
                 i2 = int(i2[0])
                 data.count = counter
 
@@ -272,12 +272,12 @@ class DLMAGICEventSource(EventSource):
                     #Adding telescope pointing container
 
                     data.pointing.tel[tel_i+1].azimuth = u.Quantity(np.deg2rad(pointing_azimuth[i]), u.rad)
-                    data.pointing.tel[tel_i+1].altitude = u.Quantity(np.deg2rad(90 - pointing_altitude[i]), u.rad)
+                    data.pointing.tel[tel_i+1].altitude = u.Quantity(np.deg2rad(90.0 - pointing_altitude[i]), u.rad)
                     
                     
                     #Adding MC data
-                    data.mc.alt = Angle(np.pi/2 - zenith[i], u.rad)
-                    data.mc.az = Angle(np.deg2rad(180-7) - azimuth[i], u.rad)
+                    data.mc.alt = Angle(np.deg2rad(zenith[i] * 0.00337), u.rad)
+                    data.mc.az = Angle(np.deg2rad(azimuth[i] * 0.00337), u.rad)
                     data.mc.x_max = u.Quantity(0, X_MAX_UNIT)
                     data.mc.h_first_int = u.Quantity(h_first_int[i], u.m)
                     data.mc.core_x = u.Quantity(core_x[i], u.m)
@@ -286,11 +286,11 @@ class DLMAGICEventSource(EventSource):
                     data.mc.shower_primary_id = shower_primary_id
                     # Adding event charge and peak positions per pixel
                     if tel_i == 0:
-                        data.dl1.tel[tel_i + 1].image = chargeM1[i][:1039]
-                        data.dl1.tel[tel_i + 1].peak_time = peak_timeM1[i][:1039]
+                        data.dl1.tel[tel_i + 1].image = charge_M1[i][:1039]
+                        data.dl1.tel[tel_i + 1].peak_time = peak_time_M1[i][:1039]
                     else:
-                        data.dl1.tel[tel_i + 1].image = chargeM2[i][:1039]
-                        data.dl1.tel[tel_i + 1].peak_time = peak_timeM2[i][:1039]                      
+                        data.dl1.tel[tel_i + 1].image = charge_M2[i][:1039]
+                        data.dl1.tel[tel_i + 1].peak_time = peak_time_M2[i][:1039]                      
                 
                 # Setting the telescopes with data
                 data.r0.tels_with_data = tels_with_data
