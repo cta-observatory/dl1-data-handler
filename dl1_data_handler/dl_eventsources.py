@@ -172,11 +172,11 @@ class DLMAGICEventSource(EventSource):
         eventid_M1 = np.asarray(self.event_M1["MRawEvtHeader.fStereoEvtNumber"].array())
         eventid_M2 = np.asarray(self.event_M2["MRawEvtHeader.fStereoEvtNumber"].array())
         
-        zenith = np.asarray(self.event_M1["MSrcPosCam.fY"].array())
+        src_pos_cam_Y = np.asarray(self.event_M1["MSrcPosCam.fY"].array())
         
         pointing_altitude = np.asarray(self.event_M1["MPointingPos.fZd"].array())
         
-        azimuth = np.asarray(self.event_M1["MSrcPosCam.fX"].array())
+        src_pos_cam_X = np.asarray(self.event_M1["MSrcPosCam.fX"].array())
         
         pointing_azimuth = np.asarray(self.event_M1["MPointingPos.fAz"].array())
         
@@ -235,8 +235,8 @@ class DLMAGICEventSource(EventSource):
                     
                     
                     #Adding MC data
-                    data.mc.alt = Angle(np.deg2rad(zenith[i] * 0.00337), u.rad)
-                    data.mc.az = Angle(np.deg2rad(azimuth[i] * 0.00337), u.rad)
+                    data.mc.alt = Angle(np.deg2rad(src_pos_cam_Y[i] * 0.00337), u.rad)
+                    data.mc.az = Angle(np.deg2rad(src_pos_cam_X[i] * 0.00337), u.rad)
                     data.mc.x_max = u.Quantity(0, X_MAX_UNIT)
                     data.mc.h_first_int = u.Quantity(h_first_int[i], u.m)
                     data.mc.core_x = u.Quantity(core_x[i], u.m)
