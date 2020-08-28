@@ -215,7 +215,7 @@ class DLMAGICEventSource(EventSource):
                 obs_id = self.run_number
                 event_id = eventid_M1[i]
                 i2 = np.where(eventid_M2==eventid_M1[i])
-                i2 = int(i2[0])
+                i2 = i2[0].astype(int)
                 data.count = counter
 
                 # Setting up the Data container
