@@ -115,6 +115,7 @@ class DLMAGICEventSource(EventSource):
         return self.run_number
 
     @staticmethod
+    #This function was taken from the general MAGICEventSource by ctapipe_io_magic (https://github.com/cta-observatory/ctapipe_io_magic).
     def is_compatible(file_mask):
         """
         This method checks if the specified file mask corresponds
