@@ -205,7 +205,7 @@ class CTAMLDataDumper(DL1DataDumper):
             logger.info("Array_Information table already present. Validating...")
             for tel_id in subarray.tels:
                 tel_desc = subarray.tels[tel_id]
-                if tel_id != "LST_MAGIC_MAGICCam":
+                if str(tel_desc) != "LST_MAGIC_MAGICCam":
                     rows = [row for row in array_table.iterrows()
                             if row["id"] == tel_id and
                             row["type"].decode('utf-8') == str(tel_desc) and
@@ -289,13 +289,17 @@ class CTAMLDataDumper(DL1DataDumper):
                 row.append()
             tel_table.flush()
 
-    def dump_mc_header_info(self, mcheader_container):
+    def dump_mc_header_info(self, mcheader_container, tel_desc):
         """Dump ctapipe instrument container to output file.
         Dumps entire contents of MC header container without selection.
         Parameters
         ----------
         mc_header_container : ctapipe.io.containers.MCHeaderContainer
             ctapipe container of monte carlo header data (for entire run).
+        tel_desc : str
+            telescope type to skip check for MAGIC files
+
+
         """
         logger.info("Writing MC header information to file attributes...")
 
@@ -312,17 +316,18 @@ class CTAMLDataDumper(DL1DataDumper):
                 elif field == "shower_prog_start" or field == "detector_prog_start":
                     continue
                 else:
-                    if hasattr(mcheader_dict[field], 'value'):
-                        match = math.isclose(attributes[field], mcheader_dict[field].value)  
-                    elif type(mcheader_dict[field]) is str or type(mcheader_dict[field]) is int:
-                        match = (attributes[field] == mcheader_dict[field])
-                    elif type(mcheader_dict[field]) is float:
-                        match = math.isclose(attributes[field], mcheader_dict[field])
-                    else:
-                        raise ValueError("Found unexpected type for field {} in MC header: {}".format(field, type(mcheader_dict[field])))
-                                     
-                    if not match:    
-                        raise ValueError("Attribute {} in output file root attributes does not match new value in input file: {} vs {}".format(field, attributes[field], mcheader_dict[field]))
+                    if str(tel_desc) != "LST_MAGIC_MAGICCam":
+                        if hasattr(mcheader_dict[field], 'value'):
+                            match = math.isclose(attributes[field], mcheader_dict[field].value)  
+                        elif type(mcheader_dict[field]) is str or type(mcheader_dict[field]) is int:
+                            match = (attributes[field] == mcheader_dict[field])
+                        elif type(mcheader_dict[field]) is float:
+                            match = math.isclose(attributes[field], mcheader_dict[field])
+                        else:
+                            raise ValueError("Found unexpected type for field {} in MC header: {}".format(field, type(mcheader_dict[field])))
+
+                        if not match:    
+                            raise ValueError("Attribute {} in output file root attributes does not match new value in input file: {} vs {}".format(field, attributes[field], mcheader_dict[field]))
             else:
                 attributes[field] = mcheader_dict[field]
 
@@ -520,7 +525,7 @@ class CTAMLDataDumper(DL1DataDumper):
         try:
             self.dump_header_info(input_filename)
             self.dump_instrument_info(subarray)
-            self.dump_mc_header_info(mcheader)
+            self.dump_mc_header_info(mcheader, subarray.tels[1])
             if "/Events" not in self.file:
                 self._create_event_table(subarray)
             self._create_image_tables(subarray)
