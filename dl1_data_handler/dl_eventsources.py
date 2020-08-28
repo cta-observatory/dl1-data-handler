@@ -146,13 +146,11 @@ class DLMAGICEventSource(EventSource):
                 except ValueError:
                     # uproot raises ValueError if the file is not a ROOT file
                     is_magic_root_file = False
-                    pass
-
             except ImportError:
                 if re.match(r'.+_m\d_.+root', file_path.lower()) is None:
                     is_magic_root_file = False
 
-        return is_magic_root_file  
+        return is_magic_root_file
 
     def _generator(self):
         """
@@ -162,7 +160,7 @@ class DLMAGICEventSource(EventSource):
         Returns
         -------
         
-        """  
+        """
         counter = 0
         data = DataContainer()
         data.meta['origin'] = "MAGIC"
@@ -192,9 +190,7 @@ class DLMAGICEventSource(EventSource):
         if primary_id == 'GA':
             shower_primary_id = 1
             
-        stereo_total = np.max(eventid_M1)
-        event_index = np.zeros(shape = (stereo_total,1))
-        
+        stereo_total = np.max(eventid_M1)        
         #Reading data from root file for Image table
         
         charge_M1 = self.event_M1["MCerPhotEvt.fPixels.fPhot"].array()
@@ -207,12 +203,12 @@ class DLMAGICEventSource(EventSource):
         charge_M2 = np.asarray(charge_M2)
         peak_time_M2 = np.asarray(peak_time_M2)
         
-        total_events = len(self.event_M1["MCerPhotEvt.fPixels.fPhot"].array())
+        total_events = min(len(self.event_M1["MCerPhotEvt.fPixels.fPhot"].array()), len(self.event_M2["MCerPhotEvt.fPixels.fPhot"].array()))
         #Iterating over all events, and saving only stereo ones
         tels_in_file = ["m1", "m2"]
         tels_with_data = {1,2}
         for i in range(0, total_events):
-            if eventidM1[i] != 0:
+            if eventid_M1[i] != 0:
                 obs_id = self.run_number
                 event_id = eventid_M1[i]
                 i2 = np.where(eventid_M2==eventid_M1[i])
@@ -250,7 +246,7 @@ class DLMAGICEventSource(EventSource):
                         data.dl1.tel[tel_i + 1].peak_time = peak_time_M1[i][:1039]
                     else:
                         data.dl1.tel[tel_i + 1].image = charge_M2[i][:1039]
-                        data.dl1.tel[tel_i + 1].peak_time = peak_time_M2[i][:1039]                      
+                        data.dl1.tel[tel_i + 1].peak_time = peak_time_M2[i][:1039]
                 
                 # Setting the telescopes with data
                 data.r0.tels_with_data = tels_with_data
