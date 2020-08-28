@@ -232,6 +232,7 @@ class DLMAGICEventSource(EventSource):
                     
                     
                     #Adding MC data
+                    #The src_pos_cam_X/src_pos_cam_Y values are stored as alt/az to follow the generic data format.
                     data.mc.alt = Angle(np.deg2rad(src_pos_cam_Y[i] * 0.00337), u.rad)
                     data.mc.az = Angle(np.deg2rad(src_pos_cam_X[i] * 0.00337), u.rad)
                     data.mc.x_max = u.Quantity(0, X_MAX_UNIT)
