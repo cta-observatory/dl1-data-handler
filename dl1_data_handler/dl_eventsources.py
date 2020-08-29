@@ -7,7 +7,6 @@ from dl1_data_handler import containers
 import glob
 import numpy as np
 from scipy.stats import norm
-import uproot
 import re
 X_MAX_UNIT = u.g / (u.cm ** 2)
 
@@ -24,6 +23,11 @@ class DLMAGICEventSource(EventSource):
             NOTE: The file mask of the data to read can be passed with
             the 'input_url' parameter.
         """
+        try:
+            import uproot
+        except ImportError:
+            pass
+        
         self.file_list = glob.glob(kwargs['input_url'])
         self.file_list.sort()
 
@@ -137,17 +141,11 @@ class DLMAGICEventSource(EventSource):
 
         for file_path in file_list:
             try:
-                import uproot
-
-                try:
-                    with uproot.open(file_path) as input_data:
-                        if 'Events' not in input_data:
-                            is_magic_root_file = False
-                except ValueError:
+                with uproot.open(file_path) as input_data:
+                    if 'Events' not in input_data:
+                        is_magic_root_file = False
+            except ValueError:
                     # uproot raises ValueError if the file is not a ROOT file
-                    is_magic_root_file = False
-            except ImportError:
-                if re.match(r'.+_m\d_.+root', file_path.lower()) is None:
                     is_magic_root_file = False
 
         return is_magic_root_file
