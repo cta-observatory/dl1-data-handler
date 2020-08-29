@@ -26,7 +26,7 @@ class DLMAGICEventSource(EventSource):
         try:
             import uproot
         except ImportError:
-            pass
+            raise ImportError("The 'uproot' package is required for the DLMAGICEventSource class.")
         
         self.file_list = glob.glob(kwargs['input_url'])
         self.file_list.sort()
