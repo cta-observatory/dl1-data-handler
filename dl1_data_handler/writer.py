@@ -13,6 +13,8 @@ import numpy as np
 import tables
 import uproot
 from ctapipe import io, calib
+from ctapipe.image import cleaning, leakage
+from ctapipe.instrument.camera import CameraGeometry
 from dl1_data_handler import table_definitions as table_defs
 from dl1_data_handler import dl_eventsources
 logger = logging.getLogger(__name__)
@@ -167,7 +169,7 @@ class CTAMLDataDumper(DL1DataDumper):
         else:
             self.index_columns = index_columns
 
-        self.image_tables = []
+        self.tel_tables = []
         self.subarray = None
         self.event_index = 0
         self.image_indices = {}
@@ -177,11 +179,7 @@ class CTAMLDataDumper(DL1DataDumper):
     def __del__(self):
         """Cleanup + finalize output file."""
         # Flush all tables
-        self.file.root.Events.flush()
-        if self.save_mc_events:
-            self.file.root.MC_Events.flush()
-        for table in self.image_tables:
-            self.file.get_node("/" + table).flush()
+        self.file.flush()
 
         self.finalize()
         try:
@@ -382,17 +380,29 @@ class CTAMLDataDumper(DL1DataDumper):
 
         for tel_type in self.subarray:
             image_table = self.file.get_node(
-                '/' + str(tel_type),
+                '/Images/' + str(tel_type),
                 classname='Table')
             image_row = image_table.row
+
+            parameter_table = self.file.get_node(
+                '/Parameters0/' + str(tel_type),
+                classname='Table')
+            parameter_row = parameter_table.row
 
             index_vector = []
             for tel_id in self.subarray[tel_type]:
                 if tel_id in event_container.dl1.tel:
                     image_row['charge'] = event_container.dl1.tel[tel_id].image
                     image_row['peak_time'] = event_container.dl1.tel[tel_id].peak_time
+                    image_row['image_mask0'] = event_container.dl1.tel[tel_id].image_mask
                     image_row["event_index"] = self.event_index
+
                     image_row.append()
+
+                    #TODO: Add missing parameters
+                    parameter_row["event_index"] = self.event_index
+                    parameter_row["leakage2"] = event_container.dl1.tel[tel_id].parameters.leakage.intensity_width_2
+                    parameter_row.append()
 
                     index_vector.append(self.image_indices[tel_type])
 
@@ -465,18 +475,69 @@ class CTAMLDataDumper(DL1DataDumper):
                                                  self.expected_events))
 
     def _create_image_tables(self, subarray):
+        self.file.create_group(self.file.root, "Images")
         for tel_desc in set(subarray.tels.values()):
             tel_name = str(tel_desc)
-            if ("/" + tel_name) not in self.file:
+
+            if ("/{}".format(tel_name)) not in self.file.root.Images:
                 logger.info("Creating {} image table...".format(tel_name))
-                self.image_tables.append(tel_name)
+                self.tel_tables.append(tel_name)
 
                 image_shape = (len(tel_desc.camera.geometry.pix_id),)
 
                 columns_dict = {
                     "event_index": tables.Int32Col(),
                     "charge": tables.Float32Col(shape=image_shape),
-                    "peak_time": tables.Float32Col(shape=image_shape)
+                    "peak_time": tables.Float32Col(shape=image_shape),
+                    "image_mask0": tables.BoolCol(shape=image_shape),
+                }
+
+                description = type('description',
+                                  (tables.IsDescription,),
+                                  columns_dict)
+
+                # Calculate expected number of rows for compression
+                if tel_name in self.expected_images_per_event:
+                    expected_rows = (
+                        self.expected_events * self.expected_images_per_event[
+                                tel_name])
+                else:
+                    expected_rows = (
+                        self.DEFAULT_IMGS_PER_EVENT * self.expected_events)
+
+                image_table = self.file.create_table(
+                         self.file.root.Images,
+                         tel_name,
+                         description,
+                         "Image table of {} images".format(tel_name),
+                         filters=self.filters,
+                         expectedrows=expected_rows)
+
+
+
+                # Place blank image at index 0 of all image tables
+                image_row = image_table.row
+
+                image_row['charge'] = np.zeros(image_shape, dtype=np.float32)
+                image_row['event_index'] = -1
+                image_row['peak_time'] = np.zeros(image_shape, dtype=np.float32)
+                image_row['image_mask0'] = np.zeros(image_shape, dtype=np.bool_)
+
+                image_row.append()
+                image_table.flush()
+
+    def _create_parameter_tables(self, subarray):
+        self.file.create_group(self.file.root, "Parameters0")
+        for tel_desc in set(subarray.tels.values()):
+            tel_name = str(tel_desc)
+
+            if ("/{}".format(tel_name)) not in self.file.root.Parameters0:
+                logger.info("Creating {} parameter table...".format(tel_name))
+
+                #TODO: Add missing parameters
+                columns_dict = {
+                    "event_index": tables.Int32Col(),
+                    "leakage2": tables.Float32Col(),
                 }
 
                 description = type('description',
@@ -492,23 +553,23 @@ class CTAMLDataDumper(DL1DataDumper):
                     expected_rows = (
                         self.DEFAULT_IMGS_PER_EVENT * self.expected_events)
 
-                table = self.file.create_table(
-                    self.file.root,
+                parameter_table = self.file.create_table(
+                    self.file.root.Parameters0,
                     tel_name,
                     description,
-                    "Table of {} images".format(tel_name),
+                    "Parameter table of {} parameters".format(tel_name),
                     filters=self.filters,
                     expectedrows=expected_rows)
 
                 # Place blank image at index 0 of all image tables
-                image_row = table.row
+                parameter_row = parameter_table.row
 
-                image_row['charge'] = np.zeros(image_shape, dtype=np.float32)
-                image_row['event_index'] = -1
-                image_row['peak_time'] = np.zeros(image_shape, dtype=np.float32)
+                #TODO: Add missing parameters
+                parameter_row['event_index'] = -1
+                parameter_row['leakage2'] = -1
 
-                image_row.append()
-                table.flush()
+                parameter_row.append()
+                parameter_table.flush()
 
     def prepare_file(self, input_filename, subarray, mcheader):
         """Dump file-level data to file and setup file structure.
@@ -529,6 +590,7 @@ class CTAMLDataDumper(DL1DataDumper):
             if "/Events" not in self.file:
                 self._create_event_table(subarray)
             self._create_image_tables(subarray)
+            self._create_parameter_tables(subarray)
 
             if self.subarray:
                 for tel_type in self.subarray:
@@ -590,11 +652,15 @@ class CTAMLDataDumper(DL1DataDumper):
             logger.info("Adding indexed columns...")
             for location, col_name in self.index_columns:
                 if location == 'tel':
-                    table_names = ["/" + i for i in self.image_tables]
+                    table_names = ["/" + i for i in self.tel_tables]
                 else:
                     table_names = [location]
 
                 for table_name in table_names:
+                    if ("/Images/{}".format(table_name)) in self.file:
+                        table_name = "/Images/{}".format(table_name)
+                    if ("/Parameters0/{}".format(table_name)) in self.file:
+                        table_name = "/Parameters0/{}".format(table_name)
                     try:
                         table = self.file.get_node(table_name,
                                                    classname='Table')
@@ -816,7 +882,21 @@ class DL1DataWriter:
             # Write all events sequentially
             for event in event_source:
                 if filetype == "simtel":
-                        calibrator(event)
+                    calibrator(event)
+                    tels_id = event.r1.tels_with_data
+                    for tel_id in tels_id:
+                        #TODO: Make cleaning function and arguments configurable
+                        cleanmask = cleaning.tailcuts_clean(subarray.tel[tel_id].camera.geometry,
+                                                        event.dl1.tel[tel_id].image)
+                        event.dl1.tel[tel_id].image_mask = cleanmask
+
+                        #TODO: Fill the parameter container (i.e Hillas)
+                        if any(cleanmask):
+                            leakage_values = leakage(subarray.tel[tel_id].camera.geometry,
+                                                     event.dl1.tel[tel_id].image,
+                                                     cleanmask)
+                        event.dl1.tel[tel_id].parameters.leakage.intensity_width_2 = leakage_values['intensity_width_2']
+
                 if (self.preselection_cut_function is not None and not
                         self.preselection_cut_function(event)):
                     continue
