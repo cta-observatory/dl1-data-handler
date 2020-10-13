@@ -13,7 +13,7 @@ import numpy as np
 import tables
 import uproot
 from ctapipe import io, calib
-from ctapipe.image import cleaning, leakage
+from ctapipe.image import cleaning, leakage, hillas_parameters
 from ctapipe.instrument.camera import CameraGeometry
 from dl1_data_handler import table_definitions as table_defs
 from dl1_data_handler import dl_eventsources
@@ -259,7 +259,7 @@ class CTAMLDataDumper(DL1DataDumper):
                     for row in tel_table.iterrows():
                         logger.error("{}, {}, {}, {}".format(row["type"].decode('utf-8'), row["optics"].decode('utf-8'), row["camera"].decode('utf-8'), row["num_pixels"]))
                         logger.error(row["pixel_positions"])
-                    logger.error("New input file: {}-{}-{}-{}".format(str(tel_desc), str(tel_desc.optics), str(tel_desc.camera), len(subarray.tel[tel_id].camera.pix_id)))    
+                    logger.error("New input file: {}-{}-{}-{}".format(str(tel_desc), str(tel_desc.optics), str(tel_desc.camera), len(subarray.tel[tel_id].camera.pix_id)))
                     logger.error(pos)
                     raise ValueError("Failed to validate telescope type description in Telescope_Type_Information.")
         else:
@@ -296,8 +296,6 @@ class CTAMLDataDumper(DL1DataDumper):
             ctapipe container of monte carlo header data (for entire run).
         tel_desc : str
             telescope type to skip check for MAGIC files
-
-
         """
         logger.info("Writing MC header information to file attributes...")
 
@@ -316,7 +314,7 @@ class CTAMLDataDumper(DL1DataDumper):
                 else:
                     if str(tel_desc) != "LST_MAGIC_MAGICCam":
                         if hasattr(mcheader_dict[field], 'value'):
-                            match = math.isclose(attributes[field], mcheader_dict[field].value)  
+                            match = math.isclose(attributes[field], mcheader_dict[field].value)
                         elif type(mcheader_dict[field]) is str or type(mcheader_dict[field]) is int:
                             match = (attributes[field] == mcheader_dict[field])
                         elif type(mcheader_dict[field]) is float:
@@ -324,7 +322,7 @@ class CTAMLDataDumper(DL1DataDumper):
                         else:
                             raise ValueError("Found unexpected type for field {} in MC header: {}".format(field, type(mcheader_dict[field])))
 
-                        if not match:    
+                        if not match:
                             raise ValueError("Attribute {} in output file root attributes does not match new value in input file: {} vs {}".format(field, attributes[field], mcheader_dict[field]))
             else:
                 attributes[field] = mcheader_dict[field]
@@ -399,9 +397,20 @@ class CTAMLDataDumper(DL1DataDumper):
 
                     image_row.append()
 
-                    #TODO: Add missing parameters
+                    #TODO: Add missing parameters ( I think it's done )
                     parameter_row["event_index"] = self.event_index
                     parameter_row["leakage2"] = event_container.dl1.tel[tel_id].parameters.leakage.intensity_width_2
+                    parameter_row["intensity"] = event_container.dl1.tel[tel_id].parameters.hillas.intensity
+                    parameter_row["x"] = event_container.dl1.tel[tel_id].parameters.hillas.x
+                    parameter_row["y"] = event_container.dl1.tel[tel_id].parameters.hillas.y
+                    parameter_row["r"] = event_container.dl1.tel[tel_id].parameters.hillas.r
+                    parameter_row["phi"] = event_container.dl1.tel[tel_id].parameters.hillas.phi
+                    parameter_row["length"] = event_container.dl1.tel[tel_id].parameters.hillas.length
+                    parameter_row["width"] = event_container.dl1.tel[tel_id].parameters.hillas.width
+                    parameter_row["psi"] = event_container.dl1.tel[tel_id].parameters.hillas.psi
+                    parameter_row["skewness"] = event_container.dl1.tel[tel_id].parameters.hillas.skewness
+                    parameter_row["kurtosis"] = event_container.dl1.tel[tel_id].parameters.hillas.kurtosis
+
                     parameter_row.append()
 
                     index_vector.append(self.image_indices[tel_type])
@@ -534,10 +543,20 @@ class CTAMLDataDumper(DL1DataDumper):
             if ("/{}".format(tel_name)) not in self.file.root.Parameters0:
                 logger.info("Creating {} parameter table...".format(tel_name))
 
-                #TODO: Add missing parameters
+                #TODO: Add missing parameters ( I think it's done )
                 columns_dict = {
                     "event_index": tables.Int32Col(),
                     "leakage2": tables.Float32Col(),
+                    "intensity": tables.Float32Col(),
+                    "x": tables.Float32Col(),
+                    "y": tables.Float32Col(),
+                    "r": tables.Float32Col(),
+                    "phi": tables.Float32Col(),
+                    "width": tables.Float32Col(),
+                    "length": tables.Float32Col(),
+                    "psi": tables.Float32Col(),
+                    "skewness": tables.Float32Col(),
+                    "kurtosis": tables.Float32Col(),
                 }
 
                 description = type('description',
@@ -564,9 +583,19 @@ class CTAMLDataDumper(DL1DataDumper):
                 # Place blank image at index 0 of all image tables
                 parameter_row = parameter_table.row
 
-                #TODO: Add missing parameters
+                #TODO: Add missing parameters ( I think it's done)
                 parameter_row['event_index'] = -1
                 parameter_row['leakage2'] = -1
+                parameter_row['intensity'] = -1
+                parameter_row['x'] = -1
+                parameter_row['y'] = -1
+                parameter_row['r'] = -1
+                parameter_row['phi'] = -1
+                parameter_row['length'] = -1
+                parameter_row['width'] = -1
+                parameter_row['psi'] = -1
+                parameter_row['skewness'] = -1
+                parameter_row['kurtosis'] = -1
 
                 parameter_row.append()
                 parameter_table.flush()
@@ -890,12 +919,29 @@ class DL1DataWriter:
                                                         event.dl1.tel[tel_id].image)
                         event.dl1.tel[tel_id].image_mask = cleanmask
 
-                        #TODO: Fill the parameter container (i.e Hillas)
+                        #TODO: Fill the parameter container (i.e Hillas) ( I think that's done )
                         if any(cleanmask):
                             leakage_values = leakage(subarray.tel[tel_id].camera.geometry,
                                                      event.dl1.tel[tel_id].image,
                                                      cleanmask)
+                            geom_selected = subarray.tel[tel_id].camera.geometry[cleanmask]
+                            image_selected = event.dl1.tel[tel_id].image[cleanmask]
+                            hillas_parameters_values = hillas_parameters(geom_selected, image_selected)
+
                         event.dl1.tel[tel_id].parameters.leakage.intensity_width_2 = leakage_values['intensity_width_2']
+                        for name in hillas_parameters_values.keys():
+                            event.dl1.tel[tel_id].parameters.hillas[name] = hillas_parameters_values[name]
+                        # event.dl1.tel[tel_id].parameters.hillas.intensity = hillas_parameters_values['intensity']
+                        # event.dl1.tel[tel_id].parameters.hillas.x = hillas_parameters_values['x']
+                        # event.dl1.tel[tel_id].parameters.hillas.y = hillas_parameters_values['y']
+                        # event.dl1.tel[tel_id].parameters.hillas.r = hillas_parameters_values['r']
+                        # event.dl1.tel[tel_id].parameters.hillas.phi = hillas_parameters_values['phi']
+                        # event.dl1.tel[tel_id].parameters.hillas.length = hillas_parameters_values['length']
+                        # event.dl1.tel[tel_id].parameters.hillas.width = hillas_parameters_values['width']
+                        # event.dl1.tel[tel_id].parameters.hillas.psi = hillas_parameters_values['psi']
+                        # event.dl1.tel[tel_id].parameters.hillas.skewness = hillas_parameters_values['skewness']
+                        # event.dl1.tel[tel_id].parameters.hillas.kurtosis = hillas_parameters_values['kurtosis']
+
 
                 if (self.preselection_cut_function is not None and not
                         self.preselection_cut_function(event)):
