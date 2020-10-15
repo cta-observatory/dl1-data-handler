@@ -398,8 +398,16 @@ class CTAMLDataDumper(DL1DataDumper):
                     image_row.append()
 
                     #TODO: Add missing parameters ( I think it's done )
+                    
                     parameter_row["event_index"] = self.event_index
-                    parameter_row["leakage2"] = event_container.dl1.tel[tel_id].parameters.leakage.intensity_width_2
+                    parameter_row["leakage_intensity_1"] = event_container.dl1.tel[
+                        tel_id].parameters.leakage.intensity_width_1
+                    parameter_row["leakage_intensity_2"] = event_container.dl1.tel[
+                        tel_id].parameters.leakage.intensity_width_2
+                    parameter_row["leakage_pixels_1"] = event_container.dl1.tel[
+                        tel_id].parameters.leakage.pixels_width_1
+                    parameter_row["leakage_pixels_2"] = event_container.dl1.tel[
+                        tel_id].parameters.leakage.pixels_width_2
                     parameter_row["intensity"] = event_container.dl1.tel[tel_id].parameters.hillas.intensity
                     parameter_row["x"] = event_container.dl1.tel[tel_id].parameters.hillas.x
                     parameter_row["y"] = event_container.dl1.tel[tel_id].parameters.hillas.y
@@ -546,7 +554,10 @@ class CTAMLDataDumper(DL1DataDumper):
                 #TODO: Add missing parameters ( I think it's done )
                 columns_dict = {
                     "event_index": tables.Int32Col(),
-                    "leakage2": tables.Float32Col(),
+                    "leakage_intensity_1": tables.Float32Col(),
+                    "leakage_intensity_2": tables.Float32Col(),
+                    "leakage_pixels_1": tables.Float32Col(),
+                    "leakage_pixels_2": tables.Float32Col(),
                     "intensity": tables.Float32Col(),
                     "x": tables.Float32Col(),
                     "y": tables.Float32Col(),
@@ -585,7 +596,10 @@ class CTAMLDataDumper(DL1DataDumper):
 
                 #TODO: Add missing parameters ( I think it's done)
                 parameter_row['event_index'] = -1
-                parameter_row['leakage2'] = -1
+                parameter_row['leakage_intensity_1'] = -1
+                parameter_row['leakage_intensity_2'] = -1
+                parameter_row['leakage_pixels_1'] = -1
+                parameter_row['leakage_pixels_2'] = -1
                 parameter_row['intensity'] = -1
                 parameter_row['x'] = -1
                 parameter_row['y'] = -1
@@ -928,19 +942,20 @@ class DL1DataWriter:
                             image_selected = event.dl1.tel[tel_id].image[cleanmask]
                             hillas_parameters_values = hillas_parameters(geom_selected, image_selected)
 
+                        event.dl1.tel[tel_id].parameters.leakage.intensity_width_1 = leakage_values['intensity_width_1']
                         event.dl1.tel[tel_id].parameters.leakage.intensity_width_2 = leakage_values['intensity_width_2']
-                        for name in hillas_parameters_values.keys():
-                            event.dl1.tel[tel_id].parameters.hillas[name] = hillas_parameters_values[name]
-                        # event.dl1.tel[tel_id].parameters.hillas.intensity = hillas_parameters_values['intensity']
-                        # event.dl1.tel[tel_id].parameters.hillas.x = hillas_parameters_values['x']
-                        # event.dl1.tel[tel_id].parameters.hillas.y = hillas_parameters_values['y']
-                        # event.dl1.tel[tel_id].parameters.hillas.r = hillas_parameters_values['r']
-                        # event.dl1.tel[tel_id].parameters.hillas.phi = hillas_parameters_values['phi']
-                        # event.dl1.tel[tel_id].parameters.hillas.length = hillas_parameters_values['length']
-                        # event.dl1.tel[tel_id].parameters.hillas.width = hillas_parameters_values['width']
-                        # event.dl1.tel[tel_id].parameters.hillas.psi = hillas_parameters_values['psi']
-                        # event.dl1.tel[tel_id].parameters.hillas.skewness = hillas_parameters_values['skewness']
-                        # event.dl1.tel[tel_id].parameters.hillas.kurtosis = hillas_parameters_values['kurtosis']
+                        event.dl1.tel[tel_id].parameters.leakage.pixels_width_1 = leakage_values['pixels_width_1']
+                        event.dl1.tel[tel_id].parameters.leakage.pixels_width_2 = leakage_values['pixels_width_2']
+                        event.dl1.tel[tel_id].parameters.hillas.intensity = hillas_parameters_values['intensity']
+                        event.dl1.tel[tel_id].parameters.hillas.x = hillas_parameters_values['x']
+                        event.dl1.tel[tel_id].parameters.hillas.y = hillas_parameters_values['y']
+                        event.dl1.tel[tel_id].parameters.hillas.r = hillas_parameters_values['r']
+                        event.dl1.tel[tel_id].parameters.hillas.phi = hillas_parameters_values['phi']
+                        event.dl1.tel[tel_id].parameters.hillas.length = hillas_parameters_values['length']
+                        event.dl1.tel[tel_id].parameters.hillas.width = hillas_parameters_values['width']
+                        event.dl1.tel[tel_id].parameters.hillas.psi = hillas_parameters_values['psi']
+                        event.dl1.tel[tel_id].parameters.hillas.skewness = hillas_parameters_values['skewness']
+                        event.dl1.tel[tel_id].parameters.hillas.kurtosis = hillas_parameters_values['kurtosis']
 
 
                 if (self.preselection_cut_function is not None and not
