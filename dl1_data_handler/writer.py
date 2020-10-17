@@ -947,13 +947,13 @@ class DL1DataWriter:
                         event.dl1.tel[tel_id].parameters.leakage.pixels_width_1 = leakage_values['pixels_width_1']
                         event.dl1.tel[tel_id].parameters.leakage.pixels_width_2 = leakage_values['pixels_width_2']
                         event.dl1.tel[tel_id].parameters.hillas.intensity = hillas_parameters_values['intensity']
-                        event.dl1.tel[tel_id].parameters.hillas.x = hillas_parameters_values['x']
-                        event.dl1.tel[tel_id].parameters.hillas.y = hillas_parameters_values['y']
-                        event.dl1.tel[tel_id].parameters.hillas.r = hillas_parameters_values['r']
-                        event.dl1.tel[tel_id].parameters.hillas.phi = hillas_parameters_values['phi']
-                        event.dl1.tel[tel_id].parameters.hillas.length = hillas_parameters_values['length']
-                        event.dl1.tel[tel_id].parameters.hillas.width = hillas_parameters_values['width']
-                        event.dl1.tel[tel_id].parameters.hillas.psi = hillas_parameters_values['psi']
+                        event.dl1.tel[tel_id].parameters.hillas.x = hillas_parameters_values['x'].value
+                        event.dl1.tel[tel_id].parameters.hillas.y = hillas_parameters_values['y'].value
+                        event.dl1.tel[tel_id].parameters.hillas.r = hillas_parameters_values['r'].value
+                        event.dl1.tel[tel_id].parameters.hillas.phi = hillas_parameters_values['phi'].value
+                        event.dl1.tel[tel_id].parameters.hillas.length = hillas_parameters_values['length'].value
+                        event.dl1.tel[tel_id].parameters.hillas.width = hillas_parameters_values['width'].value
+                        event.dl1.tel[tel_id].parameters.hillas.psi = hillas_parameters_values['psi'].value
                         event.dl1.tel[tel_id].parameters.hillas.skewness = hillas_parameters_values['skewness']
                         event.dl1.tel[tel_id].parameters.hillas.kurtosis = hillas_parameters_values['kurtosis']
 
