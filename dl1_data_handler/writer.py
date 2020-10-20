@@ -396,8 +396,6 @@ class CTAMLDataDumper(DL1DataDumper):
                     image_row["event_index"] = self.event_index
 
                     image_row.append()
-
-                    #TODO: Add missing parameters ( I think it's done )
                     
                     parameter_row["event_index"] = self.event_index
                     parameter_row["leakage_intensity_1"] = event_container.dl1.tel[
@@ -551,7 +549,6 @@ class CTAMLDataDumper(DL1DataDumper):
             if ("/{}".format(tel_name)) not in self.file.root.Parameters0:
                 logger.info("Creating {} parameter table...".format(tel_name))
 
-                #TODO: Add missing parameters ( I think it's done )
                 columns_dict = {
                     "event_index": tables.Int32Col(),
                     "leakage_intensity_1": tables.Float32Col(),
@@ -594,7 +591,6 @@ class CTAMLDataDumper(DL1DataDumper):
                 # Place blank image at index 0 of all image tables
                 parameter_row = parameter_table.row
 
-                #TODO: Add missing parameters ( I think it's done)
                 parameter_row['event_index'] = -1
                 parameter_row['leakage_intensity_1'] = -1
                 parameter_row['leakage_intensity_2'] = -1
@@ -733,7 +729,8 @@ class DL1DataWriter:
                  write_mode='parallel',
                  output_file_size=10737418240,
                  events_per_file=None,
-                 save_mc_events=False):
+                 save_mc_events=False,
+                 cleaning_settings=None):
         """Initialize a DL1DataWriter instance.
         Provides some options for controlling the output file sizes.
         Parameters
@@ -789,6 +786,8 @@ class DL1DataWriter:
         self.events_per_file = events_per_file
 
         self.save_mc_events = save_mc_events
+        self.cleaning_settings = (cleaning_settings
+                                  if cleaning_settings else {})
 
         if self.output_file_size:
             logger.info("Max output file size set at {} bytes. Note that "
@@ -929,11 +928,12 @@ class DL1DataWriter:
                     tels_id = event.r1.tels_with_data
                     for tel_id in tels_id:
                         #TODO: Make cleaning function and arguments configurable
-                        cleanmask = cleaning.tailcuts_clean(subarray.tel[tel_id].camera.geometry,
-                                                        event.dl1.tel[tel_id].image)
+                        cleaning_method = getattr(cleaning, self.cleaning_settings['algorithm'])
+                        cleanmask = cleaning_method(subarray.tel[tel_id].camera.geometry,
+                                                        event.dl1.tel[tel_id].image,
+                                                        **self.cleaning_settings['args'])
                         event.dl1.tel[tel_id].image_mask = cleanmask
 
-                        #TODO: Fill the parameter container (i.e Hillas) ( I think that's done )
                         if any(cleanmask):
                             leakage_values = leakage(subarray.tel[tel_id].camera.geometry,
                                                      event.dl1.tel[tel_id].image,
