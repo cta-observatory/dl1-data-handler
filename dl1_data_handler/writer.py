@@ -527,8 +527,10 @@ class CTAMLDataDumper(DL1DataDumper):
                     "event_index": tables.Int32Col(),
                     "charge": tables.Float32Col(shape=image_shape),
                     "peak_time": tables.Float32Col(shape=image_shape),
-                    "image_mask0": tables.BoolCol(shape=image_shape),
                 }
+
+                for index_parameters_table in range(0, len(self.cleaning_settings)+1):
+                    columns_dict["image_mask"+str(index_parameters_table)] = tables.BoolCol(shape=image_shape)
 
                 description = type('description',
                                   (tables.IsDescription,),
