@@ -386,10 +386,11 @@ class CTAMLDataDumper(DL1DataDumper):
                 classname='Table')
             image_row = image_table.row
 
-            parameter_table = self.file.get_node(
-                '/Parameters0/' + str(tel_type),
-                classname='Table')
-            parameter_row = parameter_table.row
+            for index_parameters_table in range(0, len(self.cleaning_settings)+1):
+                parameter_table = self.file.get_node(
+                    '/Parameters'+str(index_parameters_table)+'/' + str(tel_type),
+                    classname='Table')
+                parameter_row = parameter_table.row
 
             index_vector = []
             for tel_id in self.subarray[tel_type]:
@@ -400,7 +401,7 @@ class CTAMLDataDumper(DL1DataDumper):
                     image_row["event_index"] = self.event_index
 
                     image_row.append()
-                    
+
                     parameter_row["event_index"] = self.event_index
                     parameter_row["leakage_intensity_1"] = event_container.dl1.tel[
                         tel_id].parameters.leakage.intensity_width_1
@@ -563,12 +564,12 @@ class CTAMLDataDumper(DL1DataDumper):
                 image_row.append()
                 image_table.flush()
 
-    def _create_parameter_tables(self, subarray):
-        self.file.create_group(self.file.root, "Parameters0")
+    def _create_parameter_tables(self, subarray, index_parameters_table):
+        self.file.create_group(self.file.root, "Parameters"+str(index_parameters_table))
         for tel_desc in set(subarray.tels.values()):
             tel_name = str(tel_desc)
-
-            if ("/{}".format(tel_name)) not in self.file.root.Parameters0:
+            parameter_table_number = getattr(self.file.root, "Parameters"+str(index_parameters_table))
+            if ("/{}".format(tel_name)) not in parameter_table_number:
                 logger.info("Creating {} parameter table...".format(tel_name))
 
                 columns_dict = {
@@ -620,7 +621,7 @@ class CTAMLDataDumper(DL1DataDumper):
                         self.DEFAULT_IMGS_PER_EVENT * self.expected_events)
 
                 parameter_table = self.file.create_table(
-                    self.file.root.Parameters0,
+                    parameter_table_number,
                     tel_name,
                     description,
                     "Parameter table of {} parameters".format(tel_name),
@@ -685,7 +686,8 @@ class CTAMLDataDumper(DL1DataDumper):
             if "/Events" not in self.file:
                 self._create_event_table(subarray)
             self._create_image_tables(subarray)
-            self._create_parameter_tables(subarray)
+            for index_parameters_table in range(0, len(self.cleaning_settings)+1):
+                self._create_parameter_tables(subarray, index_parameters_table)
 
             if self.subarray:
                 for tel_type in self.subarray:
@@ -754,8 +756,9 @@ class CTAMLDataDumper(DL1DataDumper):
                 for table_name in table_names:
                     if ("/Images/{}".format(table_name)) in self.file:
                         table_name = "/Images/{}".format(table_name)
-                    if ("/Parameters0/{}".format(table_name)) in self.file:
-                        table_name = "/Parameters0/{}".format(table_name)
+                    for index_parameters_table in range(0, len(self.cleaning_settings)+1):
+                        if ("/Parameters"+str(index_parameters_table)+"/{}".format(table_name)) in self.file:
+                            table_name = "/Parameters"+str(index_parameters_table)+"/{}".format(table_name)
                     try:
                         table = self.file.get_node(table_name,
                                                    classname='Table')
