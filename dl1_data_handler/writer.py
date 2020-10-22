@@ -98,7 +98,8 @@ class CTAMLDataDumper(DL1DataDumper):
                  expected_mc_events=50000,
                  expected_images_per_event=None,
                  index_columns=None,
-                 save_mc_events=False):
+                 save_mc_events=False,
+                 cleaning_settings=None):
         """Instantiate a CTAMLDataDumper instance.
         Parameters
         ----------
@@ -175,6 +176,9 @@ class CTAMLDataDumper(DL1DataDumper):
         self.image_indices = {}
 
         self.save_mc_events = save_mc_events
+
+        self.cleaning_settings = (cleaning_settings
+                                  if cleaning_settings else {})
 
     def __del__(self):
         """Cleanup + finalize output file."""
@@ -406,16 +410,16 @@ class CTAMLDataDumper(DL1DataDumper):
                         tel_id].parameters.leakage.pixels_width_1
                     parameter_row["leakage_pixels_2"] = event_container.dl1.tel[
                         tel_id].parameters.leakage.pixels_width_2
-                    parameter_row["intensity"] = event_container.dl1.tel[tel_id].parameters.hillas.intensity
-                    parameter_row["x"] = event_container.dl1.tel[tel_id].parameters.hillas.x
-                    parameter_row["y"] = event_container.dl1.tel[tel_id].parameters.hillas.y
-                    parameter_row["r"] = event_container.dl1.tel[tel_id].parameters.hillas.r
-                    parameter_row["phi"] = event_container.dl1.tel[tel_id].parameters.hillas.phi
-                    parameter_row["length"] = event_container.dl1.tel[tel_id].parameters.hillas.length
-                    parameter_row["width"] = event_container.dl1.tel[tel_id].parameters.hillas.width
-                    parameter_row["psi"] = event_container.dl1.tel[tel_id].parameters.hillas.psi
-                    parameter_row["skewness"] = event_container.dl1.tel[tel_id].parameters.hillas.skewness
-                    parameter_row["kurtosis"] = event_container.dl1.tel[tel_id].parameters.hillas.kurtosis
+                    parameter_row["hillas_intensity"] = event_container.dl1.tel[tel_id].parameters.hillas.intensity
+                    parameter_row["hillas_x"] = event_container.dl1.tel[tel_id].parameters.hillas.x
+                    parameter_row["hillas_y"] = event_container.dl1.tel[tel_id].parameters.hillas.y
+                    parameter_row["hillas_r"] = event_container.dl1.tel[tel_id].parameters.hillas.r
+                    parameter_row["hillas_phi"] = event_container.dl1.tel[tel_id].parameters.hillas.phi
+                    parameter_row["hillas_length"] = event_container.dl1.tel[tel_id].parameters.hillas.length
+                    parameter_row["hillas_width"] = event_container.dl1.tel[tel_id].parameters.hillas.width
+                    parameter_row["hillas_psi"] = event_container.dl1.tel[tel_id].parameters.hillas.psi
+                    parameter_row["hillas_skewness"] = event_container.dl1.tel[tel_id].parameters.hillas.skewness
+                    parameter_row["hillas_kurtosis"] = event_container.dl1.tel[tel_id].parameters.hillas.kurtosis
 
                     parameter_row.append()
 
@@ -555,16 +559,16 @@ class CTAMLDataDumper(DL1DataDumper):
                     "leakage_intensity_2": tables.Float32Col(),
                     "leakage_pixels_1": tables.Float32Col(),
                     "leakage_pixels_2": tables.Float32Col(),
-                    "intensity": tables.Float32Col(),
-                    "x": tables.Float32Col(),
-                    "y": tables.Float32Col(),
-                    "r": tables.Float32Col(),
-                    "phi": tables.Float32Col(),
-                    "width": tables.Float32Col(),
-                    "length": tables.Float32Col(),
-                    "psi": tables.Float32Col(),
-                    "skewness": tables.Float32Col(),
-                    "kurtosis": tables.Float32Col(),
+                    "hillas_intensity": tables.Float32Col(),
+                    "hillas_x": tables.Float32Col(),
+                    "hillas_y": tables.Float32Col(),
+                    "hillas_r": tables.Float32Col(),
+                    "hillas_phi": tables.Float32Col(),
+                    "hillas_width": tables.Float32Col(),
+                    "hillas_length": tables.Float32Col(),
+                    "hillas_psi": tables.Float32Col(),
+                    "hillas_skewness": tables.Float32Col(),
+                    "hillas_kurtosis": tables.Float32Col(),
                 }
 
                 description = type('description',
@@ -596,16 +600,16 @@ class CTAMLDataDumper(DL1DataDumper):
                 parameter_row['leakage_intensity_2'] = -1
                 parameter_row['leakage_pixels_1'] = -1
                 parameter_row['leakage_pixels_2'] = -1
-                parameter_row['intensity'] = -1
-                parameter_row['x'] = -1
-                parameter_row['y'] = -1
-                parameter_row['r'] = -1
-                parameter_row['phi'] = -1
-                parameter_row['length'] = -1
-                parameter_row['width'] = -1
-                parameter_row['psi'] = -1
-                parameter_row['skewness'] = -1
-                parameter_row['kurtosis'] = -1
+                parameter_row['hillas_intensity'] = -1
+                parameter_row['hillas_x'] = -1
+                parameter_row['hillas_y'] = -1
+                parameter_row['hillas_r'] = -1
+                parameter_row['hillas_phi'] = -1
+                parameter_row['hillas_length'] = -1
+                parameter_row['hillas_width'] = -1
+                parameter_row['hillas_psi'] = -1
+                parameter_row['hillas_skewness'] = -1
+                parameter_row['hillas_kurtosis'] = -1
 
                 parameter_row.append()
                 parameter_table.flush()
@@ -938,9 +942,9 @@ class DL1DataWriter:
                             leakage_values = leakage(subarray.tel[tel_id].camera.geometry,
                                                      event.dl1.tel[tel_id].image,
                                                      cleanmask)
-                            geom_selected = subarray.tel[tel_id].camera.geometry[cleanmask]
-                            image_selected = event.dl1.tel[tel_id].image[cleanmask]
-                            hillas_parameters_values = hillas_parameters(geom_selected, image_selected)
+                            hillas_parameters_values = hillas_parameters(subarray.tel[tel_id].camera.geometry[cleanmask],
+                                                                         event.dl1.tel[tel_id].image[cleanmask])
+
 
                         event.dl1.tel[tel_id].parameters.leakage.intensity_width_1 = leakage_values['intensity_width_1']
                         event.dl1.tel[tel_id].parameters.leakage.intensity_width_2 = leakage_values['intensity_width_2']
