@@ -13,7 +13,7 @@ import numpy as np
 import tables
 import uproot
 from ctapipe import io, calib
-from ctapipe.image import cleaning, leakage, hillas_parameters
+from ctapipe.image import cleaning, leakage, hillas_parameters, concentration, timing_parameters, morphology_parameters
 from ctapipe.instrument.camera import CameraGeometry
 from dl1_data_handler import table_definitions as table_defs
 from dl1_data_handler import dl_eventsources
@@ -410,6 +410,7 @@ class CTAMLDataDumper(DL1DataDumper):
                         tel_id].parameters.leakage.pixels_width_1
                     parameter_row["leakage_pixels_2"] = event_container.dl1.tel[
                         tel_id].parameters.leakage.pixels_width_2
+
                     parameter_row["hillas_intensity"] = event_container.dl1.tel[tel_id].parameters.hillas.intensity
                     parameter_row["hillas_x"] = event_container.dl1.tel[tel_id].parameters.hillas.x
                     parameter_row["hillas_y"] = event_container.dl1.tel[tel_id].parameters.hillas.y
@@ -420,6 +421,23 @@ class CTAMLDataDumper(DL1DataDumper):
                     parameter_row["hillas_psi"] = event_container.dl1.tel[tel_id].parameters.hillas.psi
                     parameter_row["hillas_skewness"] = event_container.dl1.tel[tel_id].parameters.hillas.skewness
                     parameter_row["hillas_kurtosis"] = event_container.dl1.tel[tel_id].parameters.hillas.kurtosis
+
+                    parameter_row['concentration_cog'] = event_container.dl1.tel[tel_id].parameters.concentration.cog
+                    parameter_row['concentration_core'] = event_container.dl1.tel[tel_id].parameters.concentration.core
+                    parameter_row['concentration_pixel'] = event_container.dl1.tel[tel_id].parameters.concentration.pixel
+
+                    #parameter_row['timing_slope'] = event_container.dl1.tel[tel_id].parameters.timing.slope
+                    #parameter_row['timing_slope_err'] = event_container.dl1.tel[tel_id].parameters.timing.slope_err
+                    #parameter_row['timing_intercept'] = event_container.dl1.tel[tel_id].parameters.timing.intercept
+                    #parameter_row['timing_intercept_err'] = event_container.dl1.tel[tel_id].parameters.timing.intercept_err
+                    #parameter_row['timing_deviation'] = event_container.dl1.tel[tel_id].parameters.timing.deviation
+
+
+                    parameter_row['morphology_num_pixels'] = event_container.dl1.tel[tel_id].parameters.morphology.num_pixels
+                    parameter_row['morphology_num_islands'] = event_container.dl1.tel[tel_id].parameters.morphology.num_islands
+                    parameter_row['morphology_num_small_islands'] = event_container.dl1.tel[tel_id].parameters.morphology.num_small_islands
+                    parameter_row['morphology_num_medium_islands'] = event_container.dl1.tel[tel_id].parameters.morphology.num_medium_islands
+                    parameter_row['morphology_num_large_islands'] = event_container.dl1.tel[tel_id].parameters.morphology.num_large_islands
 
                     parameter_row.append()
 
@@ -560,6 +578,7 @@ class CTAMLDataDumper(DL1DataDumper):
                     "leakage_pixels_1": tables.Float32Col(),
                     "leakage_pixels_2": tables.Float32Col(),
                     "hillas_intensity": tables.Float32Col(),
+
                     "hillas_x": tables.Float32Col(),
                     "hillas_y": tables.Float32Col(),
                     "hillas_r": tables.Float32Col(),
@@ -569,6 +588,22 @@ class CTAMLDataDumper(DL1DataDumper):
                     "hillas_psi": tables.Float32Col(),
                     "hillas_skewness": tables.Float32Col(),
                     "hillas_kurtosis": tables.Float32Col(),
+
+                    "concentration_cog": tables.Float32Col(),
+                    "concentration_core": tables.Float32Col(),
+                    "concentration_pixel": tables.Float32Col(),
+
+                    "timing_slope": tables.Float32Col(),
+                    "timing_slope_err": tables.Float32Col(),
+                    "timing_intercept": tables.Float32Col(),
+                    "timing_intercept_err": tables.Float32Col(),
+                    "timing_deviation": tables.Float32Col(),
+
+                    "morphology_num_pixels": tables.Int32Col(),
+                    "morphology_num_islands": tables.Int32Col(),
+                    "morphology_num_small_islands": tables.Int32Col(),
+                    "morphology_num_medium_islands": tables.Int32Col(),
+                    "morphology_num_large_islands": tables.Int32Col(),
                 }
 
                 description = type('description',
@@ -600,6 +635,7 @@ class CTAMLDataDumper(DL1DataDumper):
                 parameter_row['leakage_intensity_2'] = -1
                 parameter_row['leakage_pixels_1'] = -1
                 parameter_row['leakage_pixels_2'] = -1
+
                 parameter_row['hillas_intensity'] = -1
                 parameter_row['hillas_x'] = -1
                 parameter_row['hillas_y'] = -1
@@ -610,6 +646,22 @@ class CTAMLDataDumper(DL1DataDumper):
                 parameter_row['hillas_psi'] = -1
                 parameter_row['hillas_skewness'] = -1
                 parameter_row['hillas_kurtosis'] = -1
+
+                parameter_row['concentration_cog'] = -1
+                parameter_row['concentration_core'] = -1
+                parameter_row['concentration_pixel'] = -1
+
+                parameter_row['timing_slope'] = -1
+                parameter_row['timing_slope_err'] = -1
+                parameter_row['timing_intercept'] = -1
+                parameter_row['timing_intercept_err'] = -1
+                parameter_row['timing_deviation'] = -1
+
+                parameter_row['morphology_num_pixels'] = -1
+                parameter_row['morphology_num_islands'] = -1
+                parameter_row['morphology_num_small_islands'] = -1
+                parameter_row['morphology_num_medium_islands'] = -1
+                parameter_row['morphology_num_large_islands'] = -1
 
                 parameter_row.append()
                 parameter_table.flush()
@@ -944,12 +996,22 @@ class DL1DataWriter:
                                                      cleanmask)
                             hillas_parameters_values = hillas_parameters(subarray.tel[tel_id].camera.geometry[cleanmask],
                                                                          event.dl1.tel[tel_id].image[cleanmask])
+                            concentration_values = concentration(subarray.tel[tel_id].camera.geometry,
+                                                                 event.dl1.tel[tel_id].image,
+                                                                 hillas_parameters_values)
+#                            timing_values = timing_parameters(subarray.tel[tel_id].camera.geometry,
+#                                                              event.dl1.tel[tel_id].image,
+#                                                              event.dl1.tel[tel_id].peak_time,
+#                                                              hillas_parameters_values,
+#                                                              cleanmask)
+                            morphology_values = morphology_parameters(subarray.tel[tel_id].camera.geometry, cleanmask)
 
-
+                        #leakage
                         event.dl1.tel[tel_id].parameters.leakage.intensity_width_1 = leakage_values['intensity_width_1']
                         event.dl1.tel[tel_id].parameters.leakage.intensity_width_2 = leakage_values['intensity_width_2']
                         event.dl1.tel[tel_id].parameters.leakage.pixels_width_1 = leakage_values['pixels_width_1']
                         event.dl1.tel[tel_id].parameters.leakage.pixels_width_2 = leakage_values['pixels_width_2']
+                        #hillas
                         event.dl1.tel[tel_id].parameters.hillas.intensity = hillas_parameters_values['intensity']
                         event.dl1.tel[tel_id].parameters.hillas.x = hillas_parameters_values['x'].value
                         event.dl1.tel[tel_id].parameters.hillas.y = hillas_parameters_values['y'].value
@@ -960,7 +1022,22 @@ class DL1DataWriter:
                         event.dl1.tel[tel_id].parameters.hillas.psi = hillas_parameters_values['psi'].value
                         event.dl1.tel[tel_id].parameters.hillas.skewness = hillas_parameters_values['skewness']
                         event.dl1.tel[tel_id].parameters.hillas.kurtosis = hillas_parameters_values['kurtosis']
-
+                        #concentration
+                        event.dl1.tel[tel_id].parameters.concentration.cog = concentration_values['cog']
+                        event.dl1.tel[tel_id].parameters.concentration.core = concentration_values['core']
+                        event.dl1.tel[tel_id].parameters.concentration.pixel = concentration_values['pixel']
+                        #timing
+                        #event.dl1.tel[tel_id].parameters.timing.deviation = timing_values['deviation']
+                        #event.dl1.tel[tel_id].parameters.timing.intercept = timing_values['intercept']
+                        #event.dl1.tel[tel_id].parameters.timing.intercept_err = timing_values['intercept_err']
+                        #event.dl1.tel[tel_id].parameters.timing.slope = timing_values['slope'].value
+                        #event.dl1.tel[tel_id].parameters.timing.slope_err = timing_values['slope_err'].value
+                        #morphology
+                        event.dl1.tel[tel_id].parameters.morphology.num_islands = morphology_values['num_islands']
+                        event.dl1.tel[tel_id].parameters.morphology.num_large_islands = morphology_values['num_large_islands']
+                        event.dl1.tel[tel_id].parameters.morphology.num_medium_islands = morphology_values['num_medium_islands']
+                        event.dl1.tel[tel_id].parameters.morphology.num_pixels = morphology_values['num_pixels']
+                        event.dl1.tel[tel_id].parameters.morphology.num_small_islands = morphology_values['num_small_islands']
 
                 if (self.preselection_cut_function is not None and not
                         self.preselection_cut_function(event)):
