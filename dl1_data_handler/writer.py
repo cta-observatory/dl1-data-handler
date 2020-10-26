@@ -442,11 +442,11 @@ class CTAMLDataDumper(DL1DataDumper):
                                 parameter_row['concentration_pixel'] = event_container.dl1.tel[
                                     tel_id].parameters.concentration.pixel
 
-                                # parameter_row['timing_slope'] = event_container.dl1.tel[tel_id].parameters.timing.slope
-                                # parameter_row['timing_slope_err'] = event_container.dl1.tel[tel_id].parameters.timing.slope_err
-                                # parameter_row['timing_intercept'] = event_container.dl1.tel[tel_id].parameters.timing.intercept
-                                # parameter_row['timing_intercept_err'] = event_container.dl1.tel[tel_id].parameters.timing.intercept_err
-                                # parameter_row['timing_deviation'] = event_container.dl1.tel[tel_id].parameters.timing.deviation
+                                parameter_row['timing_slope'] = event_container.dl1.tel[tel_id].parameters.timing.slope
+                                parameter_row['timing_slope_err'] = event_container.dl1.tel[tel_id].parameters.timing.slope_err
+                                parameter_row['timing_intercept'] = event_container.dl1.tel[tel_id].parameters.timing.intercept
+                                parameter_row['timing_intercept_err'] = event_container.dl1.tel[tel_id].parameters.timing.intercept_err
+                                parameter_row['timing_deviation'] = event_container.dl1.tel[tel_id].parameters.timing.deviation
 
                                 parameter_row['morphology_num_pixels'] = event_container.dl1.tel[
                                     tel_id].parameters.morphology.num_pixels
@@ -476,6 +476,7 @@ class CTAMLDataDumper(DL1DataDumper):
                                 leakage_values = containers.LeakageContainer()
                                 hillas_parameters_values = containers.HillasParametersContainer()
                                 concentration_values = containers.ConcentrationContainer()
+                                timing_values = containers.TimingParametersContainer()
                                 morphology_values = containers.MorphologyContainer()
 
                                 if any(cleanmask):
@@ -490,11 +491,14 @@ class CTAMLDataDumper(DL1DataDumper):
                                     concentration_values = concentration(self.subarray['geom_' + str(tel_type)],
                                                                          event_container.dl1.tel[tel_id].image,
                                                                          hillas_parameters_values)
-                                    #    timing_values = timing_parameters(self.subarray.tel[tel_id].camera.geometry,
-                                    #               event.dl1.tel[tel_id].image,
-                                    #               event.dl1.tel[tel_id].peak_time,
-                                    #               hillas_parameters_values,
-                                    #               cleanmask)
+                                    try:
+                                        timing_values = timing_parameters(self.subarray['geom_' + str(tel_type)],
+                                                                      event_container.dl1.tel[tel_id].image,
+                                                                      event_container.dl1.tel[tel_id].peak_time,
+                                                                      hillas_parameters_values,
+                                                                      cleanmask)
+                                    except:
+                                        timing_values = containers.TimingParametersContainer()
 
                                     morphology_values = morphology_parameters(
                                         self.subarray['geom_' + str(tel_type)],
@@ -524,11 +528,11 @@ class CTAMLDataDumper(DL1DataDumper):
                                 parameter_row['concentration_pixel'] = concentration_values['pixel']
 
                                 # timing
-                                # timing_values['deviation']
-                                # timing_values['intercept']
-                                # timing_values['intercept_err']
-                                # timing_values['slope'].value
-                                # timing_values['slope_err'].value
+                                parameter_row['timing_deviation'] = timing_values['deviation']
+                                parameter_row['timing_intercept'] = timing_values['intercept']
+                                parameter_row['timing_intercept_err'] = timing_values['intercept_err']
+                                parameter_row['timing_slope'] = timing_values['slope'].value
+                                parameter_row['timing_slope_err'] = timing_values['slope_err'].value
 
                                 # morphology
                                 parameter_row['morphology_num_pixels'] = morphology_values['num_islands']
@@ -1108,19 +1112,23 @@ class DL1DataWriter:
                             concentration_values = concentration(subarray.tel[tel_id].camera.geometry,
                                                                  event.dl1.tel[tel_id].image,
                                                                  hillas_parameters_values)
-#                            timing_values = timing_parameters(subarray.tel[tel_id].camera.geometry,
-#                                                              event.dl1.tel[tel_id].image,
-#                                                              event.dl1.tel[tel_id].peak_time,
-#                                                              hillas_parameters_values,
-#                                                              cleanmask)
+                            try:
+                                timing_values = timing_parameters(subarray.tel[tel_id].camera.geometry,
+                                                                  event.dl1.tel[tel_id].image,
+                                                                  event.dl1.tel[tel_id].peak_time,
+                                                                  hillas_parameters_values,
+                                                                  cleanmask)
+                            except:
+                                timing_values = containers.TimingParametersContainer()
+
                             morphology_values = morphology_parameters(subarray.tel[tel_id].camera.geometry, cleanmask)
 
-                        #leakage
+                        # leakage
                         event.dl1.tel[tel_id].parameters.leakage.intensity_width_1 = leakage_values['intensity_width_1']
                         event.dl1.tel[tel_id].parameters.leakage.intensity_width_2 = leakage_values['intensity_width_2']
                         event.dl1.tel[tel_id].parameters.leakage.pixels_width_1 = leakage_values['pixels_width_1']
                         event.dl1.tel[tel_id].parameters.leakage.pixels_width_2 = leakage_values['pixels_width_2']
-                        #hillas
+                        # hillas
                         event.dl1.tel[tel_id].parameters.hillas.intensity = hillas_parameters_values['intensity']
                         event.dl1.tel[tel_id].parameters.hillas.x = hillas_parameters_values['x'].value
                         event.dl1.tel[tel_id].parameters.hillas.y = hillas_parameters_values['y'].value
@@ -1131,17 +1139,17 @@ class DL1DataWriter:
                         event.dl1.tel[tel_id].parameters.hillas.psi = hillas_parameters_values['psi'].value
                         event.dl1.tel[tel_id].parameters.hillas.skewness = hillas_parameters_values['skewness']
                         event.dl1.tel[tel_id].parameters.hillas.kurtosis = hillas_parameters_values['kurtosis']
-                        #concentration
+                        # concentration
                         event.dl1.tel[tel_id].parameters.concentration.cog = concentration_values['cog']
                         event.dl1.tel[tel_id].parameters.concentration.core = concentration_values['core']
                         event.dl1.tel[tel_id].parameters.concentration.pixel = concentration_values['pixel']
-                        #timing
-                        #event.dl1.tel[tel_id].parameters.timing.deviation = timing_values['deviation']
-                        #event.dl1.tel[tel_id].parameters.timing.intercept = timing_values['intercept']
-                        #event.dl1.tel[tel_id].parameters.timing.intercept_err = timing_values['intercept_err']
-                        #event.dl1.tel[tel_id].parameters.timing.slope = timing_values['slope'].value
-                        #event.dl1.tel[tel_id].parameters.timing.slope_err = timing_values['slope_err'].value
-                        #morphology
+                        # timing
+                        event.dl1.tel[tel_id].parameters.timing.deviation = timing_values['deviation']
+                        event.dl1.tel[tel_id].parameters.timing.intercept = timing_values['intercept']
+                        event.dl1.tel[tel_id].parameters.timing.intercept_err = timing_values['intercept_err']
+                        event.dl1.tel[tel_id].parameters.timing.slope = timing_values['slope'].value
+                        event.dl1.tel[tel_id].parameters.timing.slope_err = timing_values['slope_err'].value
+                        # morphology
                         event.dl1.tel[tel_id].parameters.morphology.num_islands = morphology_values['num_islands']
                         event.dl1.tel[tel_id].parameters.morphology.num_large_islands = morphology_values['num_large_islands']
                         event.dl1.tel[tel_id].parameters.morphology.num_medium_islands = morphology_values['num_medium_islands']
