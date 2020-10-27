@@ -61,7 +61,7 @@ class DL1DataDumper(ABC):
 
     # Prepare the file's header, telescope/array descriptions, event and image tables
     @abstractmethod
-    def prepare_file(self, input_filename, subarray, mcheader):
+    def prepare_file(self, input_filename, subarray, mcheader, cleaning_algorithm_metadata):
         """Dump file-level data to file and setup file structure.
         Creates Event and image tables. Sets self.subarray for later fast lookup.
         Parameters
@@ -72,6 +72,8 @@ class DL1DataDumper(ABC):
             ctapipe subarray description object.
         mcheader : ctapipe.io.containers.MCHeaderContainer
             ctapipe container of monte carlo header data (for entire run).
+        cleaning_algorithm_metadata: dict
+            cleaning algortithm name and args stored in datawriter part of config file
         """
         pass
 
@@ -668,7 +670,7 @@ class CTAMLDataDumper(DL1DataDumper):
                 image_row.append()
                 image_table.flush()
 
-    def _create_parameter_tables(self, subarray, index_parameters_table):
+    def _create_parameter_tables(self, subarray, index_parameters_table, cleaning_main_algorithm_metadata):
         self.file.create_group(self.file.root, "Parameters"+str(index_parameters_table))
         for tel_desc in set(subarray.tels.values()):
             tel_name = str(tel_desc)
@@ -724,13 +726,26 @@ class CTAMLDataDumper(DL1DataDumper):
                     expected_rows = (
                         self.DEFAULT_IMGS_PER_EVENT * self.expected_events)
 
-                parameter_table = self.file.create_table(
-                    parameter_table_number,
-                    tel_name,
-                    description,
-                    "Parameter table of {} parameters".format(tel_name),
-                    filters=self.filters,
-                    expectedrows=expected_rows)
+                if index_parameters_table == 0:
+                    parameter_table = self.file.create_table(
+                        parameter_table_number,
+                        tel_name,
+                        description,
+                        "Parameter table of {} parameters, algorithm: {}, args: {}".format(tel_name,
+                                                                                           cleaning_main_algorithm_metadata['algorithm'],
+                                                                                           cleaning_main_algorithm_metadata['args']),
+                        filters=self.filters,
+                        expectedrows=expected_rows)
+                else :
+                    parameter_table = self.file.create_table(
+                        parameter_table_number,
+                        tel_name,
+                        description,
+                        "Parameter table of {} parameters, algorithm: {}, args: {}".format(tel_name,
+                                                                  self.cleaning_settings[index_parameters_table -1]['algorithm'],
+                                                                  self.cleaning_settings[index_parameters_table -1]['args']),
+                        filters=self.filters,
+                        expectedrows=expected_rows)
 
                 # Place blank image at index 0 of all image tables
                 parameter_row = parameter_table.row
@@ -771,7 +786,7 @@ class CTAMLDataDumper(DL1DataDumper):
                 parameter_row.append()
                 parameter_table.flush()
 
-    def prepare_file(self, input_filename, subarray, mcheader):
+    def prepare_file(self, input_filename, subarray, mcheader, cleaning_algorithm_metadata):
         """Dump file-level data to file and setup file structure.
         Creates Event and image tables. Sets self.subarray for later fast lookup.
         Parameters
@@ -782,6 +797,8 @@ class CTAMLDataDumper(DL1DataDumper):
             ctapipe subarray description object.
         mcheader : ctapipe.io.containers.MCHeaderContainer
             ctapipe container of monte carlo header data (for entire run).
+        cleaning_algorithm_metadata: dict
+            cleaning algortithm name and args stored in datawriter part of config file
         """
         try:
             self.dump_header_info(input_filename)
@@ -791,7 +808,7 @@ class CTAMLDataDumper(DL1DataDumper):
                 self._create_event_table(subarray)
             self._create_image_tables(subarray)
             for index_parameters_table in range(0, len(self.cleaning_settings)+1):
-                self._create_parameter_tables(subarray, index_parameters_table)
+                self._create_parameter_tables(subarray, index_parameters_table, cleaning_algorithm_metadata)
 
             if self.subarray:
                 for tel_type in self.subarray:
@@ -1084,7 +1101,7 @@ class DL1DataWriter:
             if filetype == "simtel":
                 calibrator = calib.camera.calibrator.CameraCalibrator(subarray=subarray)
             mcheader = example_event.mcheader
-            data_dumper.prepare_file(filename, subarray, mcheader)
+            data_dumper.prepare_file(filename, subarray, mcheader, self.cleaning_settings)
 
             # Write all events sequentially
             for event in event_source:
@@ -1190,7 +1207,7 @@ class DL1DataWriter:
                     example_event = next(event_source._generator())
                     subarray = example_event.inst.subarray
                     mcheader = example_event.mcheader
-                    data_dumper.prepare_file(filename, subarray, mcheader)
+                    data_dumper.prepare_file(filename, subarray, mcheader, self.cleaning_settings)
 
             if self.save_mc_events:
                 for mc_event in event_source.file_.iter_mc_events():
@@ -1230,4 +1247,4 @@ class DL1DataWriter:
                         temp = io.DataContainer()
                         event_source.fill_mc_information(temp, mc_event)
                         mcheader = temp.mcheader
-                        data_dumper.prepare_file(filename, subarray, mcheader)
+                        data_dumper.prepare_file(filename, subarray, mcheader, self.cleaning_settings)
