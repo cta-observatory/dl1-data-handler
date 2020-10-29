@@ -397,7 +397,6 @@ class CTAMLDataDumper(DL1DataDumper):
                     image_row['peak_time'] = event_container.dl1.tel[tel_id].peak_time
                     image_row["event_index"] = self.event_index
 
-
                     for index_parameters_table in range(0, len(self.cleaning_settings)+1):
                         parameter_table = self.file.get_node(
                             '/Parameters' + str(index_parameters_table) + '/' + str(tel_type),
@@ -674,48 +673,9 @@ class CTAMLDataDumper(DL1DataDumper):
         self.file.create_group(self.file.root, "Parameters"+str(index_parameters_table))
         for tel_desc in set(subarray.tels.values()):
             tel_name = str(tel_desc)
-            parameter_table_number = getattr(self.file.root, "Parameters"+str(index_parameters_table))
+            parameter_table_number = getattr(self.file.root, "Parameters" + str(index_parameters_table))
             if ("/{}".format(tel_name)) not in parameter_table_number:
                 logger.info("Creating {} parameter table...".format(tel_name))
-
-                columns_dict = {
-                    "event_index": tables.Int32Col(),
-                    "leakage_intensity_1": tables.Float32Col(),
-                    "leakage_intensity_2": tables.Float32Col(),
-                    "leakage_pixels_1": tables.Float32Col(),
-                    "leakage_pixels_2": tables.Float32Col(),
-                    "hillas_intensity": tables.Float32Col(),
-
-                    "hillas_x": tables.Float32Col(),
-                    "hillas_y": tables.Float32Col(),
-                    "hillas_r": tables.Float32Col(),
-                    "hillas_phi": tables.Float32Col(),
-                    "hillas_width": tables.Float32Col(),
-                    "hillas_length": tables.Float32Col(),
-                    "hillas_psi": tables.Float32Col(),
-                    "hillas_skewness": tables.Float32Col(),
-                    "hillas_kurtosis": tables.Float32Col(),
-
-                    "concentration_cog": tables.Float32Col(),
-                    "concentration_core": tables.Float32Col(),
-                    "concentration_pixel": tables.Float32Col(),
-
-                    "timing_slope": tables.Float32Col(),
-                    "timing_slope_err": tables.Float32Col(),
-                    "timing_intercept": tables.Float32Col(),
-                    "timing_intercept_err": tables.Float32Col(),
-                    "timing_deviation": tables.Float32Col(),
-
-                    "morphology_num_pixels": tables.Int32Col(),
-                    "morphology_num_islands": tables.Int32Col(),
-                    "morphology_num_small_islands": tables.Int32Col(),
-                    "morphology_num_medium_islands": tables.Int32Col(),
-                    "morphology_num_large_islands": tables.Int32Col(),
-                }
-
-                description = type('description',
-                                   (tables.IsDescription,),
-                                   columns_dict)
 
                 # Calculate expected number of rows for compression
                 if tel_name in self.expected_images_per_event:
@@ -727,25 +687,23 @@ class CTAMLDataDumper(DL1DataDumper):
                         self.DEFAULT_IMGS_PER_EVENT * self.expected_events)
 
                 if index_parameters_table == 0:
-                    parameter_table = self.file.create_table(
-                        parameter_table_number,
-                        tel_name,
-                        description,
-                        "Parameter table of {} parameters, algorithm: {}, args: {}".format(tel_name,
+                    parameter_table = self.file.create_table(parameter_table_number,
+                                                         tel_name,
+                                                         table_defs.ParametersTableRow,
+                                                         "Parameter table of {} parameters, algorithm: {}, args: {}".format(tel_name,
                                                                                            cleaning_main_algorithm_metadata['algorithm'],
                                                                                            cleaning_main_algorithm_metadata['args']),
-                        filters=self.filters,
-                        expectedrows=expected_rows)
+                                                         filters=self.filters,
+                                                         expectedrows=expected_rows)
                 else :
-                    parameter_table = self.file.create_table(
-                        parameter_table_number,
-                        tel_name,
-                        description,
-                        "Parameter table of {} parameters, algorithm: {}, args: {}".format(tel_name,
+                    parameter_table = self.file.create_table(parameter_table_number,
+                                                         tel_name,
+                                                         table_defs.ParametersTableRow,
+                                                         "Parameter table of {} parameters, algorithm: {}, args: {}".format(tel_name,
                                                                   self.cleaning_settings[index_parameters_table -1]['algorithm'],
                                                                   self.cleaning_settings[index_parameters_table -1]['args']),
-                        filters=self.filters,
-                        expectedrows=expected_rows)
+                                                        filters=self.filters,
+                                                        expectedrows=expected_rows)
 
                 # Place blank image at index 0 of all image tables
                 parameter_row = parameter_table.row
