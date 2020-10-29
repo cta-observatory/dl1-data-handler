@@ -111,3 +111,38 @@ class ArrayTableRow(IsDescription):
     x = Float32Col()
     y = Float32Col()
     z = Float32Col()
+
+
+class ParametersTableRow(IsDescription):
+    event_index = UInt32Col()
+    leakage_intensity_1 = Float32Col()
+    leakage_intensity_2 = Float32Col()
+    leakage_pixels_1 = Float32Col()
+    leakage_pixels_2 = Float32Col()
+
+    hillas_intensity = Float32Col()
+    hillas_x= Float32Col()
+    hillas_y = Float32Col()
+    hillas_r = Float32Col()
+    hillas_phi = Float32Col()
+    hillas_width = Float32Col()
+    hillas_length = Float32Col()
+    hillas_psi = Float32Col()
+    hillas_skewness = Float32Col()
+    hillas_kurtosis = Float32Col()
+
+    concentration_cog = Float32Col()
+    concentration_core = Float32Col()
+    concentration_pixel = Float32Col()
+
+    timing_slope = Float32Col()
+    timing_slope_err = Float32Col()
+    timing_intercept = Float32Col()
+    timing_intercept_err = Float32Col()
+    timing_deviation = Float32Col()
+
+    morphology_num_pixels = UInt32Col()
+    morphology_num_islands = UInt32Col()
+    morphology_num_small_islands = UInt32Col()
+    morphology_num_medium_islands = UInt32Col()
+    morphology_num_large_islands = UInt32Col()
