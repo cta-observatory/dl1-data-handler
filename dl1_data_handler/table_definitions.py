@@ -6,7 +6,7 @@ the output PyTables .h5 files.
 """
 
 from tables import (IsDescription, UInt32Col, UInt16Col, UInt8Col,
-                    Float32Col, StringCol)
+                    Float32Col, StringCol, Int32Col)
 
 
 class EventTableRow(IsDescription):
@@ -114,14 +114,47 @@ class ArrayTableRow(IsDescription):
 
 
 class ParametersTableRow(IsDescription):
-    event_index = UInt32Col()
+    """Describe row format for parameter table.
+
+    Contains parameters values for each image of each event of each telescope in the array.
+    Parameters are calculated after image cleaning (i.e. with for example tailcut_clean method)
+    There are Hillas, Leakage, Concentration, Timing and Morphology parameters.
+
+    Attributes
+    ----------
+    event_index : tables.Int32Col
+        Event id of file (from -1 to N )
+
+    leakage_* : tables.Float32Col
+        see at https://cta-observatory.github.io/ctapipe/api/ctapipe.containers.LeakageContainer.html?highlight=leakagecontainer#ctapipe.containers.LeakageContainer
+
+    hillas_* : tables.Float32Col
+        see at https://cta-observatory.github.io/ctapipe/api/ctapipe.containers.HillasParametersContainer.html#ctapipe.containers.HillasParametersContainer
+
+    concentration_* :
+        see at https://cta-observatory.github.io/ctapipe/api/ctapipe.containers.ConcentrationContainer.html#ctapipe.containers.ConcentrationContainer
+
+    timing_* :
+        see at https://cta-observatory.github.io/ctapipe/api/ctapipe.containers.TimingParametersContainer.html#ctapipe.containers.TimingParametersContainer
+
+    morphology_* :
+        see at https://cta-observatory.github.io/ctapipe/api/ctapipe.containers.MorphologyContainer.html#ctapipe.containers.MorphologyContainer
+
+    log_hillas_intensity : tables.Float32Col
+        logaritmic hillas intensity
+
+    """
+
+    event_index = Int32Col()
+
     leakage_intensity_1 = Float32Col()
     leakage_intensity_2 = Float32Col()
     leakage_pixels_1 = Float32Col()
     leakage_pixels_2 = Float32Col()
 
     hillas_intensity = Float32Col()
-    hillas_x= Float32Col()
+    hillas_log_intensity = Float32Col()
+    hillas_x = Float32Col()
     hillas_y = Float32Col()
     hillas_r = Float32Col()
     hillas_phi = Float32Col()
@@ -135,14 +168,18 @@ class ParametersTableRow(IsDescription):
     concentration_core = Float32Col()
     concentration_pixel = Float32Col()
 
-    timing_slope = Float32Col()
+    timing_slope = Float32Col()  # time gradient
     timing_slope_err = Float32Col()
     timing_intercept = Float32Col()
     timing_intercept_err = Float32Col()
     timing_deviation = Float32Col()
 
-    morphology_num_pixels = UInt32Col()
-    morphology_num_islands = UInt32Col()
-    morphology_num_small_islands = UInt32Col()
-    morphology_num_medium_islands = UInt32Col()
-    morphology_num_large_islands = UInt32Col()
+    morphology_num_pixels = Int32Col()
+    morphology_num_islands = Int32Col()
+    morphology_num_small_islands = Int32Col()
+    morphology_num_medium_islands = Int32Col()
+    morphology_num_large_islands = Int32Col()
+# dl2 params
+# add log_reco_energy
+# add reco_disp_dx
+# add reco_disp_dy
