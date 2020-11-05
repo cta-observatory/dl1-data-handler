@@ -1070,67 +1070,74 @@ class DL1DataWriter:
             for event in event_source:
                 if filetype == "simtel":
                     calibrator(event)
-                    tels_id = event.r1.tels_with_data
-                    for tel_id in tels_id:
+                tels_id = event.r1.tels_with_data
+                for tel_id in tels_id:
 
-                        cleaning_method = getattr(cleaning, self.cleaning_settings['algorithm'])
-                        cleanmask = cleaning_method(subarray.tel[tel_id].camera.geometry,
-                                                        event.dl1.tel[tel_id].image,
-                                                        **self.cleaning_settings['args'])
-                        event.dl1.tel[tel_id].image_mask = cleanmask
+                    cleaning_method = getattr(cleaning, self.cleaning_settings['algorithm'])
+                    cleanmask = cleaning_method(subarray.tel[tel_id].camera.geometry,
+                                                    event.dl1.tel[tel_id].image,
+                                                    **self.cleaning_settings['args'])
+                    event.dl1.tel[tel_id].image_mask = cleanmask
 
-                        if any(cleanmask):
-                            leakage_values = leakage(subarray.tel[tel_id].camera.geometry,
-                                                     event.dl1.tel[tel_id].image,
-                                                     cleanmask)
-                            hillas_parameters_values = hillas_parameters(subarray.tel[tel_id].camera.geometry[cleanmask],
-                                                                         event.dl1.tel[tel_id].image[cleanmask])
-                            concentration_values = concentration(subarray.tel[tel_id].camera.geometry,
-                                                                 event.dl1.tel[tel_id].image,
-                                                                 hillas_parameters_values)
-                            try:
-                                timing_values = timing_parameters(subarray.tel[tel_id].camera.geometry,
-                                                                  event.dl1.tel[tel_id].image,
-                                                                  event.dl1.tel[tel_id].peak_time,
-                                                                  hillas_parameters_values,
-                                                                  cleanmask)
-                            except:
-                                timing_values = containers.TimingParametersContainer()
+                    if any(cleanmask):
+                        leakage_values = leakage(subarray.tel[tel_id].camera.geometry,
+                                                 event.dl1.tel[tel_id].image,
+                                                 cleanmask)
+                        hillas_parameters_values = hillas_parameters(subarray.tel[tel_id].camera.geometry[cleanmask],
+                                                                     event.dl1.tel[tel_id].image[cleanmask])
+                        concentration_values = concentration(subarray.tel[tel_id].camera.geometry,
+                                                             event.dl1.tel[tel_id].image,
+                                                             hillas_parameters_values)
+                        try:
+                            timing_values = timing_parameters(subarray.tel[tel_id].camera.geometry,
+                                                              event.dl1.tel[tel_id].image,
+                                                              event.dl1.tel[tel_id].peak_time,
+                                                              hillas_parameters_values,
+                                                              cleanmask)
+                        except:
+                            timing_values = containers.TimingParametersContainer()
 
-                            morphology_values = morphology_parameters(subarray.tel[tel_id].camera.geometry, cleanmask)
+                        morphology_values = morphology_parameters(subarray.tel[tel_id].camera.geometry, cleanmask)
 
-                        # leakage
-                        event.dl1.tel[tel_id].parameters.leakage.intensity_width_1 = leakage_values['intensity_width_1']
-                        event.dl1.tel[tel_id].parameters.leakage.intensity_width_2 = leakage_values['intensity_width_2']
-                        event.dl1.tel[tel_id].parameters.leakage.pixels_width_1 = leakage_values['pixels_width_1']
-                        event.dl1.tel[tel_id].parameters.leakage.pixels_width_2 = leakage_values['pixels_width_2']
-                        # hillas
-                        event.dl1.tel[tel_id].parameters.hillas.intensity = hillas_parameters_values['intensity']
-                        event.dl1.tel[tel_id].parameters.hillas.x = hillas_parameters_values['x'].value
-                        event.dl1.tel[tel_id].parameters.hillas.y = hillas_parameters_values['y'].value
-                        event.dl1.tel[tel_id].parameters.hillas.r = hillas_parameters_values['r'].value
-                        event.dl1.tel[tel_id].parameters.hillas.phi = hillas_parameters_values['phi'].value
-                        event.dl1.tel[tel_id].parameters.hillas.length = hillas_parameters_values['length'].value
-                        event.dl1.tel[tel_id].parameters.hillas.width = hillas_parameters_values['width'].value
-                        event.dl1.tel[tel_id].parameters.hillas.psi = hillas_parameters_values['psi'].value
-                        event.dl1.tel[tel_id].parameters.hillas.skewness = hillas_parameters_values['skewness']
-                        event.dl1.tel[tel_id].parameters.hillas.kurtosis = hillas_parameters_values['kurtosis']
-                        # concentration
-                        event.dl1.tel[tel_id].parameters.concentration.cog = concentration_values['cog']
-                        event.dl1.tel[tel_id].parameters.concentration.core = concentration_values['core']
-                        event.dl1.tel[tel_id].parameters.concentration.pixel = concentration_values['pixel']
-                        # timing
-                        event.dl1.tel[tel_id].parameters.timing.deviation = timing_values['deviation']
-                        event.dl1.tel[tel_id].parameters.timing.intercept = timing_values['intercept']
-                        event.dl1.tel[tel_id].parameters.timing.intercept_err = timing_values['intercept_err']
-                        event.dl1.tel[tel_id].parameters.timing.slope = timing_values['slope'].value
-                        event.dl1.tel[tel_id].parameters.timing.slope_err = timing_values['slope_err'].value
-                        # morphology
-                        event.dl1.tel[tel_id].parameters.morphology.num_islands = morphology_values['num_islands']
-                        event.dl1.tel[tel_id].parameters.morphology.num_large_islands = morphology_values['num_large_islands']
-                        event.dl1.tel[tel_id].parameters.morphology.num_medium_islands = morphology_values['num_medium_islands']
-                        event.dl1.tel[tel_id].parameters.morphology.num_pixels = morphology_values['num_pixels']
-                        event.dl1.tel[tel_id].parameters.morphology.num_small_islands = morphology_values['num_small_islands']
+                    else:
+                        leakage_values = containers.LeakageContainer()
+                        hillas_parameters_values = containers.HillasParametersContainer()
+                        concentration_values = containers.ConcentrationContainer()
+                        timing_values = containers.TimingParametersContainer()
+                        morphology_values = containers.MorphologyContainer()
+
+                    # leakage
+                    event.dl1.tel[tel_id].parameters.leakage.intensity_width_1 = leakage_values['intensity_width_1']
+                    event.dl1.tel[tel_id].parameters.leakage.intensity_width_2 = leakage_values['intensity_width_2']
+                    event.dl1.tel[tel_id].parameters.leakage.pixels_width_1 = leakage_values['pixels_width_1']
+                    event.dl1.tel[tel_id].parameters.leakage.pixels_width_2 = leakage_values['pixels_width_2']
+                    # hillas
+                    event.dl1.tel[tel_id].parameters.hillas.intensity = hillas_parameters_values['intensity']
+                    event.dl1.tel[tel_id].parameters.hillas.x = hillas_parameters_values['x'].value
+                    event.dl1.tel[tel_id].parameters.hillas.y = hillas_parameters_values['y'].value
+                    event.dl1.tel[tel_id].parameters.hillas.r = hillas_parameters_values['r'].value
+                    event.dl1.tel[tel_id].parameters.hillas.phi = hillas_parameters_values['phi'].value
+                    event.dl1.tel[tel_id].parameters.hillas.length = hillas_parameters_values['length'].value
+                    event.dl1.tel[tel_id].parameters.hillas.width = hillas_parameters_values['width'].value
+                    event.dl1.tel[tel_id].parameters.hillas.psi = hillas_parameters_values['psi'].value
+                    event.dl1.tel[tel_id].parameters.hillas.skewness = hillas_parameters_values['skewness']
+                    event.dl1.tel[tel_id].parameters.hillas.kurtosis = hillas_parameters_values['kurtosis']
+                    # concentration
+                    event.dl1.tel[tel_id].parameters.concentration.cog = concentration_values['cog']
+                    event.dl1.tel[tel_id].parameters.concentration.core = concentration_values['core']
+                    event.dl1.tel[tel_id].parameters.concentration.pixel = concentration_values['pixel']
+                    # timing
+                    event.dl1.tel[tel_id].parameters.timing.deviation = timing_values['deviation']
+                    event.dl1.tel[tel_id].parameters.timing.intercept = timing_values['intercept']
+                    event.dl1.tel[tel_id].parameters.timing.intercept_err = timing_values['intercept_err']
+                    event.dl1.tel[tel_id].parameters.timing.slope = timing_values['slope'].value
+                    event.dl1.tel[tel_id].parameters.timing.slope_err = timing_values['slope_err'].value
+                    # morphology
+                    event.dl1.tel[tel_id].parameters.morphology.num_islands = morphology_values['num_islands']
+                    event.dl1.tel[tel_id].parameters.morphology.num_large_islands = morphology_values['num_large_islands']
+                    event.dl1.tel[tel_id].parameters.morphology.num_medium_islands = morphology_values['num_medium_islands']
+                    event.dl1.tel[tel_id].parameters.morphology.num_pixels = morphology_values['num_pixels']
+                    event.dl1.tel[tel_id].parameters.morphology.num_small_islands = morphology_values['num_small_islands']
 
                 if (self.preselection_cut_function is not None and not
                         self.preselection_cut_function(event)):
