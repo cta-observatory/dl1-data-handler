@@ -769,9 +769,11 @@ class CTAMLDataDumper(DL1DataDumper):
             self.dump_mc_header_info(mcheader, subarray.tels[1])
             if "/Events" not in self.file:
                 self._create_event_table(subarray)
-            self._create_image_tables(subarray)
-            for index_parameters_table in range(0, len(self.cleaning_settings)+1):
-                self._create_parameter_tables(subarray, index_parameters_table, cleaning_algorithm_metadata)
+            if "/Images" not in self.file:
+                self._create_image_tables(subarray)
+            if "/Parameters0" not in self.file:
+                for index_parameters_table in range(0, len(self.cleaning_settings)+1):
+                    self._create_parameter_tables(subarray, index_parameters_table, cleaning_algorithm_metadata)
 
             if self.subarray:
                 for tel_type in self.subarray:
