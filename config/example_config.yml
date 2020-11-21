@@ -12,6 +12,15 @@ Data Writer:
     events_per_file: 500
     # Boolean flag indicating whether to save non-triggered Monte Carlo events in a separate MC_Events table.
     save_mc_events: False
+    
+    # parameters0 table, cleaning_algo and cleaning_args
+    cleaning_settings:
+        algorithm: 'tailcuts_clean'
+        args:
+            picture_thresh: 7
+            boundary_thresh: 5
+#            keep_isolated_pixels:
+#            min_number_picture_neighbors:
 
 Event Source:
   # Dictionary of Event Source settings. Will be passed as a dict of kwargs to ctapipe Event Source constructor.
@@ -50,6 +59,7 @@ Data Dumper:
         'DigiCam': 1.25
         'ASTRICam': 1.25
         'CHEC': 1.25
+        'MAGIC': 2.0
     # A list of (table, column) pairs on which PyTables should create indexes in the output files.
     # The tables should be specified as '/{table_name}' or 'tel' to select all telescope tables in the file (all share the same column names)
     # The column name should be specified as it appears in the table.
@@ -58,3 +68,16 @@ Data Dumper:
         - ['/Events', 'alt']
         - ['/Events', 'az']
         - ['tel', 'event_index']
+        
+    # parameters0 table, cleaning_algo and cleaning_args
+    cleaning_settings:
+        - algorithm: 'tailcuts_clean'
+          args:
+            picture_thresh: 10
+            boundary_thresh: 5
+        - algorithm: 'tailcuts_clean'
+          args:
+            picture_thresh: 20
+            boundary_thresh: 5
+#            keep_isolated_pixels:
+#            min_number_picture_neighbors:
