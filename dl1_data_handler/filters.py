@@ -4,6 +4,7 @@ import numpy as np
 # Event Filters #
 #################
 
+
 def event_intensity_filter(reader, file, i_min=-np.inf, i_max=np.inf):
     """
     Prototype of Filter events on intensity (in pe)
@@ -35,13 +36,14 @@ def event_intensity_filter(reader, file, i_min=-np.inf, i_max=np.inf):
 ###########################
 
 
-def image_parameters_filter(reader, parameters_table, algorithm, parameter, threshold_min, threshold_max):
+def hillas_parameters_filter(reader, parameters_table, algorithm, parameter, threshold_min=-np.inf, threshold_max=np.inf):
     """
-    Filter images on selected parameters
+    Filter images on hillas parameters
     Parameters
     ----------
     reader (DL1DataReader) : the reader to filter
     parameters_table
+    algorithm : not used
     parameter
     threshold_min
     threshold_max
@@ -51,13 +53,99 @@ def image_parameters_filter(reader, parameters_table, algorithm, parameter, thre
     mask (Array of bool)
     """
     selected_parameter = parameters_table[parameter]
-    print(selected_parameter)
     mask1 = selected_parameter > threshold_min
     mask2 = selected_parameter < threshold_max
     mask = mask1 & mask2
-    print(mask)
     return mask
 
+
+def leakage_parameters_filter(reader, parameters_table, algorithm, parameter, threshold=1.0):
+    """
+    Filter images on leakage parameters
+    Parameters
+    ----------
+    reader (DL1DataReader) : the reader to filter
+    parameters_table
+    algorithm : not used
+    parameter
+    threshold
+
+    Returns
+    -------
+    mask (Array of bool)
+    """
+    selected_parameter = parameters_table[parameter]
+    mask = selected_parameter < threshold
+    return mask
+
+
+def concentration_parameters_filter(reader, parameters_table, algorithm, parameter, threshold_min=-np.inf, threshold_max=np.inf):
+    """
+    Filter images on concentration parameters
+    Parameters
+    ----------
+    reader (DL1DataReader) : the reader to filter
+    parameters_table
+    algorithm : not used
+    parameter
+    threshold_min
+    threshold_max
+
+    Returns
+    -------
+    mask (Array of bool)
+    """
+    selected_parameter = parameters_table[parameter]
+    mask1 = selected_parameter > threshold_min
+    mask2 = selected_parameter < threshold_max
+    mask = mask1 & mask2
+    return mask
+
+
+def timing_parameters_filter(reader, parameters_table, algorithm, parameter, threshold_min=-np.inf, threshold_max=np.inf):
+    """
+    Filter images on timing parameters
+    Parameters
+    ----------
+    reader (DL1DataReader) : the reader to filter
+    parameters_table
+    algorithm : not used
+    parameter
+    threshold_min
+    threshold_max
+
+    Returns
+    -------
+    mask (Array of bool)
+    """
+    selected_parameter = parameters_table[parameter]
+    mask1 = selected_parameter > threshold_min
+    mask2 = selected_parameter < threshold_max
+    mask = mask1 & mask2
+    return mask
+
+
+def morphology_parameters_filter(reader, parameters_table, algorithm, parameter, threshold_min=-np.inf, threshold_max=np.inf):
+    """
+    Filter images on morphology parameters
+    Parameters
+    ----------
+    reader (DL1DataReader) : the reader to filter
+    parameters_table
+    algorithm : not used
+    parameter
+    threshold_min
+    threshold_max
+
+    Returns
+    -------
+    mask (Array of bool)
+    """
+    selected_parameter = parameters_table[parameter]
+    mask1 = selected_parameter > threshold_min
+    mask2 = selected_parameter < threshold_max
+    mask = mask1 & mask2
+    return mask
 #################
 # Image Filters #
 #################
@@ -82,6 +170,7 @@ def image_intensity_filter(reader, images, i_min=-np.inf, i_max=np.inf):
     mask1 = i_min < amps
     mask2 = amps < i_max
     return mask1 & mask2
+
 
 def image_intensity_after_cleaning_filter(reader, images, i_min=-np.inf, i_max=np.inf, **opts):
     """
@@ -121,6 +210,7 @@ def image_intensity_after_cleaning_filter(reader, images, i_min=-np.inf, i_max=n
     int_mask = np.apply_along_axis(int_after_clean, 1, images)
     return int_mask
 
+
 def image_cleaning_filter(reader, images, **opts):
     """
     Filter images according to a cleaning operation.
@@ -152,6 +242,7 @@ def image_cleaning_filter(reader, images, **opts):
 
     clean_mask = np.apply_along_axis(clean, 1, images)
     return clean_mask.any(axis=1)
+
 
 def leakage_filter(reader, images, leakage_value=1.0, leakage_number=2, **opts):
     """
