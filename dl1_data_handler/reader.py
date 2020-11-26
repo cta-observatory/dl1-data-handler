@@ -1,7 +1,6 @@
 from collections import OrderedDict
 import random
 import threading
-
 import numpy as np
 import tables
 
@@ -13,8 +12,8 @@ lock = threading.Lock()
 def get_camera_type(tel_type):
     return tel_type.split('_')[-1]
 
-class DL1DataReader:
 
+class DL1DataReader:
 
     def __init__(self,
                  file_list,
@@ -24,6 +23,7 @@ class DL1DataReader:
                  selection_string=None,
                  event_selection=None,
                  image_selection=None,
+                 image_selection_from_file=None,
                  shuffle=False,
                  seed=None,
                  image_channels=None,
@@ -61,6 +61,10 @@ class DL1DataReader:
         if image_selection is None:
             image_selection = {}
 
+        if image_selection_from_file is None:
+            self.image_selection_from_file = {}
+        else:
+            self.image_selection_from_file = image_selection_from_file
         if mapping_settings is None:
             mapping_settings = {}
 
@@ -139,9 +143,17 @@ class DL1DataReader:
                     img_ids = np.array(selected_indices[:, tel_index])
                     mask = (img_ids != 0)
                     # TODO handle all selected channels
-                    mask[mask] &= self._select_image(
-                        f.root[self.tel_type][img_ids[mask]]['charge'],
-                        image_selection)
+                    if (image_selection_from_file == {}):
+                        mask[mask] &= self._select_image(
+                            f.root[self.tel_type][img_ids[mask]]['charge'],
+                            image_selection)
+                    else:
+                        mask[mask] &= self._select_image_from_file(
+                            f.root,
+                            img_ids,
+                            mask,
+                            image_selection_from_file)
+
                     for image_index, nrow in zip(img_ids[mask],
                                                np.array(selected_nrows)[mask]):
                         example_identifiers.append((filename, nrow,
@@ -356,6 +368,27 @@ class DL1DataReader:
             mask &= filter_function(self, images, **filter_parameters)
         return mask
 
+    def _select_image_from_file(self, file, img_ids, imgs_mask, filters):
+        """
+        Filter the data image wise.
+        Parameters
+        ----------
+            images (tables.File): the images to filter on
+            filters (dict): dictionary of `{filter_function: filter_parameters}` to apply on the data
+
+        Returns
+        -------
+        the mask of filtered images
+
+                """
+        images = file['/Images'][self.tel_type][img_ids[imgs_mask]]['charge']
+        mask = np.full(len(images), True)
+        for filter_function, filter_parameters in filters.items():
+            parameters_table = file['/Parameters'+str(filter_parameters['algorithm'])][self.tel_type][img_ids[imgs_mask]]
+            mask &= filter_function(self, images, parameters_table, **filter_parameters)
+        return mask
+
+
     # Get a single telescope image from a particular event, uniquely
     # identified by the filename, tel_type, and image table index.
     # First extract a raw 1D vector and transform it into a 2D image using a
@@ -377,7 +410,6 @@ class DL1DataReader:
            return vector
         image = self.image_mapper.map_image(vector, get_camera_type(tel_type))
         return image
-
 
     def _append_array_info(self, filename, array_info, tel_id):
         with lock:
@@ -423,7 +455,10 @@ class DL1DataReader:
             # Get a single image
             nrow, image_index, tel_id = identifiers[1:4]
             with lock:
-                child = self.files[filename].root._f_get_child(self.tel_type)
+                if (self.image_selection_from_file == {}):
+                    child = self.files[filename].root._f_get_child(self.tel_type)
+                else:
+                    child = self.files[filename].root['/Images']._f_get_child(self.tel_type)
             image = self._get_image(child, self.tel_type, image_index)
             example = [image]
 

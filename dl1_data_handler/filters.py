@@ -30,9 +30,39 @@ def event_intensity_filter(reader, file, i_min=-np.inf, i_max=np.inf):
     mask2 = total_intensity < i_max
     return set(np.arange(len(file.root.Events))[mask1 & mask2])
 
+###########################
+# Image Filters From File #
+###########################
+
+
+def image_parameters_filter(reader, images, parameters_table, algorithm, parameter, threshold_min, threshold_max):
+    """
+    Filter images on selected parameters
+    Parameters
+    ----------
+    reader (DL1DataReader) : the reader to filter
+    images
+    parameters_table
+    parameter
+    threshold_min
+    threshold_max
+
+    Returns
+    -------
+    mask (Array of bool)
+    """
+    selected_parameter = parameters_table[parameter]
+    print(selected_parameter)
+    mask1 = selected_parameter > threshold_min
+    mask2 = selected_parameter < threshold_max
+    mask = mask1 & mask2
+    print(mask)
+    return mask
+
 #################
 # Image Filters #
 #################
+
 
 def image_intensity_filter(reader, images, i_min=-np.inf, i_max=np.inf):
     """
