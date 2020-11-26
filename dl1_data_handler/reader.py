@@ -9,6 +9,7 @@ from dl1_data_handler.processor import DL1DataProcessor
 
 lock = threading.Lock()
 
+
 def get_camera_type(tel_type):
     return tel_type.split('_')[-1]
 
@@ -32,7 +33,7 @@ class DL1DataReader:
                  event_info=None,
                  transforms=None,
                  validate_processor=False
-                ):
+                 ):
 
         # Construct dict of filename:file_handle pairs
         self.files = OrderedDict()
@@ -119,14 +120,13 @@ class DL1DataReader:
                                        - set(available_tel_ids))
                     if invalid_tel_ids:
                         raise ValueError("Tel ids {} are not a valid selection"
-                                         "for tel type '{}'".format(
-                                             invalid_tel_ids, tel_type))
+                                         "for tel type '{}'".format(invalid_tel_ids, tel_type))
                     selected_telescopes[tel_type] = requested_tel_ids
                 else:
                     selected_telescopes[tel_type] = available_tel_ids
 
             selected_nrows = set([row.nrow for row
-                              in f.root.Events.where(cut_condition)])
+                                  in f.root.Events.where(cut_condition)])
             selected_nrows &= self._select_event(f, event_selection)
             selected_nrows = list(selected_nrows)
 
@@ -143,11 +143,15 @@ class DL1DataReader:
                     img_ids = np.array(selected_indices[:, tel_index])
                     mask = (img_ids != 0)
                     # TODO handle all selected channels
-                    if (image_selection_from_file == {}):
+                    if image_selection_from_file == {}:
                         mask[mask] &= self._select_image(
                             f.root[self.tel_type][img_ids[mask]]['charge'],
                             image_selection)
                     else:
+                        mask[mask] &= self._select_image(
+                            f.root['/Images'][self.tel_type][img_ids[mask]]['charge'],
+                            image_selection)
+
                         mask[mask] &= self._select_image_from_file(
                             f.root,
                             img_ids,
@@ -155,7 +159,7 @@ class DL1DataReader:
                             image_selection_from_file)
 
                     for image_index, nrow in zip(img_ids[mask],
-                                               np.array(selected_nrows)[mask]):
+                                                 np.array(selected_nrows)[mask]):
                         example_identifiers.append((filename, nrow,
                                                     image_index, tel_id))
 
@@ -202,20 +206,21 @@ class DL1DataReader:
                 # For now hardcoded, since this information is not in the h5 files.
                 # The official CTA DL1 format will contain this information.
                 if cam in ['LSTCam', 'NectarCam', 'MAGICCam']:
-                    rotation_angle = -70.9 * np.pi/180.0 if cam == 'MAGICCam' else -100.893 * np.pi/180.0
+                    rotation_angle = -70.9 * np.pi / 180.0 if cam == 'MAGICCam' else -100.893 * np.pi / 180.0
                     rotation_matrix = np.matrix([[np.cos(rotation_angle), -np.sin(rotation_angle)],
-                                                [np.sin(rotation_angle), np.cos(rotation_angle)]], dtype=float)
-                    self.pixel_positions[cam] = np.squeeze(np.asarray(np.dot(rotation_matrix, self.pixel_positions[cam])))
+                                                 [np.sin(rotation_angle), np.cos(rotation_angle)]], dtype=float)
+                    self.pixel_positions[cam] = np.squeeze(
+                        np.asarray(np.dot(rotation_matrix, self.pixel_positions[cam])))
         if 'camera_types' not in mapping_settings:
             mapping_settings['camera_types'] = cameras
         self.image_mapper = ImageMapper(pixel_positions=self.pixel_positions,
                                         **mapping_settings)
 
         self.image_mapper.image_shapes[get_camera_type(self.tel_type)] = (
-                self.image_mapper.image_shapes[get_camera_type(self.tel_type)][0],
-                self.image_mapper.image_shapes[get_camera_type(self.tel_type)][1],
-                len(self.image_channels)  # number of channels
-                )
+            self.image_mapper.image_shapes[get_camera_type(self.tel_type)][0],
+            self.image_mapper.image_shapes[get_camera_type(self.tel_type)][1],
+            len(self.image_channels)  # number of channels
+        )
 
         if array_info is None:
             array_info = []
@@ -234,8 +239,8 @@ class DL1DataReader:
                     'base_name': 'image',
                     'shape': self.image_mapper.image_shapes[get_camera_type(self.tel_type)],
                     'dtype': np.dtype(np.float32)
-                    }
-                ]
+                }
+            ]
             for col_name in self.array_info:
                 col = f.root.Array_Information.cols._f_col(col_name)
                 self.unprocessed_example_description.append(
@@ -245,8 +250,8 @@ class DL1DataReader:
                         'base_name': col_name,
                         'shape': (1,) + col.shape[1:],
                         'dtype': col.dtype
-                        }
-                    )
+                    }
+                )
         elif self.mode == 'stereo':
             num_tels = len(self.selected_telescopes[self.tel_type])
             self.unprocessed_example_description = [
@@ -257,15 +262,15 @@ class DL1DataReader:
                     'shape': ((num_tels,)
                               + self.image_mapper.image_shapes[get_camera_type(self.tel_type)]),
                     'dtype': np.dtype(np.float32)
-                    },
+                },
                 {
                     'name': 'trigger',
                     'tel_type': self.tel_type,
                     'base_name': 'trigger',
                     'shape': (num_tels,),
                     'dtype': np.dtype(np.int8)
-                    }
-                ]
+                }
+            ]
             for col_name in self.array_info:
                 col = f.root.Array_Information.cols._f_col(col_name)
                 self.unprocessed_example_description.append(
@@ -275,8 +280,8 @@ class DL1DataReader:
                         'base_name': col_name,
                         'shape': (num_tels,) + col.shape[1:],
                         'dtype': col.dtype
-                        }
-                    )
+                    }
+                )
         elif self.mode == 'multi-stereo':
             self.unprocessed_example_description = []
             for tel_type in self.selected_telescopes:
@@ -289,15 +294,15 @@ class DL1DataReader:
                         'shape': ((num_tels,)
                                   + self.image_mapper.image_shapes[get_camera_type(tel_type)]),
                         'dtype': np.dtype(np.float32)
-                        },
+                    },
                     {
                         'name': tel_type + '_trigger',
                         'tel_type': tel_type,
                         'base_name': 'trigger',
                         'shape': (num_tels,),
                         'dtype': np.dtype(np.int8)
-                        }
-                    ])
+                    }
+                ])
                 for col_name in self.array_info:
                     col = f.root.Array_Information.cols._f_col(col_name)
                     self.unprocessed_example_description.append(
@@ -307,8 +312,8 @@ class DL1DataReader:
                             'base_name': col_name,
                             'shape': (num_tels,) + col.shape[1:],
                             'dtype': col.dtype
-                            }
-                        )
+                        }
+                    )
         # Add event info to description
         for col_name in self.event_info:
             col = f.root.Events.cols._f_col(col_name)
@@ -319,15 +324,15 @@ class DL1DataReader:
                     'base_name': col_name,
                     'shape': col.shape[1:],
                     'dtype': col.dtype
-                    }
-                )
+                }
+            )
 
         self.processor = DL1DataProcessor(
             self.mode,
             self.unprocessed_example_description,
             transforms,
             validate_processor
-            )
+        )
 
         # Definition of preprocessed example
         self.example_description = self.processor.output_description
@@ -381,13 +386,14 @@ class DL1DataReader:
         the mask of filtered images
 
                 """
-        images = file['/Images'][self.tel_type][img_ids[imgs_mask]]['charge']
+        images = file['/Images'][self.tel_type][img_ids[imgs_mask]]['charge']  # equal to the number of parameters
         mask = np.full(len(images), True)
         for filter_function, filter_parameters in filters.items():
-            parameters_table = file['/Parameters'+str(filter_parameters['algorithm'])][self.tel_type][img_ids[imgs_mask]]
+            parameters_table = file['/Parameters' + str(filter_parameters['algorithm'])][self.tel_type][
+                img_ids[imgs_mask]]
             mask &= filter_function(self, parameters_table, **filter_parameters)
+        print(mask)
         return mask
-
 
     # Get a single telescope image from a particular event, uniquely
     # identified by the filename, tel_type, and image table index.
@@ -407,7 +413,7 @@ class DL1DataReader:
                 vector[:, i] = record[channel]
         # If 'indexed_conv' is selected, we only need the unmapped vector.
         if self.image_mapper.mapping_method[get_camera_type(tel_type)] == 'indexed_conv':
-           return vector
+            return vector
         image = self.image_mapper.map_image(vector, get_camera_type(tel_type))
         return image
 
