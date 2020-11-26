@@ -1,3 +1,4 @@
+
 Data Writer:
   # Dictionary of DL1DataWriter settings. Will be passed as a dict of kwargs to the DL1DataWriter constructor.
   Settings:
@@ -12,6 +13,9 @@ Data Writer:
     events_per_file: 500
     # Boolean flag indicating whether to save non-triggered Monte Carlo events in a separate MC_Events table.
     save_mc_events: False
+    # Telescope ids dumped to file. Specify the telescopes to write to the the output file.
+    selected_telescope_ids: [1]
+    #selected_telescope_ids: [1,2,3,4]
     
     # parameters0 table, cleaning_algo and cleaning_args
     cleaning_settings:
