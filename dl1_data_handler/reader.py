@@ -385,7 +385,7 @@ class DL1DataReader:
         mask = np.full(len(images), True)
         for filter_function, filter_parameters in filters.items():
             parameters_table = file['/Parameters'+str(filter_parameters['algorithm'])][self.tel_type][img_ids[imgs_mask]]
-            mask &= filter_function(self, images, parameters_table, **filter_parameters)
+            mask &= filter_function(self, parameters_table, **filter_parameters)
         return mask
 
 

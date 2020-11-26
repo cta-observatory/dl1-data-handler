@@ -35,13 +35,12 @@ def event_intensity_filter(reader, file, i_min=-np.inf, i_max=np.inf):
 ###########################
 
 
-def image_parameters_filter(reader, images, parameters_table, algorithm, parameter, threshold_min, threshold_max):
+def image_parameters_filter(reader, parameters_table, algorithm, parameter, threshold_min, threshold_max):
     """
     Filter images on selected parameters
     Parameters
     ----------
     reader (DL1DataReader) : the reader to filter
-    images
     parameters_table
     parameter
     threshold_min
