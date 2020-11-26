@@ -870,6 +870,7 @@ class DL1DataWriter:
     def __init__(self,
                  event_source_class=None,
                  event_source_settings=None,
+                 selected_telescope_ids=None,
                  data_dumper_class=CTAMLDataDumper,
                  data_dumper_settings=None,
                  preselection_cut_function=None,
@@ -888,6 +889,8 @@ class DL1DataWriter:
         event_source_settings : dict
             A dictionary of kwargs which will be passed into the constructor
             for the EventSource.
+        selected_telescope_ids : set of telescope, which should be included in the
+            subarray
         data_dumper_class : subclass of dl1_data_writer.DL1DataDumper
             A subclass of DL1DataDumper which will be used to write events from
             the EventSource to output files.
@@ -919,6 +922,8 @@ class DL1DataWriter:
         self.event_source_settings = (event_source_settings
                                       if event_source_settings else {})
 
+        self.selected_telescope_ids = selected_telescope_ids
+
         self.data_dumper_class = data_dumper_class
         self.data_dumper_settings = (data_dumper_settings
                                      if data_dumper_settings else {})
@@ -933,8 +938,10 @@ class DL1DataWriter:
         self.events_per_file = events_per_file
 
         self.save_mc_events = save_mc_events
-        self.cleaning_settings = (cleaning_settings
-                                  if cleaning_settings else {})
+
+        if cleaning_settings is None:
+            cleaning_settings = {'algorithm': 'tailcuts_clean', 'args': {'picture_thresh': 7, 'boundary_thresh': 5}}
+        self.cleaning_settings = cleaning_settings
 
         if self.output_file_size:
             logger.info("Max output file size set at {} bytes. Note that "
@@ -1065,6 +1072,8 @@ class DL1DataWriter:
             subarray = event_source.subarray
             if filetype == "simtel":
                 calibrator = calib.camera.calibrator.CameraCalibrator(subarray=subarray)
+            if self.selected_telescope_ids:
+                subarray = subarray.select_subarray("subarray_for_selected_telids",self.selected_telescope_ids)
             mcheader = example_event.mcheader
             data_dumper.prepare_file(filename, subarray, mcheader, self.cleaning_settings)
 
@@ -1074,6 +1083,8 @@ class DL1DataWriter:
                     calibrator(event)
                 tels_id = event.r1.tels_with_data
                 for tel_id in tels_id:
+                    if tel_id not in self.selected_telescope_ids:
+                        continue
 
                     cleaning_method = getattr(cleaning, self.cleaning_settings['algorithm'])
                     cleanmask = cleaning_method(subarray.tel[tel_id].camera.geometry,
@@ -1176,9 +1187,6 @@ class DL1DataWriter:
 
                     # Write all file-level data if not present
                     # Or compare to existing data if already in file
-                    example_event = next(event_source._generator())
-                    subarray = example_event.inst.subarray
-                    mcheader = example_event.mcheader
                     data_dumper.prepare_file(filename, subarray, mcheader, self.cleaning_settings)
 
             if self.save_mc_events:
@@ -1214,9 +1222,4 @@ class DL1DataWriter:
 
                         # Write all file-level data if not present
                         # Or compare to existing data if already in file
-                        example_event = next(event_source._generator())
-                        subarray = example_event.inst.subarray
-                        temp = io.DataContainer()
-                        event_source.fill_mc_information(temp, mc_event)
-                        mcheader = temp.mcheader
                         data_dumper.prepare_file(filename, subarray, mcheader, self.cleaning_settings)
