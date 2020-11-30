@@ -63,9 +63,8 @@ class DL1DataReader:
             image_selection = {}
 
         if image_selection_from_file is None:
-            self.image_selection_from_file = {}
-        else:
-            self.image_selection_from_file = image_selection_from_file
+            image_selection_from_file = {}
+
         if mapping_settings is None:
             mapping_settings = {}
 
@@ -143,20 +142,15 @@ class DL1DataReader:
                     img_ids = np.array(selected_indices[:, tel_index])
                     mask = (img_ids != 0)
                     # TODO handle all selected channels
-                    if image_selection_from_file == {}:
-                        mask[mask] &= self._select_image(
-                            f.root[self.tel_type][img_ids[mask]]['charge'],
-                            image_selection)
-                    else:
-                        mask[mask] &= self._select_image(
-                            f.root['/Images'][self.tel_type][img_ids[mask]]['charge'],
-                            image_selection)
+                    mask[mask] &= self._select_image(
+                        f.root['/Images'][self.tel_type][img_ids[mask]]['charge'],
+                        image_selection)
 
-                        mask[mask] &= self._select_image_from_file(
-                            f.root,
-                            img_ids,
-                            mask,
-                            image_selection_from_file)
+                    mask[mask] &= self._select_image_from_file(
+                        f.root,
+                        img_ids,
+                        mask,
+                        image_selection_from_file)
 
                     for image_index, nrow in zip(img_ids[mask],
                                                  np.array(selected_nrows)[mask]):
@@ -392,7 +386,6 @@ class DL1DataReader:
             parameters_table = file['/Parameters' + str(filter_parameters['algorithm'])][self.tel_type][
                 img_ids[imgs_mask]]
             mask &= filter_function(self, parameters_table, **filter_parameters)
-        print(mask)
         return mask
 
     # Get a single telescope image from a particular event, uniquely
@@ -461,10 +454,7 @@ class DL1DataReader:
             # Get a single image
             nrow, image_index, tel_id = identifiers[1:4]
             with lock:
-                if (self.image_selection_from_file == {}):
-                    child = self.files[filename].root._f_get_child(self.tel_type)
-                else:
-                    child = self.files[filename].root['/Images']._f_get_child(self.tel_type)
+                child = self.files[filename].root['/Images']._f_get_child(self.tel_type)
             image = self._get_image(child, self.tel_type, image_index)
             example = [image]
 
