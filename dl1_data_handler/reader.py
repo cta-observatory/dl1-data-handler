@@ -385,6 +385,7 @@ class DL1DataReader:
         for filter_function, filter_parameters in filters.items():
             parameters_table = file['/Parameters' + str(filter_parameters['algorithm'])][self.tel_type][
                 img_ids[imgs_mask]]
+            filter_parameters.pop('algorithm')
             mask &= filter_function(self, parameters_table, **filter_parameters)
         return mask
 

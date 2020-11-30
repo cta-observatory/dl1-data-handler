@@ -36,14 +36,13 @@ def event_intensity_filter(reader, file, i_min=-np.inf, i_max=np.inf):
 ###########################
 
 
-def hillas_parameters_filter(reader, parameters_table, algorithm, parameter, threshold_min=-np.inf, threshold_max=np.inf):
+def parameters_filter(reader, parameters_table, parameter, threshold_min=-np.inf, threshold_max=np.inf):
     """
     Filter images on hillas parameters
     Parameters
     ----------
     reader (DL1DataReader) : the reader to filter
     parameters_table
-    algorithm : not used
     parameter
     threshold_min
     threshold_max
@@ -53,20 +52,37 @@ def hillas_parameters_filter(reader, parameters_table, algorithm, parameter, thr
     mask (Array of bool)
     """
     selected_parameter = parameters_table[parameter]
-    mask1 = selected_parameter > threshold_min
-    mask2 = selected_parameter < threshold_max
+    mask1 = selected_parameter >= threshold_min
+    mask2 = selected_parameter <= threshold_max
     mask = mask1 & mask2
     return mask
 
 
-def leakage_parameters_filter(reader, parameters_table, algorithm, parameter, threshold=1.0):
+def hillas_parameters_filter(reader, parameters_table, parameter, threshold_min=-np.inf, threshold_max=np.inf):
+    """
+    Filter images on hillas parameters
+    Parameters
+    ----------
+    reader (DL1DataReader) : the reader to filter
+    parameters_table
+    parameter
+    threshold_min
+    threshold_max
+
+    Returns
+    -------
+    mask (Array of bool)
+    """
+    return parameters_filter(reader, parameters_table, parameter, threshold_min, threshold_max)
+
+
+def leakage_parameters_filter(reader, parameters_table, parameter, threshold_min=-np.inf, threshold_max=np.inf):
     """
     Filter images on leakage parameters
     Parameters
     ----------
     reader (DL1DataReader) : the reader to filter
     parameters_table
-    algorithm : not used
     parameter
     threshold
 
@@ -74,19 +90,16 @@ def leakage_parameters_filter(reader, parameters_table, algorithm, parameter, th
     -------
     mask (Array of bool)
     """
-    selected_parameter = parameters_table[parameter]
-    mask = selected_parameter < threshold
-    return mask
+    return parameters_filter(reader, parameters_table, parameter, threshold_min, threshold_max)
 
 
-def concentration_parameters_filter(reader, parameters_table, algorithm, parameter, threshold_min=-np.inf, threshold_max=np.inf):
+def concentration_parameters_filter(reader, parameters_table, parameter, threshold_min=-np.inf, threshold_max=np.inf):
     """
     Filter images on concentration parameters
     Parameters
     ----------
     reader (DL1DataReader) : the reader to filter
     parameters_table
-    algorithm : not used
     parameter
     threshold_min
     threshold_max
@@ -95,21 +108,16 @@ def concentration_parameters_filter(reader, parameters_table, algorithm, paramet
     -------
     mask (Array of bool)
     """
-    selected_parameter = parameters_table[parameter]
-    mask1 = selected_parameter > threshold_min
-    mask2 = selected_parameter < threshold_max
-    mask = mask1 & mask2
-    return mask
+    return parameters_filter(reader, parameters_table, parameter, threshold_min, threshold_max)
 
 
-def timing_parameters_filter(reader, parameters_table, algorithm, parameter, threshold_min=-np.inf, threshold_max=np.inf):
+def timing_parameters_filter(reader, parameters_table, parameter, threshold_min=-np.inf, threshold_max=np.inf):
     """
     Filter images on timing parameters
     Parameters
     ----------
     reader (DL1DataReader) : the reader to filter
     parameters_table
-    algorithm : not used
     parameter
     threshold_min
     threshold_max
@@ -118,21 +126,16 @@ def timing_parameters_filter(reader, parameters_table, algorithm, parameter, thr
     -------
     mask (Array of bool)
     """
-    selected_parameter = parameters_table[parameter]
-    mask1 = selected_parameter > threshold_min
-    mask2 = selected_parameter < threshold_max
-    mask = mask1 & mask2
-    return mask
+    return parameters_filter(reader, parameters_table, parameter, threshold_min, threshold_max)
 
 
-def morphology_parameters_filter(reader, parameters_table, algorithm, parameter, threshold_min=-np.inf, threshold_max=np.inf):
+def morphology_parameters_filter(reader, parameters_table, parameter, threshold_min=-np.inf, threshold_max=np.inf):
     """
     Filter images on morphology parameters
     Parameters
     ----------
     reader (DL1DataReader) : the reader to filter
     parameters_table
-    algorithm : not used
     parameter
     threshold_min
     threshold_max
@@ -141,11 +144,8 @@ def morphology_parameters_filter(reader, parameters_table, algorithm, parameter,
     -------
     mask (Array of bool)
     """
-    selected_parameter = parameters_table[parameter]
-    mask1 = selected_parameter > threshold_min
-    mask2 = selected_parameter < threshold_max
-    mask = mask1 & mask2
-    return mask
+    return parameters_filter(reader, parameters_table, parameter, threshold_min, threshold_max)
+
 #################
 # Image Filters #
 #################
