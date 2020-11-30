@@ -53,7 +53,7 @@ def parameters_filter(reader, parameters_table, parameter, threshold_min=-np.inf
     """
     selected_parameter = parameters_table[parameter]
     mask1 = selected_parameter >= threshold_min
-    mask2 = selected_parameter <= threshold_max
+    mask2 = selected_parameter < threshold_max
     mask = mask1 & mask2
     return mask
 
