@@ -413,6 +413,7 @@ class CTAMLDataDumper(DL1DataDumper):
 
                         if index_parameters_table == 0:
                             image_row['image_mask0'] = event_container.dl1.tel[tel_id].image_mask
+                            image_row['inv_image_mask0'] = np.invert(event_container.dl1.tel[tel_id].image_mask)
 
                             parameter_row["event_index"] = self.event_index
                             parameter_row["leakage_intensity_1"] = event_container.dl1.tel[
@@ -478,6 +479,7 @@ class CTAMLDataDumper(DL1DataDumper):
                                                         **self.cleaning_settings[index_parameters_table - 1]['args'])
 
                             image_row["image_mask"+str(index_parameters_table)] = cleanmask
+                            image_row["inv_image_mask"+str(index_parameters_table)] = np.invert(cleanmask)
 
                             leakage_values = containers.LeakageContainer()
                             hillas_parameters_values = containers.HillasParametersContainer()
@@ -642,6 +644,7 @@ class CTAMLDataDumper(DL1DataDumper):
 
                 for index_parameters_table in range(0, len(self.cleaning_settings)+1):
                     columns_dict["image_mask"+str(index_parameters_table)] = tables.BoolCol(shape=image_shape)
+                    columns_dict["inv_image_mask"+str(index_parameters_table)] = tables.BoolCol(shape=image_shape)
 
                 description = type('description',
                                   (tables.IsDescription,),
@@ -674,7 +677,7 @@ class CTAMLDataDumper(DL1DataDumper):
                 image_row['peak_time'] = np.zeros(image_shape, dtype=np.float32)
                 for index_parameters_table in range(0, len(self.cleaning_settings)+1):
                     image_row["image_mask"+str(index_parameters_table)] = np.zeros(image_shape, dtype=np.bool_)
-
+                    image_row["inv_image_mask"+str(index_parameters_table)] = np.ones(image_shape, dtype=np.bool_)
                 image_row.append()
                 image_table.flush()
 
