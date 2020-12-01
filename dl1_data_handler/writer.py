@@ -255,17 +255,21 @@ class CTAMLDataDumper(DL1DataDumper):
                 y_len = subarray.tel[tel_id].camera.geometry.pix_y.value.shape[0]
                 pos[0:x_len, 0] = subarray.tel[tel_id].camera.geometry.pix_x.value
                 pos[0:y_len, 1] = subarray.tel[tel_id].camera.geometry.pix_y.value
+                pix_rotation = subarray.tel[tel_id].camera.geometry.pix_rotation.value
+                cam_rotation = subarray.tel[tel_id].camera.geometry.cam_rotation.value
 
                 rows = [row for row in tel_table.iterrows() if
                             row["type"].decode('utf-8') == str(tel_desc) and
                             row["optics"].decode('utf-8') == str(tel_desc.optics) and
                             row["camera"].decode('utf-8') == str(tel_desc.camera) and
                             row["num_pixels"] == len(subarray.tel[tel_id].camera.geometry.pix_id) and
-                            np.allclose(row["pixel_positions"], pos)]
+                            np.allclose(row["pixel_positions"], pos) and
+                            row["pix_rotation"] == pix_rotation and
+                            row["cam_rotation"] == cam_rotation]
 
                 if len(rows) != 1:
                     for row in tel_table.iterrows():
-                        logger.error("{}, {}, {}, {}".format(row["type"].decode('utf-8'), row["optics"].decode('utf-8'), row["camera"].decode('utf-8'), row["num_pixels"]))
+                        logger.error("{}, {}, {}, {}, {}, {}".format(row["type"].decode('utf-8'), row["optics"].decode('utf-8'), row["camera"].decode('utf-8'), row["num_pixels"], row["pix_rotation"], row["cam_rotation"]))
                         logger.error(row["pixel_positions"])
                     logger.error("New input file: {}-{}-{}-{}".format(str(tel_desc), str(tel_desc.optics), str(tel_desc.camera), len(subarray.tel[tel_id].camera.pix_id)))
                     logger.error(pos)
@@ -292,6 +296,8 @@ class CTAMLDataDumper(DL1DataDumper):
                 row["camera"] = str(tel_description.camera)
                 row["num_pixels"] = len(subarray.tel[tel_id].camera.geometry.pix_id)
                 row["pixel_positions"] = pos
+                row["pix_rotation"] = subarray.tel[tel_id].camera.geometry.pix_rotation.value
+                row["cam_rotation"] = subarray.tel[tel_id].camera.geometry.cam_rotation.value
                 row.append()
             tel_table.flush()
 
