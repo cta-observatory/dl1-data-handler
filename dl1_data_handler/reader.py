@@ -176,6 +176,8 @@ class DL1DataReader:
                                  "{}".format(filename))
             self.selected_telescopes = selected_telescopes
 
+            self.algorithm = algorithm
+
             if self.example_identifiers is None:
                 self.example_identifiers = example_identifiers
             else:
@@ -503,6 +505,13 @@ class DL1DataReader:
             for column in self.event_info:
                 dtype = events.cols._f_col(column).dtype
                 example.append(np.array(events[nrow][column], dtype=dtype))
+
+        # Load parameters
+        with lock:
+            parameters = self.files[filename].root['/Parameters' + str(self.algorithm)][self.tel_type]
+            for column in self.training_parameters:
+                dtype = parameters.cols._f_col(column).dtype
+                example.append(np.array(parameters[image_index][column], dtype=dtype))
 
         # Preprocess the example
         example = self.processor.process(example)
