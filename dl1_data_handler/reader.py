@@ -21,7 +21,7 @@ class DL1DataReader:
                  mode='mono',
                  selected_telescope_type=None,
                  selected_telescope_ids=None,
-                 selected_parameters=None,
+                 training_parameters=None,
                  selection_string=None,
                  event_selection=None,
                  image_selection=None,
@@ -54,11 +54,14 @@ class DL1DataReader:
 
         self.example_identifiers = None
         self.telescopes = {}
+
         if selected_telescope_ids is None:
             selected_telescope_ids = {}
 
-        if selected_parameters is None:
-            selected_parameters = {}
+        if training_parameters is None:
+            self.training_parameters = {}
+        else:
+            self.training_parameters = training_parameters
 
         if event_selection is None:
             event_selection = {}
@@ -159,7 +162,7 @@ class DL1DataReader:
 
                     for image_index, nrow in zip(img_ids[mask], np.array(selected_nrows)[mask]):
                         temp_list = []
-                        for parameter_name in selected_parameters:
+                        for parameter_name in training_parameters:
                             if (parameter_name != 'event_index'):
                                 param = [x[parameter_name] for x in parameters_table]
                                 temp_list.append(param[image_index])
@@ -329,6 +332,19 @@ class DL1DataReader:
                 }
             )
 
+        # Add parameters info to description
+        for col_name in self.training_parameters:
+            col = parameters_table.cols._f_col(col_name)
+            self.unprocessed_example_description.append(
+                {
+                    'name': 'parameter',
+                    'tel_type': None,
+                    'base_name': col_name,
+                    'shape': col.shape[1:],
+                    'dtype': col.dtype
+                }
+            )
+
         self.processor = DL1DataProcessor(
             self.mode,
             self.unprocessed_example_description,
@@ -375,7 +391,7 @@ class DL1DataReader:
             mask &= filter_function(self, images, **filter_parameters)
         return mask
 
-    def _select_image_from_file(self, file, img_ids, imgs_mask, filters):
+    def _select_image_from_file(self, images, parameters_table, filters):
         """
         Filter the data image wise.
         Parameters
