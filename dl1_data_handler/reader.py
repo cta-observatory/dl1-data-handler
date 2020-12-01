@@ -21,6 +21,7 @@ class DL1DataReader:
                  mode='mono',
                  selected_telescope_type=None,
                  selected_telescope_ids=None,
+                 selected_parameters=None,
                  selection_string=None,
                  event_selection=None,
                  image_selection=None,
@@ -55,6 +56,9 @@ class DL1DataReader:
         self.telescopes = {}
         if selected_telescope_ids is None:
             selected_telescope_ids = {}
+
+        if selected_parameters is None:
+            selected_parameters = {}
 
         if event_selection is None:
             event_selection = {}
@@ -135,6 +139,8 @@ class DL1DataReader:
                                        in selected_nrows]
             elif self.mode == 'mono':
                 example_identifiers = []
+                algorithm = image_selection_from_file[next(iter(image_selection_from_file))]['algorithm']
+                parameters_table = f.root['/Parameters' + str(algorithm)][self.tel_type]
                 field = '{}_indices'.format(self.tel_type)
                 selected_indices = f.root.Events.read_coordinates(selected_nrows, field=field)
                 for tel_id in selected_telescopes[self.tel_type]:
@@ -152,10 +158,13 @@ class DL1DataReader:
                         mask,
                         image_selection_from_file)
 
-                    for image_index, nrow in zip(img_ids[mask],
-                                                 np.array(selected_nrows)[mask]):
-                        example_identifiers.append((filename, nrow,
-                                                    image_index, tel_id))
+                    for image_index, nrow in zip(img_ids[mask], np.array(selected_nrows)[mask]):
+                        temp_list = []
+                        for parameter_name in selected_parameters:
+                            if (parameter_name != 'event_index'):
+                                param = [x[parameter_name] for x in parameters_table]
+                                temp_list.append(param[image_index])
+                        example_identifiers.append((filename, nrow, image_index, tel_id, temp_list))
 
             # Confirm that the files are consistent and merge them
             if not self.telescopes:
