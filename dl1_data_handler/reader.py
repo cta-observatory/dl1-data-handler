@@ -153,9 +153,8 @@ class DL1DataReader:
                         image_selection)
 
                     mask[mask] &= self._select_image_from_file(
-                        f.root,
-                        img_ids,
-                        mask,
+                        f.root['/Images'][self.tel_type][img_ids[mask]]['charge'],
+                        parameters_table[img_ids[mask]],
                         image_selection_from_file)
 
                     for image_index, nrow in zip(img_ids[mask], np.array(selected_nrows)[mask]):
@@ -389,11 +388,8 @@ class DL1DataReader:
         the mask of filtered images
 
                 """
-        images = file['/Images'][self.tel_type][img_ids[imgs_mask]]['charge']  # equal to the number of parameters
         mask = np.full(len(images), True)
         for filter_function, filter_parameters in filters.items():
-            parameters_table = file['/Parameters' + str(filter_parameters['algorithm'])][self.tel_type][
-                img_ids[imgs_mask]]
             filter_parameters.pop('algorithm')
             mask &= filter_function(self, parameters_table, **filter_parameters)
         return mask
