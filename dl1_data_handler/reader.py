@@ -59,7 +59,7 @@ class DL1DataReader:
             selected_telescope_ids = {}
 
         if training_parameters is None:
-            self.training_parameters = {}
+            self.training_parameters = []
         else:
             self.training_parameters = training_parameters
 
@@ -142,8 +142,12 @@ class DL1DataReader:
                                        in selected_nrows]
             elif self.mode == 'mono':
                 example_identifiers = []
-                algorithm = image_selection_from_file[next(iter(image_selection_from_file))]['algorithm']
-                parameters_table = f.root['/Parameters' + str(algorithm)][self.tel_type]
+                if image_selection_from_file != {}:
+                    algorithm = image_selection_from_file[next(iter(image_selection_from_file))]['algorithm']
+                    parameters_table = f.root['/Parameters' + str(algorithm)][self.tel_type]
+                else:
+                    algorithm = 0
+                    parameters_table = f.root['/Parameters0'][self.tel_type]
                 field = '{}_indices'.format(self.tel_type)
                 selected_indices = f.root.Events.read_coordinates(selected_nrows, field=field)
                 for tel_id in selected_telescopes[self.tel_type]:
@@ -160,13 +164,18 @@ class DL1DataReader:
                         parameters_table[img_ids[mask]],
                         image_selection_from_file)
 
-                    for image_index, nrow in zip(img_ids[mask], np.array(selected_nrows)[mask]):
-                        temp_list = []
-                        for parameter_name in training_parameters:
-                            if (parameter_name != 'event_index'):
-                                param = [x[parameter_name] for x in parameters_table]
-                                temp_list.append(param[image_index])
-                        example_identifiers.append((filename, nrow, image_index, tel_id, temp_list))
+                    if self.training_parameters == []:
+                        for image_index, nrow in zip(img_ids[mask], np.array(selected_nrows)[mask]):
+                            example_identifiers.append((filename, nrow,
+                                                        image_index, tel_id))
+                    else:
+                        for image_index, nrow in zip(img_ids[mask], np.array(selected_nrows)[mask]):
+                            temp_list = []
+                            for parameter_name in self.training_parameters:
+                                if (parameter_name != 'event_index'):
+                                    param = [x[parameter_name] for x in parameters_table]
+                                    temp_list.append(param[image_index])
+                            example_identifiers.append((filename, nrow, image_index, tel_id, temp_list))
 
             # Confirm that the files are consistent and merge them
             if not self.telescopes:
