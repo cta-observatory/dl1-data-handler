@@ -74,14 +74,18 @@ class TelTableRow(IsDescription):
         Telescope camera type name (i.e. 'LSTCam').
     num_pixels: tables.UInt32Col
         Number of pixels in the telescope camera.
-
+    pix_rotation: tables.Float32Col
+        Rotation angle in deg.
+    cam_rotation: tables.Float32Col
+        Overall camera rotation in deg.
     """
 
     type = StringCol(20)
     optics = StringCol(20)
     camera = StringCol(20)
     num_pixels = UInt32Col()
-
+    pix_rotation = Float32Col()
+    cam_rotation = Float32Col()
 
 class ArrayTableRow(IsDescription):
     """Describe row format for telescope array table.
