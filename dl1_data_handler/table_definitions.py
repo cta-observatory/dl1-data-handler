@@ -190,8 +190,8 @@ class ParametersTableRow(IsDescription):
     timing_intercept_err = Float32Col()
     timing_deviation = Float32Col()
 
-    morphology_num_pixels = UInt32Col()
-    morphology_num_islands = UInt32Col()
-    morphology_num_small_islands = UInt32Col()
-    morphology_num_medium_islands = UInt32Col()
-    morphology_num_large_islands = UInt32Col()
+    morphology_num_pixels = Int32Col()
+    morphology_num_islands = Int32Col()
+    morphology_num_small_islands = Int32Col()
+    morphology_num_medium_islands = Int32Col()
+    morphology_num_large_islands = Int32Col()
