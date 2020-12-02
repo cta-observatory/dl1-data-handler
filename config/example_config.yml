@@ -4,19 +4,24 @@ Data Writer:
   Settings:
     # Mode for writing. Valid options are 'serial' and 'parallel'. Specify 'serial' to write each output file (process each run) sequentially using a single thread.
     # Specify 'parallel' to write to each output file (process each run) in parallel using Python Multithreading.
-    write_mode: 'parallel'
+    write_mode: 'serial'
     # Cut function to be used to exclude events from being dumped. Should follow
     #preselection_cut_function: None
     # Maximum output file size (in bytes). After this limit is reached, the dumper will finish the existing file and start a new one. Comment out this setting to set no limit.
     output_file_size: 1073741824
     # Maximum number of (triggered) events per file. After this limit is reached, the dumper will finish the existing file and start a new one. Comment out this setting to set no limit. 
-    events_per_file: 500
+    events_per_file: 10000
     # Boolean flag indicating whether to save non-triggered Monte Carlo events in a separate MC_Events table.
     save_mc_events: False
     # Telescope ids dumped to file. Specify the telescopes to write to the the output file.
     selected_telescope_ids: [1]
     #selected_telescope_ids: [1,2,3,4]
-    
+    # Settings for the ImageExtractor for the calibration class.
+    image_extractor_settings:
+        algorithm: 'LocalPeakWindowSum'
+        args:
+            window_shift: 4
+            window_width: 8
     # parameters0 table, cleaning_algo and cleaning_args
     cleaning_settings:
         algorithm: 'tailcuts_clean'
@@ -69,10 +74,11 @@ Data Dumper:
     # The column name should be specified as it appears in the table.
     index_columns:
         - ['/Events', 'mc_energy']
+        - ['/Events', 'log_mc_energy']
         - ['/Events', 'alt']
         - ['/Events', 'az']
         - ['tel', 'event_index']
-        
+
     # parameters0 table, cleaning_algo and cleaning_args
     cleaning_settings:
         - algorithm: 'tailcuts_clean'
