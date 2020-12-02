@@ -330,18 +330,6 @@ class DL1DataReader:
                             'dtype': col.dtype
                         }
                     )
-        # Add event info to description
-        for col_name in self.event_info:
-            col = f.root.Events.cols._f_col(col_name)
-            self.unprocessed_example_description.append(
-                {
-                    'name': col_name,
-                    'tel_type': None,
-                    'base_name': col_name,
-                    'shape': col.shape[1:],
-                    'dtype': col.dtype
-                }
-            )
 
         # Add parameters info to description
         for col_name in self.training_parameters:
@@ -349,6 +337,18 @@ class DL1DataReader:
             self.unprocessed_example_description.append(
                 {
                     'name': 'parameter_' + str(col_name),
+                    'tel_type': self.tel_type,
+                    'base_name': col_name,
+                    'shape': col.shape[1:],
+                    'dtype': col.dtype
+                }
+            )
+            # Add event info to description
+        for col_name in self.event_info:
+            col = f.root.Events.cols._f_col(col_name)
+            self.unprocessed_example_description.append(
+                {
+                    'name': col_name,
                     'tel_type': None,
                     'base_name': col_name,
                     'shape': col.shape[1:],
@@ -508,19 +508,19 @@ class DL1DataReader:
                                                             tel_type)
                 example.extend(tel_type_example)
 
-        # Load event info
-        with lock:
-            events = self.files[filename].root.Events
-            for column in self.event_info:
-                dtype = events.cols._f_col(column).dtype
-                example.append(np.array(events[nrow][column], dtype=dtype))
-
         # Load parameters
         with lock:
             parameters = self.files[filename].root['/Parameters' + str(self.algorithm)][self.tel_type]
             for column in self.training_parameters:
                 dtype = parameters.cols._f_col(column).dtype
                 example.append(np.array(parameters[image_index][column], dtype=dtype))
+
+        # Load event info
+        with lock:
+            events = self.files[filename].root.Events
+            for column in self.event_info:
+                dtype = events.cols._f_col(column).dtype
+                example.append(np.array(events[nrow][column], dtype=dtype))
 
         # Preprocess the example
         example = self.processor.process(example)
