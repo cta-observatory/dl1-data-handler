@@ -348,7 +348,7 @@ class DL1DataReader:
             col = parameters_table.cols._f_col(col_name)
             self.unprocessed_example_description.append(
                 {
-                    'name': 'parameter',
+                    'name': 'parameter_' + str(col_name),
                     'tel_type': None,
                     'base_name': col_name,
                     'shape': col.shape[1:],
