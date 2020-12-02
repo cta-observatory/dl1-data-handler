@@ -387,8 +387,13 @@ class CTAMLDataDumper(DL1DataDumper):
             event_row['h_first_int'] = event_container.mc.h_first_int.value
             event_row['x_max'] = event_container.mc.x_max.value
             event_row['mc_energy'] = event_container.mc.energy.value
+            event_row['log_mc_energy'] = np.log10(event_container.mc.energy.value)
             event_row['alt'] = event_container.mc.alt.value
             event_row['az'] = event_container.mc.az.value
+            event_row['array_pointing_alt'] = event_container.pointing.array_altitude.value
+            event_row['array_pointing_az'] = event_container.pointing.array_azimuth.value
+            event_row['delta_direction'] = np.array([event_row['az']-event_row['array_pointing_az'],
+                                           event_row['alt']-event_row['array_pointing_alt']])
 
         for tel_type in self.subarray:
             image_table = self.file.get_node(
@@ -590,8 +595,12 @@ class CTAMLDataDumper(DL1DataDumper):
         event_row['h_first_int'] = eventio_mc_event['mc_shower']['h_first_int']
         event_row['x_max'] = eventio_mc_event['mc_shower']['xmax']
         event_row['mc_energy'] = eventio_mc_event['mc_shower']['energy']
+        event_row['log_mc_energy'] = eventio_mc_event['mc_shower']['log_mc_energy']
         event_row['alt'] = eventio_mc_event['mc_shower']['altitude']
         event_row['az'] = eventio_mc_event['mc_shower']['azimuth']
+        event_row['array_pointing_alt'] = eventio_mc_event['mc_shower']['array_pointing_alt']
+        event_row['array_pointing_az'] = eventio_mc_event['mc_shower']['array_pointing_az']
+        event_row['delta_direction'] = event_row['delta_direction']
 
         event_row.append()
 
@@ -1088,9 +1097,11 @@ class DL1DataWriter:
 
             # Write all events sequentially
             for event in event_source:
+
                 if filetype == "simtel":
                     calibrator(event)
-                tels_id = event.r1.tels_with_data
+
+                tels_id = event.r1.tels_with_data 
                 for tel_id in tels_id:
                     if tel_id not in self.selected_telescope_ids:
                         continue
@@ -1200,6 +1211,7 @@ class DL1DataWriter:
 
             if self.save_mc_events:
                 for mc_event in event_source.file_.iter_mc_events():
+
                     try:
                         data_dumper.dump_mc_event(mc_event, event_source.file_.header['run'])
                     except IOError:
