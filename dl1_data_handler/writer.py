@@ -12,9 +12,11 @@ import glob
 import numpy as np
 import tables
 import uproot
+from traitlets.config.loader import Config
+import ctapipe
 from ctapipe import io, calib
 from ctapipe import containers
-from ctapipe.image import cleaning, leakage, hillas_parameters, concentration, timing_parameters, morphology_parameters
+from ctapipe.image import cleaning, extractor, leakage, hillas_parameters, concentration, timing_parameters, morphology_parameters
 from ctapipe.instrument.camera import CameraGeometry
 from dl1_data_handler import table_definitions as table_defs
 from dl1_data_handler import dl_eventsources
@@ -896,7 +898,8 @@ class DL1DataWriter:
                  output_file_size=10737418240,
                  events_per_file=None,
                  save_mc_events=False,
-                 cleaning_settings=None):
+                 cleaning_settings=None,
+                 image_extractor_settings=None):
         """Initialize a DL1DataWriter instance.
         Provides some options for controlling the output file sizes.
         Parameters
@@ -935,6 +938,11 @@ class DL1DataWriter:
         save_mc_events : bool
             Whether to save event data for all monte carlo showers, even for
             events which did not trigger the array (no images were saved).
+        cleaning_settings : dict
+            Settings for the cleaning used to calculate the parameters like
+            Hillas, leakage etc.
+        image_extractor_settings : dict
+            Settings for the ImageExtractor for the calibration class.
         """
         self.event_source_class = event_source_class
         self.event_source_settings = (event_source_settings
@@ -956,6 +964,10 @@ class DL1DataWriter:
         self.events_per_file = events_per_file
 
         self.save_mc_events = save_mc_events
+
+        if image_extractor_settings is None:
+            image_extractor_settings = {'algorithm': 'LocalPeakWindowSum', 'args': {'window_shift': 4, 'window_width': 8}}
+        self.image_extractor_settings = image_extractor_settings
 
         if cleaning_settings is None:
             cleaning_settings = {'algorithm': 'tailcuts_clean', 'args': {'picture_thresh': 7, 'boundary_thresh': 5}}
@@ -1089,7 +1101,8 @@ class DL1DataWriter:
 
             subarray = event_source.subarray
             if filetype == "simtel":
-                calibrator = calib.camera.calibrator.CameraCalibrator(subarray=subarray)
+                image_extractor = getattr(ctapipe.image.extractor, self.image_extractor_settings['algorithm'])(subarray=subarray,config=Config(self.image_extractor_settings['args']))
+                calibrator = calib.camera.calibrator.CameraCalibrator(subarray=subarray, image_extractor=image_extractor)
             if self.selected_telescope_ids:
                 subarray = subarray.select_subarray("subarray_for_selected_telids",self.selected_telescope_ids)
             mcheader = example_event.mcheader
