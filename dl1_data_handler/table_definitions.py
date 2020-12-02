@@ -36,12 +36,21 @@ class EventTableRow(IsDescription):
         Height of shower primary particle first interaction. From Monte Carlo
         simulation parameters.
     mc_energy : tables.Float32Col
-        Energy of the shower primary particle. From Monte Carlo simulation
+        Energy of the shower primary particle in TeV. From Monte Carlo simulation
+        parameters.
+    log_mc_energy : tables.Float32Col
+        Energy of the shower primary particle in log(TeV). From Monte Carlo simulation
         parameters.
     az : tables.Float32Col
         Shower azimuth angle. From Monte Carlo simulation parameters.
     alt : tables.Float32Col
         Shower altitude (zenith) angle. From Monte Carlo simulation parameters.
+    array_pointing_az : tables.Float32Col
+        Array pointing azimuth angle.
+    array_pointing_alt : tables.Float32Col
+        Array pointing altitude (zenith) angle.
+    delta_direction : tables.Float32Col(2)
+        Angular distance of the shower azimuth and the array pointing.
 
     """
 
@@ -53,9 +62,12 @@ class EventTableRow(IsDescription):
     h_first_int = Float32Col()
     x_max = Float32Col()
     mc_energy = Float32Col()
+    log_mc_energy = Float32Col()
     az = Float32Col()
     alt = Float32Col()
-
+    array_pointing_az = Float32Col()
+    array_pointing_alt = Float32Col()
+    delta_direction = Float32Col(2)
 
 class TelTableRow(IsDescription):
     """Describe row format for telescope type table.
