@@ -42,8 +42,8 @@ def parameters_filter(reader, parameters_table, parameter, threshold_min=-np.inf
     Parameters
     ----------
     reader (DL1DataReader) : the reader to filter
-    parameters_table
-    parameter
+    parameters_table : File parameters table
+    parameter : parameter used to perform the cut
     threshold_min
     threshold_max
 
@@ -84,7 +84,8 @@ def leakage_parameters_filter(reader, parameters_table, parameter, threshold_min
     reader (DL1DataReader) : the reader to filter
     parameters_table
     parameter
-    threshold
+    threshold_min
+    threshold_max
 
     Returns
     -------
