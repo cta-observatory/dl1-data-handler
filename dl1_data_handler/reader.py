@@ -142,6 +142,7 @@ class DL1DataReader:
                                        in selected_nrows]
             elif self.mode == 'mono':
                 example_identifiers = []
+                # Determinate which parameters table loads due to user settings in the config file
                 if image_selection_from_file != {}:
                     algorithm = image_selection_from_file[next(iter(image_selection_from_file))]['algorithm']
                     parameters_table = f.root['/Parameters' + str(algorithm)][self.tel_type]
@@ -343,7 +344,8 @@ class DL1DataReader:
                     'dtype': col.dtype
                 }
             )
-            # Add event info to description
+
+        # Add event info to description
         for col_name in self.event_info:
             col = f.root.Events.cols._f_col(col_name)
             self.unprocessed_example_description.append(
@@ -408,6 +410,7 @@ class DL1DataReader:
         Parameters
         ----------
             images (tables.File): the images to filter on
+            parameters_table (tables.File) : the parameters used to filter images
             filters (dict): dictionary of `{filter_function: filter_parameters}` to apply on the data
 
         Returns
