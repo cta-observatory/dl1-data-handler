@@ -420,8 +420,9 @@ class DL1DataReader:
                 """
         mask = np.full(len(images), True)
         for filter_function, filter_parameters in filters.items():
-            filter_parameters.pop('algorithm')
-            mask &= filter_function(self, parameters_table, **filter_parameters)
+            keys_to_exclude = {'algorithm'}
+            filter_parameters_function = {k: v for k, v in filter_parameters.items() if k not in keys_to_exclude}
+            mask &= filter_function(self, parameters_table, **filter_parameters_function)
         return mask
 
     # Get a single telescope image from a particular event, uniquely
