@@ -136,6 +136,14 @@ class DL1DataReader:
             selected_nrows &= self._select_event(f, event_selection)
             selected_nrows = list(selected_nrows)
 
+            # got parameters table selected
+            if image_selection_from_file != {}:
+                algorithm = image_selection_from_file[next(iter(image_selection_from_file))]['algorithm']
+                parameters_table = f.root['/Parameters' + str(algorithm)][self.tel_type]
+            else:
+                algorithm = 0
+                parameters_table = f.root['/Parameters0'][self.tel_type]
+
             # Make list of identifiers of all examples passing event selection
             if self.mode in ['stereo', 'multi-stereo']:
                 example_identifiers = [(filename, nrow) for nrow
@@ -143,12 +151,6 @@ class DL1DataReader:
             elif self.mode == 'mono':
                 example_identifiers = []
                 # Determinate which parameters table loads due to user settings in the config file
-                if image_selection_from_file != {}:
-                    algorithm = image_selection_from_file[next(iter(image_selection_from_file))]['algorithm']
-                    parameters_table = f.root['/Parameters' + str(algorithm)][self.tel_type]
-                else:
-                    algorithm = 0
-                    parameters_table = f.root['/Parameters0'][self.tel_type]
                 field = '{}_indices'.format(self.tel_type)
                 selected_indices = f.root.Events.read_coordinates(selected_nrows, field=field)
                 for tel_id in selected_telescopes[self.tel_type]:
@@ -512,12 +514,13 @@ class DL1DataReader:
                                                             tel_type)
                 example.extend(tel_type_example)
 
-        # Load parameters
-        with lock:
-            parameters = self.files[filename].root['/Parameters' + str(self.algorithm)][self.tel_type]
-            for column in self.training_parameters:
-                dtype = parameters.cols._f_col(column).dtype
-                example.append(np.array(parameters[image_index][column], dtype=dtype))
+        # Load parameters, working only with mono mode at the moment
+        if self.mode == "mono":
+            with lock:
+                parameters = self.files[filename].root['/Parameters' + str(self.algorithm)][self.tel_type]
+                for column in self.training_parameters:
+                    dtype = parameters.cols._f_col(column).dtype
+                    example.append(np.array(parameters[image_index][column], dtype=dtype))
 
         # Load event info
         with lock:
