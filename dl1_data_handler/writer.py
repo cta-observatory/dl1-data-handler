@@ -899,6 +899,7 @@ class DL1DataWriter:
                  events_per_file=None,
                  save_mc_events=False,
                  cleaning_settings=None,
+                 gain_selector_settings=None,
                  image_extractor_settings=None):
         """Initialize a DL1DataWriter instance.
         Provides some options for controlling the output file sizes.
@@ -941,6 +942,8 @@ class DL1DataWriter:
         cleaning_settings : dict
             Settings for the cleaning used to calculate the parameters like
             Hillas, leakage etc.
+        gain_selector_settings: dict
+            Settings for the GainSelector.
         image_extractor_settings : dict
             Settings for the ImageExtractor for the calibration class.
         """
@@ -964,6 +967,10 @@ class DL1DataWriter:
         self.events_per_file = events_per_file
 
         self.save_mc_events = save_mc_events
+
+        if gain_selector_settings is None:
+            gain_selector_settings = {'algorithm': 'ThresholdGainSelector', 'args': {'threshold': 3500}}
+        self.gain_selector_settings = gain_selector_settings
 
         if image_extractor_settings is None:
             image_extractor_settings = {'algorithm': 'LocalPeakWindowSum', 'args': {'window_shift': 4, 'window_width': 8}}
@@ -1108,13 +1115,19 @@ class DL1DataWriter:
             mcheader = example_event.mcheader
             data_dumper.prepare_file(filename, subarray, mcheader, self.cleaning_settings)
 
+            gain_selector = getattr(ctapipe.calib.camera.gainselection, self.gain_selector_settings['algorithm'])(config=Config(self.gain_selector_settings['args']))
+
             # Write all events sequentially
             for event in event_source:
+                tels_id = event.r1.tels_with_data
+
+                for tel_id in tels_id:
+                    if tel_id not in self.selected_telescope_ids:
+                        event.r1.tel[tel_id].selected_gain_channel = gain_selector(event.r0.tel[tel_id].waveform)
 
                 if filetype == "simtel":
                     calibrator(event)
 
-                tels_id = event.r1.tels_with_data 
                 for tel_id in tels_id:
                     if tel_id not in self.selected_telescope_ids:
                         continue
