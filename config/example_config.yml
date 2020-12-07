@@ -16,6 +16,11 @@ Data Writer:
     # Telescope ids dumped to file. Specify the telescopes to write to the the output file.
     selected_telescope_ids: [1]
     #selected_telescope_ids: [1,2,3,4]
+    # Settinigs for the GainSelector
+    gain_selector_settings:
+        algorithm: 'ThresholdGainSelector'
+        args:
+            threshold: 3500
     # Settings for the ImageExtractor for the calibration class.
     image_extractor_settings:
         algorithm: 'LocalPeakWindowSum'
