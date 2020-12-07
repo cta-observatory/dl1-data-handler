@@ -1121,11 +1121,10 @@ class DL1DataWriter:
             for event in event_source:
                 tels_id = event.r1.tels_with_data
 
-                for tel_id in tels_id:
-                    if tel_id not in self.selected_telescope_ids:
-                        event.r1.tel[tel_id].selected_gain_channel = gain_selector(event.r0.tel[tel_id].waveform)
-
                 if filetype == "simtel":
+                    for tel_id in tels_id:
+                        if tel_id not in self.selected_telescope_ids:
+                            event.r1.tel[tel_id].selected_gain_channel = gain_selector(event.r0.tel[tel_id].waveform)
                     calibrator(event)
 
                 for tel_id in tels_id:
