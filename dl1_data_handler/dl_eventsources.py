@@ -169,11 +169,11 @@ class DLMAGICEventSource(EventSource):
         eventid_M1 = np.asarray(self.event_M1["MRawEvtHeader.fStereoEvtNumber"].array())
         eventid_M2 = np.asarray(self.event_M2["MRawEvtHeader.fStereoEvtNumber"].array())
         
-        src_pos_cam_Y = np.asarray(self.event_M1["MSrcPosCam.fY"].array())
+        zenith = np.asarray(self.event_M1["MMcEvt.fTheta"].array())
         
         pointing_altitude = np.asarray(self.event_M1["MPointingPos.fZd"].array())
         
-        src_pos_cam_X = np.asarray(self.event_M1["MSrcPosCam.fX"].array())
+        azimuth = np.asarray(self.event_M1["MMcEvt.fPhi"].array())
         
         pointing_azimuth = np.asarray(self.event_M1["MPointingPos.fAz"].array())
         
@@ -220,19 +220,19 @@ class DLMAGICEventSource(EventSource):
                 data.r1.tel.clear()
                 data.dl0.tel.clear()
                 
+                data.pointing.array_altitude = u.Quantity(np.deg2rad(90.0 - pointing_altitude[i]), u.rad)
+                data.pointing.array_azimuth = u.Quantity(np.deg2rad(pointing_azimuth[i]), u.rad)
+
                 # Filling the DL1 container with the event data
                 for tel_i, tel_id in enumerate(tels_in_file):
                     
                     #Adding telescope pointing container
-
                     data.pointing.tel[tel_i+1].azimuth = u.Quantity(np.deg2rad(pointing_azimuth[i]), u.rad)
                     data.pointing.tel[tel_i+1].altitude = u.Quantity(np.deg2rad(90.0 - pointing_altitude[i]), u.rad)
                     
-                    
                     #Adding MC data
-                    #The src_pos_cam_X/src_pos_cam_Y values are stored as alt/az to follow the generic data format.
-                    data.mc.alt = Angle(np.deg2rad(src_pos_cam_Y[i] * 0.00337), u.rad)
-                    data.mc.az = Angle(np.deg2rad(src_pos_cam_X[i] * 0.00337), u.rad)
+                    data.mc.alt = Angle(np.pi/2.0 - zenith[i], u.rad)
+                    data.mc.az = Angle(np.deg2rad(180.0-7.0) - azimuth[i], u.rad)
                     data.mc.x_max = u.Quantity(0, X_MAX_UNIT)
                     data.mc.h_first_int = u.Quantity(h_first_int[i], u.m)
                     data.mc.core_x = u.Quantity(core_x[i], u.m)
