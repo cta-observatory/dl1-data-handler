@@ -1,6 +1,12 @@
+# If you would like to use the DLMAGICEventSource with superstar files,
+# make sure you had run "star" with flags "-saveimages -saveimagesclean -savecerevt".
+# i.e.:
+# $ star -b -f -mc -q -saveimages -saveimagesclean -savecerevt --config=mrcfiles/star_M{1,2}_OSA.rc --ind="/home/tjark/MAGIC_files/cal/*M{1,2}*_Y_*.root" --out="/home/tjark/MAGIC_files/starM{1,2}/" --log=/home/tjark/MAGIC_files/starM{1,2}/LogFile.txt
+# $ superstar -q -b -f -mc --config=mrcfiles/superstar.rc --ind1=/home/tjark/MAGIC_files/starM1/GA_M1_za05to35_8_*_I_w0.root --ind2=/home/tjark/MAGIC_files/starM2/GA_M2_za05to35_8_*_I_w0.root --out=/home/tjark/MAGIC_files/superstar/ --log=/home/tjark/MAGIC_files/superstar/logfile.txt
+
 from astropy import units as u
 from astropy.coordinates import Angle
-from ctapipe.containers import DataContainer, TelescopePointingContainer
+from ctapipe.containers import DataContainer, TelescopePointingContainer, LeakageContainer, HillasParametersContainer, ConcentrationContainer, TimingParametersContainer, MorphologyContainer
 from ctapipe.instrument import TelescopeDescription, SubarrayDescription, OpticsDescription, CameraGeometry, CameraReadout, CameraDescription
 from ctapipe.io.eventsource import EventSource
 from dl1_data_handler import containers
@@ -15,7 +21,7 @@ class DLMAGICEventSource(EventSource):
     def __init__(self, **kwargs):
         """
         Constructor
-        
+
         Parameters
         ----------
         kwargs: dict
@@ -27,24 +33,22 @@ class DLMAGICEventSource(EventSource):
             import uproot
         except ImportError:
             raise ImportError("The 'uproot' package is required for the DLMAGICEventSource class.")
-        
+
         self.file_list = glob.glob(kwargs['input_url'])
         self.file_list.sort()
 
         # Since EventSource can not handle file wild cards as input_url
         # We substitute the input_url with first file matching
         # the specified file mask.
-        
         del kwargs['input_url']
         super().__init__(input_url=self.file_list[0], **kwargs)
-        
-        # get run number
-        mask = r".*_M\d_za\d+to\d+_\d_(\d+)_Y_.*"
-        parsed_info = re.findall(mask, self.file_list[0])
-        self.run_number = parsed_info[0]
-        
-        # MAGIC telescope positions in m wrt. to the center of CTA simulations
 
+        # get run number
+        mask = r".*_za\d+to\d+_\d_(\d+)_([A-Z]+)_.*"
+        parsed_info = re.findall(mask, self.file_list[0])
+        self.run_number = parsed_info[0][0]
+
+        # MAGIC telescope positions in m wrt. to the center of CTA simulations
         self.magic_tel_positions = {
             1: [-27.24, -146.66, 50.00] * u.m,
             2: [-96.44, -96.77, 51.00] * u.m
@@ -60,13 +64,25 @@ class DLMAGICEventSource(EventSource):
         self.magic_tel_descriptions = {1: self.magic_tel_description, 2: self.magic_tel_description}
         self.magic_subarray = SubarrayDescription('MAGIC', self.magic_tel_positions, self.magic_tel_descriptions)
         # Open ROOT files
-        file1 = uproot.open(self.file_list[0])
-        self.event_M1 = file1["Events"]
-        file2 = uproot.open(self.file_list[1])
-        self.event_M2 = file2["Events"]
-        self.meta = file1["RunHeaders"]
+        self.calib_M1, self.calib_M2, self.star_M1, self.star_M2, self.superstar = None, None, None, None, None
+        for file in self.file_list:
+            uproot_file = uproot.open(file)
+            if "_Y_" in file:
+                if "_M1_" in file:
+                    self.calib_M1 = uproot_file["Events"]
+                    self.meta = uproot_file["RunHeaders"]
+                elif "_M2_" in file:
+                    self.calib_M2 = uproot_file["Events"]
+            if "_I_"in file:
+                if "_M1_" in file:
+                    self.star_M1 = uproot_file["Events"]
+                elif "_M2_" in file:
+                    self.star_M2 = uproot_file["Events"]
+            if "_S_" in file:
+                self.superstar = uproot_file["Events"]
+                self.meta = uproot_file["RunHeaders"]
         self._mc_header = self._parse_mc_header()
-        
+
     @property
     def is_simulation(self):
         """
@@ -154,10 +170,10 @@ class DLMAGICEventSource(EventSource):
         """
         Stereo event generator. Yields DataContainer instances, filled
         with the read event data.
-        
+
         Returns
         -------
-        
+
         """
         counter = 0
         data = DataContainer()
@@ -165,45 +181,82 @@ class DLMAGICEventSource(EventSource):
         data.meta['input_url'] = self.input_url
         data.meta['is_simulation'] = True
         data.mcheader = self._mc_header
-        #Reading data from root file for Events table
-        eventid_M1 = np.asarray(self.event_M1["MRawEvtHeader.fStereoEvtNumber"].array())
-        eventid_M2 = np.asarray(self.event_M2["MRawEvtHeader.fStereoEvtNumber"].array())
-        
-        zenith = np.asarray(self.event_M1["MMcEvt.fTheta"].array())
-        
-        pointing_altitude = np.asarray(self.event_M1["MPointingPos.fZd"].array())
-        
-        azimuth = np.asarray(self.event_M1["MMcEvt.fPhi"].array())
-        
-        pointing_azimuth = np.asarray(self.event_M1["MPointingPos.fAz"].array())
-        
-        core_x = np.asarray(self.event_M1["MMcEvt.fCoreX"].array())
-        core_y = np.asarray(self.event_M1["MMcEvt.fCoreY"].array())
-        
-        mc_energy = np.asarray(self.event_M1["MMcEvt.fEnergy"].array())/1000.0
-        h_first_int = np.asarray(self.event_M1["MMcEvt.fZFirstInteraction"].array())
-        
-        mask = r".([A-Z]+)_M\d_za\d+to\d+_\d_\d+_Y_.*"
-        primary_id = re.findall(mask, self.file_list[0])[0]
-        if primary_id == 'GA':
+
+        if self.calib_M1 is not None and self.calib_M2 is not None:
+            #Reading data from root file for Events table
+            eventid_M1 = np.asarray(self.calib_M1["MRawEvtHeader.fStereoEvtNumber"].array())
+            eventid_M2 = np.asarray(self.calib_M2["MRawEvtHeader.fStereoEvtNumber"].array())
+            zenith = np.asarray(self.calib_M1["MMcEvt.fTheta"].array())
+            pointing_altitude = np.asarray(self.calib_M1["MPointingPos.fZd"].array())
+            azimuth = np.asarray(self.calib_M1["MMcEvt.fPhi"].array())
+            pointing_azimuth = np.asarray(self.calib_M1["MPointingPos.fAz"].array())
+            core_x = np.asarray(self.calib_M1["MMcEvt.fCoreX"].array())
+            core_y = np.asarray(self.calib_M1["MMcEvt.fCoreY"].array())
+            mc_energy = np.asarray(self.calib_M1["MMcEvt.fEnergy"].array())/1000.0
+            h_first_int = np.asarray(self.calib_M1["MMcEvt.fZFirstInteraction"].array())
+
+            #Reading data from root file for Image table
+            charge_M1 = np.asarray(self.calib_M1["MCerPhotEvt.fPixels.fPhot"].array())
+            peak_time_M1 = np.asarray(self.calib_M1["MArrivalTime.fData"].array())
+            charge_M2 = np.asarray(self.calib_M2["MCerPhotEvt.fPixels.fPhot"].array())
+            peak_time_M2 = np.asarray(self.calib_M2["MArrivalTime.fData"].array())
+
+        if self.superstar is not None:
+            #Reading data from root file for Events table
+            eventid_M1 = np.asarray(self.superstar["MRawEvtHeader_1.fStereoEvtNumber"].array())
+            eventid_M2 = np.asarray(self.superstar["MRawEvtHeader_2.fStereoEvtNumber"].array())
+            zenith = np.asarray(self.superstar["MMcEvt_1.fTheta"].array())
+            pointing_altitude = np.asarray(self.superstar["MPointingPos_1.fZd"].array())
+            azimuth = np.asarray(self.superstar["MMcEvt_1.fPhi"].array())
+            pointing_azimuth = np.asarray(self.superstar["MPointingPos_1.fAz"].array())
+            core_x = np.asarray(self.superstar["MMcEvt_1.fCoreX"].array())
+            core_y = np.asarray(self.superstar["MMcEvt_1.fCoreY"].array())
+            mc_energy = np.asarray(self.superstar["MMcEvt_1.fEnergy"].array())/1000.0
+            h_first_int = np.asarray(self.superstar["MMcEvt_1.fZFirstInteraction"].array())
+
+            #Reading data from root file for Parameter table
+            hillas_intensity_M1 = np.asarray(self.superstar["MHillas_1.fSize"].array())
+            hillas_intensity_M2 = np.asarray(self.superstar["MHillas_2.fSize"].array())
+            hillas_x_M1 = np.asarray(self.superstar["MHillas_1.fMeanX"].array())
+            hillas_x_M2 = np.asarray(self.superstar["MHillas_2.fMeanX"].array())
+            hillas_y_M1 = np.asarray(self.superstar["MHillas_1.fMeanY"].array())
+            hillas_y_M2 = np.asarray(self.superstar["MHillas_2.fMeanY"].array())
+            hillas_r_M1 = np.sqrt(np.power(hillas_x_M1,2)+np.power(hillas_y_M1,2))
+            hillas_r_M2 = np.sqrt(np.power(hillas_x_M2,2)+np.power(hillas_y_M2,2))
+            hillas_phi_M1 = np.arctan2(hillas_y_M1, hillas_x_M1)
+            hillas_phi_M2 = np.arctan2(hillas_y_M2, hillas_x_M2)
+            hillas_length_M1 = np.asarray(self.superstar["MHillas_1.fLength"].array())
+            hillas_length_M2 = np.asarray(self.superstar["MHillas_2.fLength"].array())
+            hillas_width_M1 = np.asarray(self.superstar["MHillas_1.fWidth"].array())
+            hillas_width_M2 = np.asarray(self.superstar["MHillas_2.fWidth"].array())
+            hillas_psi_M1 = np.asarray(self.superstar["MHillas_1.fDelta"].array())
+            hillas_psi_M2 = np.asarray(self.superstar["MHillas_2.fDelta"].array())
+            hillas_skewness_M1 = np.asarray(self.superstar["MHillasExt_1.fM3Long"].array())
+            hillas_skewness_M2 = np.asarray(self.superstar["MHillasExt_2.fM3Long"].array())
+
+            leakage_intensity_1_M1 = np.asarray(self.superstar["MNewImagePar_1.fLeakage1"].array())
+            leakage_intensity_1_M2 = np.asarray(self.superstar["MNewImagePar_2.fLeakage1"].array())
+            leakage_intensity_2_M1 = np.asarray(self.superstar["MNewImagePar_1.fLeakage2"].array())
+            leakage_intensity_2_M2 = np.asarray(self.superstar["MNewImagePar_2.fLeakage2"].array())
+
+            num_islands_M1 = np.asarray(self.superstar["MCerPhotEvt_1.fNumIslands"].array())
+            num_islands_M2 = np.asarray(self.superstar["MCerPhotEvt_2.fNumIslands"].array())
+
+            #Reading data from root file for Image table (peak time and image mask not )
+            charge_M1 = np.asarray(self.superstar["MCerPhotEvt_1.fPixels.fPhot"].array())
+            peak_time_M1 = np.zeros((charge_M1.shape[0], 1039))
+            image_mask_M1 = np.zeros((charge_M1.shape[0], 1039), dtype=bool)
+            charge_M2 = np.asarray(self.superstar["MCerPhotEvt_2.fPixels.fPhot"].array())
+            peak_time_M2 = np.zeros((charge_M2.shape[0], 1039))
+            image_mask_M2 = np.zeros((charge_M2.shape[0], 1039), dtype=bool)
+
+        # Get the shower primary id
+        shower_primary_id = 1
+        if self.file_list[0].split("/")[-1].startswith("GA"):
             shower_primary_id = 1
-            
-        stereo_total = np.max(eventid_M1)        
-        #Reading data from root file for Image table
-        
-        charge_M1 = self.event_M1["MCerPhotEvt.fPixels.fPhot"].array()
-        peak_time_M1 = self.event_M1["MArrivalTime.fData"].array()
-        charge_M1 = np.asarray(charge_M1)
-        peak_time_M1 = np.asarray(peak_time_M1)
-        
-        charge_M2 = self.event_M2["MCerPhotEvt.fPixels.fPhot"].array()
-        peak_time_M2 = self.event_M2["MArrivalTime.fData"].array()
-        charge_M2 = np.asarray(charge_M2)
-        peak_time_M2 = np.asarray(peak_time_M2)
-        
-        total_events = min(len(self.event_M1["MCerPhotEvt.fPixels.fPhot"].array()), len(self.event_M2["MCerPhotEvt.fPixels.fPhot"].array()))
+
         #Iterating over all events, and saving only stereo ones
-        tels_in_file = ["m1", "m2"]
+        total_events = min(len(charge_M1), len(charge_M2))
         tels_with_data = {1,2}
         for i in range(0, total_events):
             if eventid_M1[i] != 0:
@@ -219,17 +272,17 @@ class DLMAGICEventSource(EventSource):
                 data.r0.tel.clear()
                 data.r1.tel.clear()
                 data.dl0.tel.clear()
-                
+
+                # Adding the array pointing in the pointing container
                 data.pointing.array_altitude = u.Quantity(np.deg2rad(90.0 - pointing_altitude[i]), u.rad)
                 data.pointing.array_azimuth = u.Quantity(np.deg2rad(pointing_azimuth[i]), u.rad)
 
                 # Filling the DL1 container with the event data
-                for tel_i, tel_id in enumerate(tels_in_file):
-                    
+                for tel_id in tels_with_data:
                     #Adding telescope pointing container
-                    data.pointing.tel[tel_i+1].azimuth = u.Quantity(np.deg2rad(pointing_azimuth[i]), u.rad)
-                    data.pointing.tel[tel_i+1].altitude = u.Quantity(np.deg2rad(90.0 - pointing_altitude[i]), u.rad)
-                    
+                    data.pointing.tel[tel_id].azimuth = u.Quantity(np.deg2rad(pointing_azimuth[i]), u.rad)
+                    data.pointing.tel[tel_id].altitude = u.Quantity(np.deg2rad(90.0 - pointing_altitude[i]), u.rad)
+
                     #Adding MC data
                     data.mc.alt = Angle(np.pi/2.0 - zenith[i], u.rad)
                     data.mc.az = Angle(np.deg2rad(180.0-7.0) - azimuth[i], u.rad)
@@ -239,14 +292,66 @@ class DLMAGICEventSource(EventSource):
                     data.mc.core_y = u.Quantity(core_y[i], u.m)
                     data.mc.energy = u.Quantity(mc_energy[i], u.TeV)
                     data.mc.shower_primary_id = shower_primary_id
-                    # Adding event charge and peak positions per pixel
-                    if tel_i == 0:
-                        data.dl1.tel[tel_i + 1].image = charge_M1[i][:1039]
-                        data.dl1.tel[tel_i + 1].peak_time = peak_time_M1[i][:1039]
+
+                    if self.superstar is not None:
+                        leakage_values = LeakageContainer()
+                        hillas_parameters_values = HillasParametersContainer()
+                        concentration_values = ConcentrationContainer()
+                        timing_values = TimingParametersContainer()
+                        morphology_values = MorphologyContainer()
+
+                    # Adding charge, peak time and parameters
+                    if tel_id == 1:
+                        data.dl1.tel[tel_id].image = charge_M1[i][:1039]
+                        data.dl1.tel[tel_id].peak_time = peak_time_M1[i][:1039]
+                        if self.superstar is not None:
+                            data.dl1.tel[tel_id].image_mask = image_mask_M1[i][:1039]
+
+                            hillas_parameters_values["intensity"] = hillas_intensity_M1[i]
+                            hillas_parameters_values["x"] = u.Quantity(hillas_x_M1[i], unit=u.mm)
+                            hillas_parameters_values["y"] = u.Quantity(hillas_y_M1[i], unit=u.mm)
+                            hillas_parameters_values["r"] = u.Quantity(hillas_r_M1[i], unit=u.mm)
+                            hillas_parameters_values["phi"] = u.Quantity(hillas_phi_M1[i], unit=u.rad)
+                            hillas_parameters_values["length"] = u.Quantity(hillas_length_M1[i], unit=u.mm)
+                            hillas_parameters_values["width"] = u.Quantity(hillas_width_M1[i], unit=u.mm)
+                            hillas_parameters_values["psi"] = u.Quantity(hillas_psi_M1[i], unit=u.rad)
+                            hillas_parameters_values["skewness"] = hillas_skewness_M1[i]
+
+                            leakage_values["intensity_width_1"] = leakage_intensity_1_M1[i]
+                            leakage_values["intensity_width_2"] = leakage_intensity_2_M1[i]
+
+                            morphology_values["num_pixels"] = 1039
+                            morphology_values["num_islands"] = num_islands_M1[i]
+
                     else:
-                        data.dl1.tel[tel_i + 1].image = charge_M2[i][:1039]
-                        data.dl1.tel[tel_i + 1].peak_time = peak_time_M2[i][:1039]
-                
+                        data.dl1.tel[tel_id].image = charge_M2[i][:1039]
+                        data.dl1.tel[tel_id].peak_time = peak_time_M2[i][:1039]
+                        if self.superstar is not None:
+                            data.dl1.tel[tel_id].image_mask = image_mask_M2[i][:1039]
+
+                            hillas_parameters_values["intensity"] = hillas_intensity_M2[i]
+                            hillas_parameters_values["x"] = u.Quantity(hillas_x_M2[i], unit=u.mm)
+                            hillas_parameters_values["y"] = u.Quantity(hillas_y_M2[i], unit=u.mm)
+                            hillas_parameters_values["r"] = u.Quantity(hillas_r_M2[i], unit=u.mm)
+                            hillas_parameters_values["phi"] = u.Quantity(hillas_phi_M2[i], unit=u.rad)
+                            hillas_parameters_values["length"] = u.Quantity(hillas_length_M2[i], unit=u.mm)
+                            hillas_parameters_values["width"] = u.Quantity(hillas_width_M2[i], unit=u.mm)
+                            hillas_parameters_values["psi"] = u.Quantity(hillas_psi_M2[i], unit=u.rad)
+                            hillas_parameters_values["skewness"] = hillas_skewness_M2[i]
+
+                            leakage_values["intensity_width_1"] = leakage_intensity_1_M2[i]
+                            leakage_values["intensity_width_2"] = leakage_intensity_2_M2[i]
+
+                            morphology_values["num_pixels"] = 1039
+                            morphology_values["num_islands"] =  num_islands_M2[i]
+
+                    if self.superstar is not None:
+                        data.dl1.tel[tel_id].parameters.leakage = leakage_values
+                        data.dl1.tel[tel_id].parameters.hillas = hillas_parameters_values
+                        data.dl1.tel[tel_id].parameters.concentration = concentration_values
+                        data.dl1.tel[tel_id].parameters.timing = timing_values
+                        data.dl1.tel[tel_id].parameters.morphology = morphology_values
+
                 # Setting the telescopes with data
                 data.r0.tels_with_data = tels_with_data
                 data.r1.tels_with_data = tels_with_data
@@ -257,42 +362,43 @@ class DLMAGICEventSource(EventSource):
                 counter += 1
         return
     def _parse_mc_header(self):
+        run_header = "MMcRunHeader" if self.superstar is None else "MMcRunHeader_1"
         return containers.MAGICMCHeaderContainer(
-            corsika_version = self.meta["MMcRunHeader.fCorsikaVersion"].array()[0],
-            refl_version = self.meta["MMcRunHeader.fReflVersion"].array()[0],
-            cam_version = self.meta["MMcRunHeader.fCamVersion"].array()[0],
-            run_number = self.meta["MMcRunHeader.fMcRunNumber"].array()[0],
-            prod_site = self.meta["MMcRunHeader.fProductionSite"].array()[0],
-            date_run_mmcs = self.meta["MMcRunHeader.fDateRunMMCs"].array()[0],
-            date_run_cam = self.meta["MMcRunHeader.fDateRunCamera"].array()[0],
-            shower_theta_max = Angle(self.meta["MMcRunHeader.fShowerThetaMax"].array()[0], u.deg),
-            shower_theta_min = Angle(self.meta["MMcRunHeader.fShowerThetaMin"].array()[0], u.deg),
-            shower_phi_max = Angle(self.meta["MMcRunHeader.fShowerPhiMax"].array()[0], u.deg),
-            shower_phi_min = Angle(self.meta["MMcRunHeader.fShowerPhiMin"].array()[0], u.deg),
-            c_wave_lower = self.meta["MMcRunHeader.fCWaveLower"].array()[0],
-            c_wave_upper = self.meta["MMcRunHeader.fCWaveUpper"].array()[0],
-            num_obs_lev = self.meta["MMcRunHeader.fNumObsLev"].array()[0],
-            height_lev = self.meta["MMcRunHeader.fHeightLev[10]"].array(),
-            slope_spec = self.meta["MMcRunHeader.fSlopeSpec"].array()[0],
-            rand_pointing_cone_semi_angle = Angle(self.meta["MMcRunHeader.fRandomPointingConeSemiAngle"].array()[0], u.deg),
-            impact_max = self.meta["MMcRunHeader.fImpactMax"].array()[0],
-            star_field_rotate = self.meta["MMcRunHeader.fStarFieldRotate"].array()[0],
-            star_field_ra_h = self.meta["MMcRunHeader.fStarFieldRaH"].array()[0],
-            star_field_ra_m = self.meta["MMcRunHeader.fStarFieldRaM"].array()[0],
-            star_field_ra_s = self.meta["MMcRunHeader.fStarFieldRaS"].array()[0],
-            star_field_dec_d = self.meta["MMcRunHeader.fStarFieldDeD"].array()[0],
-            star_field_dec_m = self.meta["MMcRunHeader.fStarFieldDeM"].array()[0],
-            star_field_dec_s = self.meta["MMcRunHeader.fStarFieldDeS"].array()[0],
-            num_trig_cond = self.meta["MMcRunHeader.fNumTrigCond"].array()[0],
-            all_evts_trig = self.meta["MMcRunHeader.fAllEvtsTriggered"].array()[0],
-            mc_evt = self.meta["MMcRunHeader.fMcEvt"].array()[0],
-            mc_trig = self.meta["MMcRunHeader.fMcTrig"].array()[0],
-            mc_fadc = self.meta["MMcRunHeader.fMcFadc"].array()[0],
-            raw_evt = self.meta["MMcRunHeader.fRawEvt"].array()[0],
-            num_analised_pix = self.meta["MMcRunHeader.fNumAnalisedPixels"].array()[0],
-            num_simulated_showers = self.meta["MMcRunHeader.fNumSimulatedShowers"].array()[0],
-            num_stored_showers = self.meta["MMcRunHeader.fNumStoredShowers"].array()[0],
-            num_events = self.meta["MMcRunHeader.fNumEvents"].array()[0],
-            num_phe_from_dnsb = self.meta["MMcRunHeader.fNumPheFromDNSB"].array()[0],
-            elec_noise = self.meta["MMcRunHeader.fElecNoise"].array()[0],
-            optic_links_noise = self.meta["MMcRunHeader.fOpticLinksNoise"].array()[0] )
+            corsika_version = self.meta["{}.fCorsikaVersion".format(run_header)].array()[0],
+            refl_version = self.meta["{}.fReflVersion".format(run_header)].array()[0],
+            cam_version = self.meta["{}.fCamVersion".format(run_header)].array()[0],
+            run_number = self.meta["{}.fMcRunNumber".format(run_header)].array()[0],
+            prod_site = self.meta["{}.fProductionSite".format(run_header)].array()[0],
+            date_run_mmcs = self.meta["{}.fDateRunMMCs".format(run_header)].array()[0],
+            date_run_cam = self.meta["{}.fDateRunCamera".format(run_header)].array()[0],
+            shower_theta_max = Angle(self.meta["{}.fShowerThetaMax".format(run_header)].array()[0], u.deg),
+            shower_theta_min = Angle(self.meta["{}.fShowerThetaMin".format(run_header)].array()[0], u.deg),
+            shower_phi_max = Angle(self.meta["{}.fShowerPhiMax".format(run_header)].array()[0], u.deg),
+            shower_phi_min = Angle(self.meta["{}.fShowerPhiMin".format(run_header)].array()[0], u.deg),
+            c_wave_lower = self.meta["{}.fCWaveLower".format(run_header)].array()[0],
+            c_wave_upper = self.meta["{}.fCWaveUpper".format(run_header)].array()[0],
+            num_obs_lev = self.meta["{}.fNumObsLev".format(run_header)].array()[0],
+            height_lev = self.meta["{}.fHeightLev[10]".format(run_header)].array(),
+            slope_spec = self.meta["{}.fSlopeSpec".format(run_header)].array()[0],
+            rand_pointing_cone_semi_angle = Angle(self.meta["{}.fRandomPointingConeSemiAngle".format(run_header)].array()[0], u.deg),
+            impact_max = self.meta["{}.fImpactMax".format(run_header)].array()[0],
+            star_field_rotate = self.meta["{}.fStarFieldRotate".format(run_header)].array()[0],
+            star_field_ra_h = self.meta["{}.fStarFieldRaH".format(run_header)].array()[0],
+            star_field_ra_m = self.meta["{}.fStarFieldRaM".format(run_header)].array()[0],
+            star_field_ra_s = self.meta["{}.fStarFieldRaS".format(run_header)].array()[0],
+            star_field_dec_d = self.meta["{}.fStarFieldDeD".format(run_header)].array()[0],
+            star_field_dec_m = self.meta["{}.fStarFieldDeM".format(run_header)].array()[0],
+            star_field_dec_s = self.meta["{}.fStarFieldDeS".format(run_header)].array()[0],
+            num_trig_cond = self.meta["{}.fNumTrigCond".format(run_header)].array()[0],
+            all_evts_trig = self.meta["{}.fAllEvtsTriggered".format(run_header)].array()[0],
+            mc_evt = self.meta["{}.fMcEvt".format(run_header)].array()[0],
+            mc_trig = self.meta["{}.fMcTrig".format(run_header)].array()[0],
+            mc_fadc = self.meta["{}.fMcFadc".format(run_header)].array()[0],
+            raw_evt = self.meta["{}.fRawEvt".format(run_header)].array()[0],
+            num_analised_pix = self.meta["{}.fNumAnalisedPixels".format(run_header)].array()[0],
+            num_simulated_showers = self.meta["{}.fNumSimulatedShowers".format(run_header)].array()[0],
+            num_stored_showers = self.meta["{}.fNumStoredShowers".format(run_header)].array()[0],
+            num_events = self.meta["{}.fNumEvents".format(run_header)].array()[0],
+            num_phe_from_dnsb = self.meta["{}.fNumPheFromDNSB".format(run_header)].array()[0],
+            elec_noise = self.meta["{}.fElecNoise".format(run_header)].array()[0],
+            optic_links_noise = self.meta["{}.fOpticLinksNoise".format(run_header)].array()[0] )
