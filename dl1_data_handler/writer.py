@@ -398,6 +398,7 @@ class CTAMLDataDumper(DL1DataDumper):
             event_row['delta_direction'] = np.array([event_row['az']-event_row['array_pointing_az'],
                                            event_row['alt']-event_row['array_pointing_alt']])
 
+        store_event = False
         for tel_type in self.subarray:
             image_table = self.file.get_node(
                 '/Images/' + str(tel_type),
@@ -405,6 +406,16 @@ class CTAMLDataDumper(DL1DataDumper):
             image_row = image_table.row
 
             index_vector = []
+            for tel_id in self.subarray[tel_type]:
+                if tel_id in event_container.dl1.tel:
+                    index_vector.append(self.image_indices[tel_type])
+                    self.image_indices[tel_type] += 1
+                else:
+                    index_vector.append(0)
+            if not np.any(index_vector):
+                continue
+            store_event = True
+
             for tel_id in self.subarray[tel_type]:
                 if tel_id in event_container.dl1.tel:
                     image_row['charge'] = event_container.dl1.tel[tel_id].image
@@ -563,18 +574,14 @@ class CTAMLDataDumper(DL1DataDumper):
                         parameter_row.append()
 
                     image_row.append()
-                    index_vector.append(self.image_indices[tel_type])
-
-                    self.image_indices[tel_type] += 1
-                else:
-                    index_vector.append(0)
 
             event_row[str(tel_type) + '_indices'] = index_vector
             event_row[str(tel_type) + '_multiplicity'] = sum(
                 index > 0 for index in index_vector)
 
-        event_row.append()
-        self.event_index += 1
+        if store_event:
+            event_row.append()
+            self.event_index += 1
 
     def dump_mc_event(self, eventio_mc_event, obs_id):
         """Dump eventio event data (event params and images) to output file.
