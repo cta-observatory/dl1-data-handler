@@ -267,14 +267,14 @@ class CTAMLDataDumper(DL1DataDumper):
                             row["camera"].decode('utf-8') == str(tel_desc.camera) and
                             row["num_pixels"] == len(subarray.tel[tel_id].camera.geometry.pix_id) and
                             np.allclose(row["pixel_positions"], pos) and
-                            np.around(row["pix_rotation"], decimals=1) == pix_rotation and
+                            np.around(row["pix_rotation"], decimals=1) == np.around(pix_rotation,1) and
                             row["cam_rotation"] == cam_rotation]
 
                 if len(rows) != 1:
                     for row in tel_table.iterrows():
                         logger.error("{}, {}, {}, {}, {}, {}".format(row["type"].decode('utf-8'), row["optics"].decode('utf-8'), row["camera"].decode('utf-8'), row["num_pixels"], row["pix_rotation"], row["cam_rotation"]))
                         logger.error(row["pixel_positions"])
-                    logger.error("New input file: {}-{}-{}-{}".format(str(tel_desc), str(tel_desc.optics), str(tel_desc.camera), len(subarray.tel[tel_id].camera.geometry.pix_id)))
+                    logger.error("New input file: {}-{}-{}-{}-{}-{}".format(str(tel_desc), str(tel_desc.optics), str(tel_desc.camera), len(subarray.tel[tel_id].camera.geometry.pix_id), pix_rotation, cam_rotation))
                     logger.error(pos)
                     raise ValueError("Failed to validate telescope type description in Telescope_Type_Information.")
         else:
