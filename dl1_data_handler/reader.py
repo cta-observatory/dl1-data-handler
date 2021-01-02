@@ -172,14 +172,17 @@ class DL1DataReader:
                             example_identifiers.append((filename, nrow,
                                                         image_index, tel_id))
                     else:
+                        param_list = []
+                        for parameter_name in self.training_parameters:
+                            if (parameter_name != 'event_index'):
+                                param = [x[parameter_name] for x in parameters_table]
+                                param_list.append(param)
                         for image_index, nrow in zip(img_ids[mask], np.array(selected_nrows)[mask]):
                             temp_list = []
-                            for parameter_name in self.training_parameters:
-                                if (parameter_name != 'event_index'):
-                                    param = [x[parameter_name] for x in parameters_table]
-                                    temp_list.append(param[image_index])
+                            for list_index in range(len(param_list)):
+                                params_value = param_list[list_index][image_index]
+                                temp_list.append(params_value)
                             example_identifiers.append((filename, nrow, image_index, tel_id, temp_list))
-
             # Confirm that the files are consistent and merge them
             if not self.telescopes:
                 self.telescopes = telescopes
