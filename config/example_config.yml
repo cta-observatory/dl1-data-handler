@@ -8,9 +8,9 @@ Data Writer:
     # Cut function to be used to exclude events from being dumped. Should follow
     #preselection_cut_function: None
     # Maximum output file size (in bytes). After this limit is reached, the dumper will finish the existing file and start a new one. Comment out this setting to set no limit.
-    output_file_size: 1073741824
+    output_file_size: 107374182400
     # Maximum number of (triggered) events per file. After this limit is reached, the dumper will finish the existing file and start a new one. Comment out this setting to set no limit. 
-    events_per_file: 10000
+    events_per_file: 1000000
     # Boolean flag indicating whether to save non-triggered Monte Carlo events in a separate MC_Events table.
     save_mc_events: False
     # Telescope ids dumped to file. Specify the telescopes to write to the the output file.
@@ -53,16 +53,16 @@ Data Dumper:
       complevel: 1
     # Expected number of telescope types (rows in the Telescope_Type_Descriptions table). This is just an approximate value which is used for
     # optimizing the chunking.
-    expected_tel_types: 10
+    expected_tel_types: 1
     # Expected number of telescopes (rows in the Array_Description table). This is just an approximate value which is used for
     # optimizing the chunking.
-    expected_tels: 300
+    expected_tels: 1
     # Expected number of triggered events (rows in the Events table). This is just an approximate value which is used for
     # optimizing the chunking.
-    expected_events: 100
+    expected_events: 100000
     # Expected number of total (triggered + non-triggered) Monte Carlo events (rows in the MC_events table). This is just an approximate value which is used for
     # optimizing the chunking.
-    expected_mc_events: 50000
+    expected_mc_events: 500000
     # Expected number of images per telescope per (triggered) event (as a float). This is just an approximate value which is used for
     # optimizing the chunking. One entry should be provided per telescope type. If a telescope type is not present then a default value will be used.
     expected_images_per_event:
