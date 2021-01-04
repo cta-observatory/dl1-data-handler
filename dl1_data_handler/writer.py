@@ -420,7 +420,7 @@ class CTAMLDataDumper(DL1DataDumper):
 
                             parameter_row["hillas_intensity"] = event_container.dl1.tel[
                                 tel_id].parameters.hillas.intensity
-                            parameter_row["hillas_log_intensity"] = np.log(event_container.dl1.tel[
+                            parameter_row["hillas_log_intensity"] = np.log10(event_container.dl1.tel[
                                 tel_id].parameters.hillas.intensity)
                             parameter_row["hillas_x"] = event_container.dl1.tel[tel_id].parameters.hillas.x
                             parameter_row["hillas_y"] = event_container.dl1.tel[tel_id].parameters.hillas.y
@@ -512,7 +512,7 @@ class CTAMLDataDumper(DL1DataDumper):
 
                             # hillas
                             parameter_row["hillas_intensity"] = hillas_parameters_values['intensity']
-                            parameter_row["hillas_log_intensity"] = np.log(hillas_parameters_values['intensity'])
+                            parameter_row["hillas_log_intensity"] = np.log10(hillas_parameters_values['intensity'])
                             parameter_row["hillas_x"] = hillas_parameters_values['x'].value
                             parameter_row["hillas_y"] = hillas_parameters_values['y'].value
                             parameter_row["hillas_r"] = hillas_parameters_values['r'].value
