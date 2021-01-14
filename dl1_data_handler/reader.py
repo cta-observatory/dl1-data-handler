@@ -174,9 +174,14 @@ class DL1DataReader:
                     else:
                         param_list = []
                         for parameter_name in self.training_parameters:
-                            if (parameter_name != 'event_index'):
-                                param = [x[parameter_name] for x in parameters_table]
-                                param_list.append(param)
+                            if parameter_name != 'event_index':
+                                if parameter_name == 'hillas_log_intensity':
+                                    param = [np.log10(x['hillas_intensity']) for x in parameters_table if x > -1]
+                                    param_list.append(-1)
+                                    param_list.append(param)
+                                else:
+                                    param = [x[parameter_name] for x in parameters_table]
+                                    param_list.append(param)
                         for image_index, nrow in zip(img_ids[mask], np.array(selected_nrows)[mask]):
                             temp_list = []
                             for list_index in range(len(param_list)):
@@ -338,17 +343,19 @@ class DL1DataReader:
                     )
 
         # Add parameters info to description
-        for col_name in self.training_parameters:
-            col = parameters_table.cols._f_col(col_name)
-            self.unprocessed_example_description.append(
-                {
-                    'name': 'parameter_' + str(col_name),
-                    'tel_type': self.tel_type,
-                    'base_name': col_name,
-                    'shape': col.shape[1:],
-                    'dtype': col.dtype
-                }
-            )
+        # working only with mono at the moment
+        if self.mode == 'mono':
+            for col_name in self.training_parameters:
+                col = parameters_table.cols._f_col(col_name)
+                self.unprocessed_example_description.append(
+                    {
+                        'name': 'parameter_' + str(col_name),
+                        'tel_type': self.tel_type,
+                        'base_name': col_name,
+                        'shape': col.shape[1:],
+                        'dtype': col.dtype
+                    }
+                )
 
         # Add event info to description
         for col_name in self.event_info:
@@ -466,7 +473,7 @@ class DL1DataReader:
         triggers = []
         array_info = [[] for column in self.array_info]
         with lock:
-            child = self.files[filename].root._f_get_child(tel_type)
+            child = self.files[filename].root['/Images']._f_get_child(tel_type)
         for tel_id in self.selected_telescopes[tel_type]:
             tel_index = self.telescopes[tel_type].index(tel_id)
             with lock:
