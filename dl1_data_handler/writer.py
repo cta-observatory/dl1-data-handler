@@ -741,32 +741,32 @@ class CTAMLDataDumper(DL1DataDumper):
 
                 parameter_row['event_index'] = -1
 
-                parameter_row['leakage_intensity_1'] = -1
-                parameter_row['leakage_intensity_2'] = -1
-                parameter_row['leakage_pixels_1'] = -1
-                parameter_row['leakage_pixels_2'] = -1
+                parameter_row['leakage_intensity_1'] = np.float32(np.nan)
+                parameter_row['leakage_intensity_2'] = np.float32(np.nan)
+                parameter_row['leakage_pixels_1'] = np.float32(np.nan)
+                parameter_row['leakage_pixels_2'] = np.float32(np.nan)
 
-                parameter_row['hillas_intensity'] = -1
-                parameter_row['hillas_log_intensity'] = -1
-                parameter_row['hillas_x'] = -1
-                parameter_row['hillas_y'] = -1
-                parameter_row['hillas_r'] = -1
-                parameter_row['hillas_phi'] = -1
-                parameter_row['hillas_length'] = -1
-                parameter_row['hillas_width'] = -1
-                parameter_row['hillas_psi'] = -1
-                parameter_row['hillas_skewness'] = -1
-                parameter_row['hillas_kurtosis'] = -1
+                parameter_row['hillas_intensity'] = np.float32(np.nan)
+                parameter_row['hillas_log_intensity'] = np.float32(np.nan)
+                parameter_row['hillas_x'] = np.float32(np.nan)
+                parameter_row['hillas_y'] = np.float32(np.nan)
+                parameter_row['hillas_r'] = np.float32(np.nan)
+                parameter_row['hillas_phi'] = np.float32(np.nan)
+                parameter_row['hillas_length'] = np.float32(np.nan)
+                parameter_row['hillas_width'] = np.float32(np.nan)
+                parameter_row['hillas_psi'] = np.float32(np.nan)
+                parameter_row['hillas_skewness'] = np.float32(np.nan)
+                parameter_row['hillas_kurtosis'] = np.float32(np.nan)
 
-                parameter_row['concentration_cog'] = -1
-                parameter_row['concentration_core'] = -1
-                parameter_row['concentration_pixel'] = -1
+                parameter_row['concentration_cog'] = np.float32(np.nan)
+                parameter_row['concentration_core'] = np.float32(np.nan)
+                parameter_row['concentration_pixel'] = np.float32(np.nan)
 
-                parameter_row['timing_slope'] = -1
-                parameter_row['timing_slope_err'] = -1
-                parameter_row['timing_intercept'] = -1
-                parameter_row['timing_intercept_err'] = -1
-                parameter_row['timing_deviation'] = -1
+                parameter_row['timing_slope'] = np.float32(np.nan)
+                parameter_row['timing_slope_err'] = np.float32(np.nan)
+                parameter_row['timing_intercept'] = np.float32(np.nan)
+                parameter_row['timing_intercept_err'] = np.float32(np.nan)
+                parameter_row['timing_deviation'] = np.float32(np.nan)
 
                 parameter_row['morphology_num_pixels'] = -1
                 parameter_row['morphology_num_islands'] = -1
