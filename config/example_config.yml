@@ -31,8 +31,8 @@ Data Writer:
     cleaning_settings:
         algorithm: 'tailcuts_clean'
         args:
-            picture_thresh: 7
-            boundary_thresh: 5
+            picture_thresh: 6
+            boundary_thresh: 3
 #            keep_isolated_pixels:
 #            min_number_picture_neighbors:
 
