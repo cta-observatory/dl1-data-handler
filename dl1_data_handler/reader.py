@@ -176,9 +176,10 @@ class DL1DataReader:
                         for parameter_name in self.training_parameters:
                             if parameter_name != 'event_index':
                                 if parameter_name == 'hillas_log_intensity':
-                                    param = [np.log10(x['hillas_intensity']) for x in parameters_table if x > -1]
-                                    param_list.append(-1)
-                                    param_list.extend(param)
+                                    param = [np.log10(x['hillas_intensity']) for x in parameters_table if
+                                             x['hillas_intensity'] > -1]
+                                    param.insert(0, -1)
+                                    param_list.append(param)
                                 else:
                                     param = [x[parameter_name] for x in parameters_table]
                                     param_list.append(param)
