@@ -49,7 +49,7 @@ Then, create and enter a new Python 3.7 environment with:
 
 ```bash
 conda create -n [ENVIRONMENT_NAME] python=3.7
-source activate [ENVIRONMENT_NAME]
+conda activate [ENVIRONMENT_NAME]
 ```
 
 From the environment, add the necessary channels for all dependencies:
