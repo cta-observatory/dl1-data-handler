@@ -159,7 +159,7 @@ class DL1DataReader:
                     mask = (img_ids != 0)
                     # TODO handle all selected channels
                     mask[mask] &= self._select_image(
-                        f.root['/Images'][self.tel_type][img_ids[mask]]['charge'],
+                        f.root['Images'][self.tel_type][img_ids[mask]]['charge'],
                         image_selection)
 
                     mask[mask] &= self._select_image_from_file(
@@ -474,7 +474,7 @@ class DL1DataReader:
         triggers = []
         array_info = [[] for column in self.array_info]
         with lock:
-            child = self.files[filename].root['/Images']._f_get_child(tel_type)
+            child = self.files[filename].root['Images']._f_get_child(self.tel_type)
         for tel_id in self.selected_telescopes[tel_type]:
             tel_index = self.telescopes[tel_type].index(tel_id)
             with lock:
@@ -504,7 +504,7 @@ class DL1DataReader:
             # Get a single image
             nrow, image_index, tel_id = identifiers[1:4]
             with lock:
-                child = self.files[filename].root['/Images']._f_get_child(self.tel_type)
+                child = self.files[filename].root['Images']._f_get_child(self.tel_type)
             image = self._get_image(child, self.tel_type, image_index)
             example = [image]
 
