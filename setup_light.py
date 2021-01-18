@@ -12,6 +12,7 @@ setup(name='dl1_data_handler',
           'astropy',
           'numpy>=1.15.0',
           'scipy',
+          'jupyter',
           'tables>=3.4.4',
           'uproot==3.12.0',
           'pytest-cov'
