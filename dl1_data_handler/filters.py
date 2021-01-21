@@ -24,7 +24,7 @@ def event_intensity_filter(reader, file, i_min=-np.inf, i_max=np.inf):
     total_intensity = np.zeros(len(file.root.Events))
     for tel_type in tel_types:
         indices = file.root.Events[:][tel_type + '_indices']
-        images = file.root['/Images']._f_get_child(tel_type)[:]['charge']
+        images = file.root['Images']._f_get_child(tel_type)[:]['charge']
         images = images[indices]
         total_intensity += images.sum(axis=(1, 2))
     mask1 = i_min < total_intensity
