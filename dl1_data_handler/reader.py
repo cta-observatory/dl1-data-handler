@@ -7,11 +7,14 @@ import tables
 from dl1_data_handler.image_mapper import ImageMapper
 from dl1_data_handler.processor import DL1DataProcessor
 
+__all__ = [
+    'DL1DataReader',
+    'DL1DataReaderSTAGE1',
+    'DL1DataReaderDL1DH'
+]
+
+
 lock = threading.Lock()
-
-
-def get_camera_type(tel_type):
-    return tel_type.split('_')[-1]
 
 
 class DL1DataReader:
@@ -34,14 +37,14 @@ class DL1DataReader:
                  event_info=None,
                  transforms=None,
                  validate_processor=False
-                 ):
-
+                ):
+        
         # Construct dict of filename:file_handle pairs
         self.files = OrderedDict()
         for filename in file_list:
             with lock:
                 self.files[filename] = tables.open_file(filename, mode='r')
-
+                
         # Set data loading mode
         # Mono: single images of one telescope type
         # Stereo: events of one telescope type
@@ -52,204 +55,6 @@ class DL1DataReader:
             raise ValueError("Invalid mode selection '{}'. Valid options: "
                              "'mono', 'stereo', 'multi-stereo'".format(mode))
 
-        self.example_identifiers = None
-        self.telescopes = {}
-
-        if selected_telescope_ids is None:
-            selected_telescope_ids = {}
-
-        if training_parameters is None:
-            self.training_parameters = []
-        else:
-            self.training_parameters = training_parameters
-
-        if event_selection is None:
-            event_selection = {}
-
-        if image_selection is None:
-            image_selection = {}
-
-        if image_selection_from_file is None:
-            image_selection_from_file = {}
-
-        if mapping_settings is None:
-            mapping_settings = {}
-
-        # Loop over the files to assemble the selected event identifiers
-        for filename, f in self.files.items():
-            example_identifiers = []
-
-            # Get dict of all the tel_types in the file mapped to their tel_ids
-            telescopes = {}
-            for row in f.root.Array_Information:
-                tel_type = row['type'].decode()
-                if tel_type not in telescopes:
-                    telescopes[tel_type] = []
-                telescopes[tel_type].append(row['id'])
-
-            # Enforce an automatic minimal telescope selection cut:
-            # there must be at least one triggered telescope of a
-            # selected type in the event
-            # Users can include stricter cuts in the selection string
-            if self.mode in ['mono', 'stereo']:
-                if selected_telescope_type is None:
-                    # Default: use the first tel type in the file
-                    default = f.root.Array_Information[0]['type'].decode()
-                    selected_telescope_type = default
-                self.tel_type = selected_telescope_type
-                selected_tel_types = [selected_telescope_type]
-            elif self.mode == 'multi-stereo':
-                if selected_telescope_type is None:
-                    # Default: use all tel types
-                    selected_telescope_type = list(telescopes)
-                self.tel_type = None
-                selected_tel_types = selected_telescope_type
-            multiplicity_conditions = ['(' + tel_type + '_multiplicity > 0)'
-                                       for tel_type in selected_tel_types]
-            tel_cut_string = '(' + ' | '.join(multiplicity_conditions) + ')'
-            # Combine minimal telescope cut with explicit selection cuts
-            if selection_string:
-                cut_condition = selection_string + ' & ' + tel_cut_string
-            else:
-                cut_condition = tel_cut_string
-
-            # Select which telescopes from the full dataset to include in each
-            # event by a telescope type and an optional list of telescope ids.
-            selected_telescopes = {}
-            for tel_type in selected_tel_types:
-                available_tel_ids = telescopes[tel_type]
-                # Keep only the selected tel ids for the tel type
-                if tel_type in selected_telescope_ids:
-                    # Check all requested telescopes are available to select
-                    requested_tel_ids = selected_telescope_ids[tel_type]
-                    invalid_tel_ids = (set(requested_tel_ids)
-                                       - set(available_tel_ids))
-                    if invalid_tel_ids:
-                        raise ValueError("Tel ids {} are not a valid selection"
-                                         "for tel type '{}'".format(invalid_tel_ids, tel_type))
-                    selected_telescopes[tel_type] = requested_tel_ids
-                else:
-                    selected_telescopes[tel_type] = available_tel_ids
-
-            selected_nrows = set([row.nrow for row
-                                  in f.root.Events.where(cut_condition)])
-            selected_nrows &= self._select_event(f, event_selection)
-            selected_nrows = list(selected_nrows)
-
-            # got parameters table selected
-            if image_selection_from_file != {}:
-                algorithm = image_selection_from_file[next(iter(image_selection_from_file))]['algorithm']
-                parameters_table = f.root['/Parameters' + str(algorithm)][self.tel_type]
-            else:
-                algorithm = 0
-                parameters_table = f.root['/Parameters0'][self.tel_type]
-
-            # Make list of identifiers of all examples passing event selection
-            if self.mode in ['stereo', 'multi-stereo']:
-                example_identifiers = [(filename, nrow) for nrow
-                                       in selected_nrows]
-            elif self.mode == 'mono':
-                example_identifiers = []
-                # Determinate which parameters table loads due to user settings in the config file
-                field = '{}_indices'.format(self.tel_type)
-                selected_indices = f.root.Events.read_coordinates(selected_nrows, field=field)
-                for tel_id in selected_telescopes[self.tel_type]:
-                    tel_index = telescopes[self.tel_type].index(tel_id)
-                    img_ids = np.array(selected_indices[:, tel_index])
-                    mask = (img_ids != 0)
-                    # TODO handle all selected channels
-                    mask[mask] &= self._select_image(
-                        f.root['Images'][self.tel_type][img_ids[mask]]['charge'],
-                        image_selection)
-
-                    mask[mask] &= self._select_image_from_file(
-                        f.root['/Images'][self.tel_type][img_ids[mask]]['charge'],
-                        parameters_table[img_ids[mask]],
-                        image_selection_from_file)
-
-                    if self.training_parameters == []:
-                        for image_index, nrow in zip(img_ids[mask], np.array(selected_nrows)[mask]):
-                            example_identifiers.append((filename, nrow,
-                                                        image_index, tel_id))
-                    else:
-                        param_list = []
-                        for parameter_name in self.training_parameters:
-                            if parameter_name != 'event_index':
-                                if parameter_name == 'hillas_log_intensity':
-                                    param = [np.log10(x['hillas_intensity']) for x in parameters_table if
-                                             x['hillas_intensity'] > -1]
-                                    param.insert(0, -1)
-                                    param_list.append(param)
-                                else:
-                                    param = [x[parameter_name] for x in parameters_table]
-                                    param_list.append(param)
-                        for image_index, nrow in zip(img_ids[mask], np.array(selected_nrows)[mask]):
-                            temp_list = []
-                            for list_index in range(len(param_list)):
-                                params_value = param_list[list_index][image_index]
-                                temp_list.append(params_value)
-                            example_identifiers.append((filename, nrow, image_index, tel_id, temp_list))
-            # Confirm that the files are consistent and merge them
-            if not self.telescopes:
-                self.telescopes = telescopes
-            if self.telescopes != telescopes:
-                raise ValueError("Inconsistent telescope definition in "
-                                 "{}".format(filename))
-            self.selected_telescopes = selected_telescopes
-
-            self.algorithm = algorithm
-
-            if self.example_identifiers is None:
-                self.example_identifiers = example_identifiers
-            else:
-                self.example_identifiers.extend(example_identifiers)
-
-        # Shuffle the examples
-        if shuffle:
-            random.seed(seed)
-            random.shuffle(self.example_identifiers)
-
-        if image_channels is None:
-            image_channels = ['charge']
-        self.image_channels = image_channels
-
-        self.tel_pointing = np.array([0.0, 0.0], dtype=np.float32)
-        if transforms is not None:
-            for transform in transforms:
-                if transform.name == 'deltaAltAz':
-                    self.tel_pointing = f.root._v_attrs.run_array_direction
-                    transform.set_tel_pointing(self.tel_pointing)
-
-        self.pixel_positions = None
-        cameras = None
-        if "/Telescope_Type_Information" in f:
-            cameras = [x['camera'].decode() for x in f.root.Telescope_Type_Information]
-            num_pixels = [x['num_pixels'] for x in f.root.Telescope_Type_Information]
-            pixel_positions = [x['pixel_positions'] for x in f.root.Telescope_Type_Information]
-            self.pixel_positions = {}
-            self.num_pixels = {}
-            for i, cam in enumerate(cameras):
-                self.pixel_positions[cam] = pixel_positions[i][:num_pixels[i]].T
-                self.num_pixels[cam] = num_pixels[i]
-                # For now hardcoded, since this information is not in the h5 files.
-                # The official CTA DL1 format will contain this information.
-                if cam in ['LSTCam', 'NectarCam', 'MAGICCam']:
-                    rotation_angle = -70.9 * np.pi / 180.0 if cam == 'MAGICCam' else -100.893 * np.pi / 180.0
-                    rotation_matrix = np.matrix([[np.cos(rotation_angle), -np.sin(rotation_angle)],
-                                                 [np.sin(rotation_angle), np.cos(rotation_angle)]], dtype=float)
-                    self.pixel_positions[cam] = np.squeeze(
-                        np.asarray(np.dot(rotation_matrix, self.pixel_positions[cam])))
-        if 'camera_types' not in mapping_settings:
-            mapping_settings['camera_types'] = cameras
-        self.image_mapper = ImageMapper(pixel_positions=self.pixel_positions,
-                                        **mapping_settings)
-
-        self.image_mapper.image_shapes[get_camera_type(self.tel_type)] = (
-            self.image_mapper.image_shapes[get_camera_type(self.tel_type)][0],
-            self.image_mapper.image_shapes[get_camera_type(self.tel_type)][1],
-            len(self.image_channels)  # number of channels
-        )
-
         if array_info is None:
             array_info = []
         self.array_info = array_info
@@ -257,20 +62,60 @@ class DL1DataReader:
         if event_info is None:
             event_info = []
         self.event_info = event_info
-
-        # Construct example description (before preprocessing)
+        
+    def _get_camera_type(self, tel_type):
+        return tel_type.split('_')[-1]
+    
+    def __len__(self):
+        return len(self.example_identifiers)
+    
+    # Return a dictionary of number of examples in the dataset, grouped by
+    # the array names listed in the iterable group_by.
+    # If example_indices is a list of indices, consider only those examples,
+    # otherwise all examples in the reader are considered.
+    def num_examples(self, group_by=None, example_indices=None):
+        grouping_indices = []
+        if group_by is not None:
+            for name in group_by:
+                for idx, des in enumerate(self.example_description):
+                    if des['name'] == name:
+                        grouping_indices.append(idx)
+        group_nums = {}
+        if example_indices is None:
+            example_indices = list(range(len(self)))
+        for idx in example_indices:
+            example = self[idx]
+            # Use tuple() and tolist() to convert list and NumPy array
+            # to hashable keys
+            group = tuple([example[idx].tolist() for idx in grouping_indices])
+            if group in group_nums:
+                group_nums[group] += 1
+            else:
+                group_nums[group] = 1
+        return group_nums
+        
+        
+    def _construct_unprocessed_example_description(self, array_information_table, events_table):
+        """
+        Construct example description (before preprocessing).
+        
+        Parameters
+        ----------
+            array_information_table (tables.File): the file containing the data
+            events_table (dict): dictionary of `{filter_function: filter_parameters}` to apply on the data
+        """
         if self.mode == 'mono':
             self.unprocessed_example_description = [
                 {
                     'name': 'image',
                     'tel_type': self.tel_type,
                     'base_name': 'image',
-                    'shape': self.image_mapper.image_shapes[get_camera_type(self.tel_type)],
+                    'shape': self.image_mapper.image_shapes[self._get_camera_type(self.tel_type)],
                     'dtype': np.dtype(np.float32)
                 }
             ]
             for col_name in self.array_info:
-                col = f.root.Array_Information.cols._f_col(col_name)
+                col = array_information_table.cols._f_col(col_name)
                 self.unprocessed_example_description.append(
                     {
                         'name': col_name,
@@ -288,7 +133,7 @@ class DL1DataReader:
                     'tel_type': self.tel_type,
                     'base_name': 'image',
                     'shape': ((num_tels,)
-                              + self.image_mapper.image_shapes[get_camera_type(self.tel_type)]),
+                              + self.image_mapper.image_shapes[self._get_camera_type(self.tel_type)]),
                     'dtype': np.dtype(np.float32)
                 },
                 {
@@ -300,7 +145,7 @@ class DL1DataReader:
                 }
             ]
             for col_name in self.array_info:
-                col = f.root.Array_Information.cols._f_col(col_name)
+                col = array_information_table.cols._f_col(col_name)
                 self.unprocessed_example_description.append(
                     {
                         'name': col_name,
@@ -320,7 +165,7 @@ class DL1DataReader:
                         'tel_type': tel_type,
                         'base_name': 'image',
                         'shape': ((num_tels,)
-                                  + self.image_mapper.image_shapes[get_camera_type(tel_type)]),
+                                  + self.image_mapper.image_shapes[self._get_camera_type(tel_type)]),
                         'dtype': np.dtype(np.float32)
                     },
                     {
@@ -332,7 +177,7 @@ class DL1DataReader:
                     }
                 ])
                 for col_name in self.array_info:
-                    col = f.root.Array_Information.cols._f_col(col_name)
+                    col = array_information_table.cols._f_col(col_name)
                     self.unprocessed_example_description.append(
                         {
                             'name': tel_type + '_' + col_name,
@@ -360,7 +205,7 @@ class DL1DataReader:
 
         # Add event info to description
         for col_name in self.event_info:
-            col = f.root.Events.cols._f_col(col_name)
+            col = events_table.cols._f_col(col_name)
             self.unprocessed_example_description.append(
                 {
                     'name': col_name,
@@ -368,37 +213,10 @@ class DL1DataReader:
                     'base_name': col_name,
                     'shape': col.shape[1:],
                     'dtype': col.dtype
-                }
-            )
-
-        self.processor = DL1DataProcessor(
-            self.mode,
-            self.unprocessed_example_description,
-            transforms,
-            validate_processor
-        )
-
-        # Definition of preprocessed example
-        self.example_description = self.processor.output_description
-
-    def _select_event(self, file, filters):
-        """
-        Filter the data event wise.
-        Parameters
-        ----------
-            file (tables.File): the file containing the data
-            filters (dict): dictionary of `{filter_function: filter_parameters}` to apply on the data
-
-        Returns
-        -------
-        the filtered nrows
-
-        """
-        indices = set(np.arange(len(file.root.Events[:])))
-        for filter_function, filter_parameters in filters.items():
-            indices &= filter_function(self, file, **filter_parameters)
-        return indices
-
+                    }
+                )
+        return
+    
     def _select_image(self, images, filters):
         """
         Filter the data image wise.
@@ -411,7 +229,7 @@ class DL1DataReader:
         -------
         the mask of filtered images
 
-                """
+        """
         mask = np.full(len(images), True)
         for filter_function, filter_parameters in filters.items():
             mask &= filter_function(self, images, **filter_parameters)
@@ -445,7 +263,7 @@ class DL1DataReader:
     # return the unmapped vector.
     def _get_image(self, child, tel_type, image_index):
 
-        num_pixels = self.num_pixels[get_camera_type(tel_type)]
+        num_pixels = self.num_pixels[self._get_camera_type(tel_type)]
         num_channels = len(self.image_channels)
         vector = np.empty(shape=(num_pixels, num_channels), dtype=np.float32)
         # If the telescope didn't trigger, the image index is 0 and a blank
@@ -455,10 +273,272 @@ class DL1DataReader:
             for i, channel in enumerate(self.image_channels):
                 vector[:, i] = record[channel]
         # If 'indexed_conv' is selected, we only need the unmapped vector.
-        if self.image_mapper.mapping_method[get_camera_type(tel_type)] == 'indexed_conv':
-            return vector
-        image = self.image_mapper.map_image(vector, get_camera_type(tel_type))
+        if self.image_mapper.mapping_method[self._get_camera_type(tel_type)] == 'indexed_conv':
+           return vector
+        image = self.image_mapper.map_image(vector, self._get_camera_type(tel_type))
         return image
+    
+    
+class DL1DataReaderSTAGE1(DL1DataReader):
+
+    def __init__(self,
+                 file_list,
+                 mode='mono',
+                 selected_telescope_type=None,
+                 selected_telescope_ids=None,
+                 selection_string=None,
+                 event_selection=None,
+                 image_selection=None,
+                 shuffle=False,
+                 seed=None,
+                 image_channels=None,
+                 mapping_settings=None,
+                 array_info=None,
+                 event_info=None,
+                 transforms=None,
+                 validate_processor=False
+                ):
+        pass
+    
+    def __getitem__(self, idx):
+        pass
+
+class DL1DataReaderDL1DH(DL1DataReader):
+
+    def __init__(self,
+                 file_list,
+                 mode='mono',
+                 selected_telescope_type=None,
+                 selected_telescope_ids=None,
+                 selection_string=None,
+                 event_selection=None,
+                 image_selection=None,
+                 shuffle=False,
+                 seed=None,
+                 image_channels=None,
+                 mapping_settings=None,
+                 array_info=None,
+                 event_info=None,
+                 transforms=None,
+                 validate_processor=False
+                ):
+                
+        super().__init__(file_list=file_list, mode=mode, selected_telescope_type=selected_telescope_type, selected_telescope_ids=selected_telescope_ids, selection_string=selection_string, event_selection=event_selection, image_selection=image_selection, shuffle=shuffle, seed=seed, image_channels=image_channels, mapping_settings=mapping_settings, array_info=array_info, event_info=event_info, transforms=transforms, validate_processor=validate_processor)
+
+        self.example_identifiers = None
+        self.telescopes = {}
+        if selected_telescope_ids is None:
+            selected_telescope_ids = {}
+
+        if event_selection is None:
+            event_selection = {}
+
+        if image_selection is None:
+            image_selection = {}
+
+        if mapping_settings is None:
+            mapping_settings = {}
+        
+        for filename, f in self.files.items():
+
+            # Tesleecope cutting
+            telescopes, selected_telescopes, cut_condition = self._construct_selection_cuts(f.root.Array_Information, selected_telescope_type, selected_telescope_ids, selection_string)
+            
+            # Event cutting
+            selected_nrows = set([row.nrow for row
+                              in f.root.Events.where(cut_condition)])
+            selected_nrows &= self._select_event(f, event_selection)
+            selected_nrows = list(selected_nrows)
+
+            # Image cutting
+            # Make list of identifiers of all examples passing event selection
+            if self.mode in ['stereo', 'multi-stereo']:
+                example_identifiers = [(filename, nrow) for nrow
+                                       in selected_nrows]
+            elif self.mode == 'mono':
+                example_identifiers = []
+                field = '{}_indices'.format(self.tel_type)
+                selected_indices = f.root.Events.read_coordinates(selected_nrows, field=field)
+                for tel_id in selected_telescopes[self.tel_type]:
+                    tel_index = telescopes[self.tel_type].index(tel_id)
+                    img_ids = np.array(selected_indices[:, tel_index])
+                    mask = (img_ids != 0)
+                    # TODO handle all selected channels
+                    mask[mask] &= super()._select_image(
+                        f.root['Images'][self.tel_type][img_ids[mask]]['charge'],
+                        image_selection)
+                    for image_index, nrow in zip(img_ids[mask],
+                                               np.array(selected_nrows)[mask]):
+                        example_identifiers.append((filename, nrow,
+                                                    image_index, tel_id))
+
+            # Confirm that the files are consistent and merge them
+            if not self.telescopes:
+                self.telescopes = telescopes
+            if self.telescopes != telescopes:
+                raise ValueError("Inconsistent telescope definition in "
+                                 "{}".format(filename))
+            self.selected_telescopes = selected_telescopes
+
+            if self.example_identifiers is None:
+                self.example_identifiers = example_identifiers
+            else:
+                self.example_identifiers.extend(example_identifiers)
+
+        # Shuffle the examples
+        if shuffle:
+            random.seed(seed)
+            random.shuffle(self.example_identifiers)
+
+        # ImageMapper (1D charges -> 2D images)
+        if image_channels is None:
+            image_channels = ['charge']
+        self.image_channels = image_channels
+        self.pixel_positions, self.num_pixels = self._construct_pixel_positions(f.root.Telescope_Type_Information)
+        if 'camera_types' not in mapping_settings:
+            mapping_settings['camera_types'] = self.pixel_positions.keys()
+        self.image_mapper = ImageMapper(pixel_positions=self.pixel_positions,
+                                        **mapping_settings)
+        camera_type = super()._get_camera_type(self.tel_type)
+        self.image_mapper.image_shapes[camera_type] = (
+                self.image_mapper.image_shapes[camera_type][0],
+                self.image_mapper.image_shapes[camera_type][1],
+                len(self.image_channels)  # number of channels
+                )
+
+        super()._construct_unprocessed_example_description(f.root.Array_Information, f.root.Events)
+        
+        self.processor = DL1DataProcessor(
+            self.mode,
+            self.unprocessed_example_description,
+            transforms,
+            validate_processor
+            )
+
+        # Definition of preprocessed example
+        self.example_description = self.processor.output_description
+
+    def _construct_selection_cuts(self, array_information_table, selected_telescope_type, selected_telescope_ids, selection_string):
+        """
+        Construct the pixel position of the cameras from the DL1 hdf5 file.
+        Parameters
+        ----------
+            array_information_table (tables.table):
+            selected_telescope_type (array of str):
+            selected_telescope_ids (array of int):
+            selection_string (str):
+            
+        Returns
+        -------
+        telescopes (dict): dictionary of `{: }`
+        selected_telescopes (dict): dictionary of `{: }`
+        cut_condition (str): cut condition for pytables where function
+
+        """
+        
+        # Get dict of all the tel_types in the file mapped to their tel_ids
+        telescopes = {}
+        for row in array_information_table:
+            tel_type = row['type'].decode()
+            if tel_type not in telescopes:
+                telescopes[tel_type] = []
+            telescopes[tel_type].append(row['id'])
+
+        # Enforce an automatic minimal telescope selection cut:
+        # there must be at least one triggered telescope of a
+        # selected type in the event
+        # Users can include stricter cuts in the selection string
+        if self.mode in ['mono', 'stereo']:
+            if selected_telescope_type is None:
+                # Default: use the first tel type in the file
+                default = array_information_table[0]['type'].decode()
+                selected_telescope_type = default
+            self.tel_type = selected_telescope_type
+            selected_tel_types = [selected_telescope_type]
+        elif self.mode == 'multi-stereo':
+            if selected_telescope_type is None:
+                # Default: use all tel types
+                selected_telescope_type = list(telescopes)
+            self.tel_type = None
+            selected_tel_types = selected_telescope_type
+        multiplicity_conditions = ['(' + tel_type + '_multiplicity > 0)'
+                                   for tel_type in selected_tel_types]
+        tel_cut_string = '(' + ' | '.join(multiplicity_conditions) + ')'
+        # Combine minimal telescope cut with explicit selection cuts
+        if selection_string:
+            cut_condition = selection_string + ' & ' + tel_cut_string
+        else:
+            cut_condition = tel_cut_string
+
+        # Select which telescopes from the full dataset to include in each
+        # event by a telescope type and an optional list of telescope ids.
+        selected_telescopes = {}
+        for tel_type in selected_tel_types:
+            available_tel_ids = telescopes[tel_type]
+            # Keep only the selected tel ids for the tel type
+            if tel_type in selected_telescope_ids:
+                # Check all requested telescopes are available to select
+                requested_tel_ids = selected_telescope_ids[tel_type]
+                invalid_tel_ids = (set(requested_tel_ids)
+                                   - set(available_tel_ids))
+                if invalid_tel_ids:
+                    raise ValueError("Tel ids {} are not a valid selection"
+                                     "for tel type '{}'".format(
+                                         invalid_tel_ids, tel_type))
+                selected_telescopes[tel_type] = requested_tel_ids
+            else:
+                selected_telescopes[tel_type] = available_tel_ids
+        
+        return telescopes, selected_telescopes, cut_condition
+    
+    def _construct_pixel_positions(self, telescope_type_information):
+        """
+        Construct the pixel position of the cameras from the DL1 hdf5 file.
+        Parameters
+        ----------
+            file (tables.): the file containing the data
+
+        Returns
+        -------
+        pixel_positions (dict): dictionary of `{cameras: pixel_positions}`
+        num_pixels (dict): dictionary of `{cameras: num_pixels}`
+
+        """
+        cameras = [x['camera'].decode() for x in telescope_type_information]
+        num_pix = [x['num_pixels'] for x in telescope_type_information]
+        pix_pos = [x['pixel_positions'] for x in telescope_type_information]
+        pixel_positions = {}
+        num_pixels = {}
+        for i, cam in enumerate(cameras):
+            pixel_positions[cam] = pix_pos[i][:num_pix[i]].T
+            num_pixels[cam] = num_pix[i]
+            # For now hardcoded, since this information is not in the h5 files.
+            # The official CTA DL1 format will contain this information.
+            if cam in ['LSTCam', 'NectarCam', 'MAGICCam']:
+                rotation_angle = -70.9 * np.pi/180.0 if cam == 'MAGICCam' else -100.893 * np.pi/180.0
+                rotation_matrix = np.matrix([[np.cos(rotation_angle), -np.sin(rotation_angle)],
+                                            [np.sin(rotation_angle), np.cos(rotation_angle)]], dtype=float)
+                pixel_positions[cam] = np.squeeze(np.asarray(np.dot(rotation_matrix, pixel_positions[cam])))
+        
+        return pixel_positions, num_pixels
+
+    def _select_event(self, file, filters):
+        """
+        Filter the data event wise.
+        Parameters
+        ----------
+            file (tables.File): the file containing the data
+            filters (dict): dictionary of `{filter_function: filter_parameters}` to apply on the data
+
+        Returns
+        -------
+        the filtered nrows
+
+        """
+        indices = set(np.arange(len(file.root.Events[:])))
+        for filter_function, filter_parameters in filters.items():
+            indices &= filter_function(self, file, **filter_parameters)
+        return indices
 
     def _append_array_info(self, filename, array_info, tel_id):
         with lock:
@@ -480,7 +560,7 @@ class DL1DataReader:
             with lock:
                 image_index = self.files[filename].root.Events[nrow][
                     tel_type + '_indices'][tel_index]
-            image = self._get_image(child, tel_type, image_index)
+            image = super()._get_image(child, tel_type, image_index)
             trigger = 0 if image_index == 0 else 1
             images.append(image)
             triggers.append(trigger)
@@ -489,8 +569,6 @@ class DL1DataReader:
         example.extend([np.stack(info) for info in array_info])
         return example
 
-    def __len__(self):
-        return len(self.example_identifiers)
 
     def __getitem__(self, idx):
 
@@ -505,7 +583,7 @@ class DL1DataReader:
             nrow, image_index, tel_id = identifiers[1:4]
             with lock:
                 child = self.files[filename].root['Images']._f_get_child(self.tel_type)
-            image = self._get_image(child, self.tel_type, image_index)
+            image = super()._get_image(child, self.tel_type, image_index)
             example = [image]
 
             array_info = [[] for column in self.array_info]
@@ -545,27 +623,3 @@ class DL1DataReader:
 
         return example
 
-    # Return a dictionary of number of examples in the dataset, grouped by
-    # the array names listed in the iterable group_by.
-    # If example_indices is a list of indices, consider only those examples,
-    # otherwise all examples in the reader are considered.
-    def num_examples(self, group_by=None, example_indices=None):
-        grouping_indices = []
-        if group_by is not None:
-            for name in group_by:
-                for idx, des in enumerate(self.example_description):
-                    if des['name'] == name:
-                        grouping_indices.append(idx)
-        group_nums = {}
-        if example_indices is None:
-            example_indices = list(range(len(self)))
-        for idx in example_indices:
-            example = self[idx]
-            # Use tuple() and tolist() to convert list and NumPy array
-            # to hashable keys
-            group = tuple([example[idx].tolist() for idx in grouping_indices])
-            if group in group_nums:
-                group_nums[group] += 1
-            else:
-                group_nums[group] = 1
-        return group_nums
