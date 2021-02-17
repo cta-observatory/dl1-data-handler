@@ -1,12 +1,13 @@
 package:
   name: dl1_data_handler
-  version: "0.8.2"
+  version: "0.8.3"
 
 source:
   git_url: https://github.com/cta-observatory/dl1-data-handler.git
-  git_rev: v0.8.2
+  git_rev: v0.8.3
 
 build:
+  noarch: generic
   number: 0
 
 requirements:

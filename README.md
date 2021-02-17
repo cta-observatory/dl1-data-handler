@@ -45,11 +45,11 @@ python setup_light.py install
 
 To install it as a conda package, first install Anaconda by following the instructions here: https://www.anaconda.com/distribution/.
 
-Then, create and enter a new Python 3.7 environment with:
+Then, create and enter a new Python 3.7 (with cython) environment with:
 
 ```bash
-conda create -n [ENVIRONMENT_NAME] python=3.7
-source activate [ENVIRONMENT_NAME]
+conda create -n [ENVIRONMENT_NAME] python=3.7 cython
+conda activate [ENVIRONMENT_NAME]
 ```
 
 From the environment, add the necessary channels for all dependencies:
@@ -72,7 +72,7 @@ If you want to import any functionality from dl1-data-handler into your own Pyth
 
 ```bash
 git clone https://github.com/cta-observatory/dl1-data-handler.git
-git checkout v0.8.2
+git checkout v0.8.3
 ```
 
 dl1-data-handler should already have been installed in your environment by Conda, so no further installation steps (i.e. with setuptools or pip) are necessary and you should be able to run scripts/write_data.py directly.
