@@ -2,14 +2,21 @@ from collections import Counter, OrderedDict
 import random
 import threading
 import numpy as np
+import pandas as pd
 import tables
 
 from dl1_data_handler.image_mapper import ImageMapper
 from dl1_data_handler.processor import DL1DataProcessor
 
-from pyirf.simulations import SimulatedEventsInfo
+from ctapipe.io import read_table  # let us read full tables inside the DL1 output file
 import astropy.units as u
-from astropy import table
+#from astropy import table
+from astropy.table import (
+    Table,
+    join,  # let us merge tables horizontally
+    vstack,  # and vertically
+)
+from pyirf.simulations import SimulatedEventsInfo
 
 __all__ = [
     'DL1DataReader',
@@ -112,10 +119,22 @@ class DL1DataReader:
                         'name': 'parameters',
                         'tel_type': self.tel_type,
                         'base_name': 'parameters',
-                        'shape': len(self.parameter_list),
+                        'shape': (len(self.parameter_list),),
                         'dtype': np.dtype(np.float32)
                     }
                 )
+                
+            if self.pointing_mode == 'divergent':
+                self.unprocessed_example_description.append(
+                    {
+                        'name': 'pointings',
+                        'tel_type': self.tel_type,
+                        'base_name': 'pointings',
+                        'shape': (2,),
+                        'dtype': np.dtype(np.float32)
+                    }
+                )
+            
             for col_name in self.subarray_info:
                 col = subarray_table.cols._f_col(col_name)
                 self.unprocessed_example_description.append(
@@ -134,9 +153,9 @@ class DL1DataReader:
                 num_tels = len(self.selected_telescopes[tel_type])
                 self.unprocessed_example_description.extend([
                     {
-                        'name': tel_type + '_trigger',
+                        'name': tel_type + '_triggers',
                         'tel_type': tel_type,
-                        'base_name': 'trigger',
+                        'base_name': 'triggers',
                         'shape': (num_tels,),
                         'dtype': np.dtype(np.int8)
                     }
@@ -145,9 +164,9 @@ class DL1DataReader:
                 if self.image_channels is not None:
                     self.unprocessed_example_description.extend([
                         {
-                            'name': tel_type + '_image',
+                            'name': tel_type + '_images',
                             'tel_type': tel_type,
-                            'base_name': 'image',
+                            'base_name': 'images',
                             'shape': ((num_tels,)
                                     + self.image_mapper.image_shapes[self._get_camera_type(tel_type)]),
                             'dtype': np.dtype(np.float32)
@@ -164,6 +183,17 @@ class DL1DataReader:
                             'dtype': np.dtype(np.float32)
                         }
                     ])
+                    
+                if self.pointing_mode in ['divergent']:
+                    self.unprocessed_example_description.append(
+                        {
+                            'name': tel_type + '_pointings',
+                            'tel_type': tel_type,
+                            'base_name': 'pointings',
+                            'shape': (num_tels,) + (2,),
+                            'dtype': np.dtype(np.float32)
+                        }
+                    )
                 
                 for col_name in self.subarray_info:
                     col = subarray_table.cols._f_col(col_name)
@@ -174,24 +204,20 @@ class DL1DataReader:
                             'base_name': col_name,
                             'shape': (num_tels,) + col.shape[1:],
                             'dtype': col.dtype
-                        }
-                    )
+                            }
+                        )
 
-        # Add parameters info to description
-        # working only with mono at the moment
-        if self.mode == 'mono':
-            for col_name in self.training_parameters:
-                col = parameters_table.cols._f_col(col_name)
-                self.unprocessed_example_description.append(
-                    {
-                        'name': 'parameter_' + str(col_name),
-                        'tel_type': self.tel_type,
-                        'base_name': col_name,
-                        'shape': col.shape[1:],
-                        'dtype': col.dtype
-                    }
-                )
-
+        if self.pointing_mode == 'subarray':
+            self.unprocessed_example_description.append(
+                {
+                    'name': 'pointing',
+                    'tel_type': None,
+                    'base_name': 'pointing',
+                    'shape': (2,),
+                    'dtype': np.dtype(np.float32)
+                }
+            )
+            
         # Add event info to description
         for col_name in self.event_info:
             col = events_table.cols._f_col(col_name)
@@ -243,18 +269,19 @@ class DL1DataReader:
         return
     
     
-# CTA DL1 data model v1.0.2
-# ctapipe stage1 v0.10.1 (standard settings writing images and parameters)
+# CTA DL1 data model v1.0.0
+# ctapipe stage1 v0.10.3 (standard settings writing images and parameters)
 class DL1DataReaderSTAGE1(DL1DataReader):
 
     def __init__(self,
                  file_list,
+                 example_identifiers_file=None,
                  mode='mono',
+                 pointing_mode='fix_subarray',
                  selected_telescope_types=None,
                  selected_telescope_ids=None,
                  multiplicity_selection=None,
                  event_selection=None,
-                 parameter_selection=None,
                  shuffle=False,
                  seed=None,
                  image_channels=None,
@@ -268,116 +295,208 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         
         super().__init__(file_list=file_list, mode=mode, subarray_info=subarray_info, event_info=event_info)
 
-        self.example_identifiers = None
+        first_file = list(self.files)[0]
+
+        # Set pointing mode
+        # Fix_subarray: Fix subarray pointing (MC production)
+        # Subarray: Subarray pointing with different pointing over time (Operation or MC production with different pointing)
+        # Fix_divergent: Fix divergent pointing (MC production)
+        # Divergent: Divergent pointing with different pointing over time (Operation or MC production with different pointing)
+        if pointing_mode in ['fix_subarray', 'subarray', 'fix_divergent', 'divergent']:
+            self.pointing_mode = pointing_mode
+        else:
+            raise ValueError("Invalid pointing mode selection '{}'. Valid options: "
+                             "'fix_subarray', 'subarray', 'fix_divergent', 'divergent'".format(pointing_mode))
+
         self.telescopes = {}
         if selected_telescope_ids is None:
             selected_telescope_ids = {}
-
+        
         if multiplicity_selection is None:
             multiplicity_selection = {}
 
         if mapping_settings is None:
             mapping_settings = {}
-
-        simulation_info = None
-        for filename, f in self.files.items():
-
-            # Read simulation information from each observation needed for pyIRF
-            if 'simulation' in f.root.configuration:
-                simulation_info = self._construct_simulated_info(f.root.configuration.simulation, simulation_info)
-            # Teslecope selection
-            telescopes, selected_telescopes = self._construct_telescopes_selection(self.files[filename].root.configuration.instrument.subarray.layout, selected_telescope_types, selected_telescope_ids)
-            
-            # Multiplicity selection
-            subarray_multiplicity = 0
-            for tel_type in selected_telescopes:
-                if tel_type not in multiplicity_selection:
-                    multiplicity_selection[tel_type] = 1
-                else:
-                    subarray_multiplicity += multiplicity_selection[tel_type]
-            if subarray_multiplicity == 0:
-                subarray_multiplicity = 1
-            if 'Subarray' not in multiplicity_selection:
-                multiplicity_selection['Subarray'] = subarray_multiplicity
-                
-            # MC event selection
-            event_table = f.root.simulation.event.subarray.shower
-            if event_selection is None:
-                selected_nrows = list(range(len(event_table)))
-            else:
-                selected_nrows = [row.nrow for row in event_table.where(event_selection)]
-            selected_nrows_tuple = np.stack((event_table[selected_nrows]["obs_id"], event_table[selected_nrows]["event_id"]), axis=-1)
-            
-            # Construct the example identifiers for 'mono' or 'stereo' events that passed the MC event selection.
-            # TODO: Add commennts
-            example_identifiers = []
-            if self.mode == 'mono':
-                for tel_id in selected_telescopes[self.tel_type]:
-                    
-                    tel_table = "tel_{:03d}".format(tel_id)
-                    if tel_table in f.root.dl1.event.telescope.parameters:
-                        # Image and parameter selection based on the parameter table
-                        parameter_child = f.root.dl1.event.telescope.parameters._f_get_child(tel_table)
-                        if parameter_selection is None:
-                            image_indices = list(range(len(parameter_child)))
-                        else:
-                            image_indices = [row.nrow for row in parameter_child.where(parameter_selection)]
-                    
-                        # TODO: Timing with a larger dataset (or tables.Table) if for loop and searching for each image by obs_id and event_id via pytables.where() is faster than this concat and unique hack. Discussion more elegant and effiecient solution for this. Suggestions?
-                        image_indices_tuple = np.stack((parameter_child[image_indices]["obs_id"], parameter_child[image_indices]["event_id"]), axis=-1)
-                        unique_tuples, unique_counts = np.unique(np.concatenate((image_indices_tuple, selected_nrows_tuple)), axis=0, return_counts=True)
-                    
-                        if event_selection is None:
-                            nrows = np.where(unique_counts > 1)[0]
-                            for image_index, nrow in zip(image_indices, nrows):
-                                example_identifiers.append((filename, nrow, image_index, tel_id))
-                        else:
-                            _, unique_tuples_images_count = np.unique(np.concatenate((image_indices_tuple, unique_tuples[np.where(unique_counts > 1)[0]])), axis=0, return_counts=True)
-                            _, unique_tuples_nrows_count = np.unique(np.concatenate((selected_nrows_tuple, unique_tuples[np.where(unique_counts > 1)[0]])), axis=0, return_counts=True)
-                            image_rows = np.where(unique_tuples_images_count > 1)[0]
-                            nrows = np.where(unique_tuples_nrows_count > 1)[0]
-                            for image_index, nrow in zip(image_rows, nrows):
-                                example_identifiers.append((filename, selected_nrows[nrow], image_indices[image_index], tel_id))
-            elif self.mode == 'stereo':
-                for selected_nrow in selected_nrows:
-                    tels_with_trigger = f.root.dl1.event.subarray.trigger.cols._f_col("tels_with_trigger")[selected_nrow]
-                    mapped_array_triggers = []
-                    for tel_type in selected_telescopes:
-                        tel_ids = np.array(selected_telescopes[tel_type])
-                        # match position of trigger array with subtract -1 from the tel_id
-                        triggers = np.array(tels_with_trigger[tel_ids-1])
-                        mapped_triggers = -np.ones(len(tel_ids), np.int8)
-                        if sum(triggers) >= multiplicity_selection[tel_type]:
-                            for tel_id in tel_ids[triggers]:
-                                tel_table = "tel_{:03d}".format(tel_id)
-                                if tel_table in f.root.dl1.event.telescope.images:
-                                    images = self.files[filename].root.dl1.event.telescope.images._f_get_child(tel_table)
-                                    idx = [row.nrow for row in images.where("(obs_id == {}) & (event_id == {})".format(selected_nrows_tuple[selected_nrow][0], selected_nrows_tuple[selected_nrow][1]))]
-                                    mapped_triggers[np.where(tel_ids==tel_id)[0]] = idx[0]
-                            if len(selected_telescopes) == 1:
-                                mapped_array_triggers.append(mapped_triggers)
-                        if len(selected_telescopes) > 1:
-                            mapped_array_triggers.append(mapped_triggers)
-                    subarray_trigger = 0
-                    for trigger in mapped_array_triggers:
-                        subarray_trigger += sum(trigger>=0)
-                    if mapped_array_triggers and subarray_trigger >= multiplicity_selection['Subarray'] :
-                        example_identifiers.append((filename, selected_nrow, mapped_array_triggers))
-
-            # Confirm that the files are consistent and merge them
-            if not self.telescopes:
-                self.telescopes = telescopes
-            if self.telescopes != telescopes:
-                raise ValueError("Inconsistent telescope definition in "
-                                 "{}".format(filename))
-            self.selected_telescopes = selected_telescopes
-
-            if self.example_identifiers is None:
-                self.example_identifiers = example_identifiers
-            else:
-                self.example_identifiers.extend(example_identifiers)
-
         
+        simulation_info = None
+        self.example_identifiers = None
+        if example_identifiers_file is None:
+            example_identifiers_file = {}
+        else:
+            example_identifiers_file = pd.HDFStore(example_identifiers_file)
+            
+        if '/example_identifiers' in list(example_identifiers_file.keys()):
+            self.example_identifiers = pd.read_hdf(example_identifiers_file, key= '/example_identifiers').to_numpy()
+            if '/simulation_info' in list(example_identifiers_file.keys()):
+                simulation_info = pd.read_hdf(example_identifiers_file, key= '/simulation_info').to_dict('records')[0]
+            self.telescopes, self.selected_telescopes = self._construct_telescopes_selection(self.files[first_file].root.configuration.instrument.subarray.layout, selected_telescope_types, selected_telescope_ids)
+        else:
+
+            for file_idx, (filename, f) in enumerate(self.files.items()):
+                
+                # Read simulation information from each observation needed for pyIRF
+                if 'simulation' in f.root.configuration:
+                    simulation_info = self._construct_simulated_info(f.root.configuration.simulation, simulation_info)
+                # Teslecope selection
+                telescopes, selected_telescopes = self._construct_telescopes_selection(f.root.configuration.instrument.subarray.layout, selected_telescope_types, selected_telescope_ids)
+                
+                # Multiplicity selection
+                subarray_multiplicity = 0
+                for tel_type in selected_telescopes:
+                    if tel_type not in multiplicity_selection:
+                        multiplicity_selection[tel_type] = 1
+                    else:
+                        subarray_multiplicity += multiplicity_selection[tel_type]
+                if subarray_multiplicity == 0:
+                    subarray_multiplicity = 1
+                if 'Subarray' not in multiplicity_selection:
+                    multiplicity_selection['Subarray'] = subarray_multiplicity
+                    
+                # Construct the example identifiers for 'mono' or 'stereo' mode.
+                example_identifiers = []
+                if self.mode == 'mono':
+                
+                    # Construct the table containing all events.
+                    # First, the telescope tables are joined with the shower simulation
+                    # table and then those joined/merged tables are vertically stacked.
+                    tel_tables = []
+                    for tel_id in selected_telescopes[self.tel_type]:
+                        tel_table = read_table(f, f"/dl1/event/telescope/parameters/tel_{tel_id:03d}")
+                        tel_table.add_column(np.arange(len(tel_table)), name='img_index', index=0)
+                        simshower_table = read_table(f, "/simulation/event/subarray/shower")
+                        simshower_table.add_column(np.arange(len(simshower_table)), name='sim_index', index=0)
+                        tel_table = join(left=tel_table, right=simshower_table, keys=['obs_id', 'event_id'])
+                        tel_tables.append(tel_table)
+                    allevents = vstack(tel_tables)
+
+                    # MC event selection based on the shower simulation table
+                    # and image and parameter selection based on the parameter tables
+                    if event_selection:
+                        for filter in event_selection:
+                            if 'min_value' in filter:
+                                allevents = allevents[allevents[filter['col_name']] >= filter['min_value']]
+                            if 'max_value' in filter:
+                                allevents = allevents[allevents[filter['col_name']] < filter['max_value']]
+
+                    # TODO: Fix pointing over time (see ctapipe issue 1484 & 1562)
+                    if self.pointing_mode in ["subarray", "divergent"]:
+                        array_pointing = 0
+                    
+                    # Construct the example identifiers
+                    for sim_idx, img_idx, tel_id in zip(allevents["sim_index"], allevents["img_index"], allevents["tel_id"]):
+                        if self.pointing_mode in ["subarray", "divergent"]:
+                            example_identifiers.append((file_idx, sim_idx, img_idx, tel_id, array_pointing))
+                        else:
+                            example_identifiers.append((file_idx, sim_idx, img_idx, tel_id))
+                    
+                elif self.mode == 'stereo':
+                
+                    # Construct the table containing all events.
+                    # The shower simulation table is joined with the subarray trigger table.
+                    simshower_table = read_table(f, "/simulation/event/subarray/shower")
+                    simshower_table.add_column(np.arange(len(simshower_table)), name='sim_index', index=0)
+                    trigger_table = read_table(f, "/dl1/event/subarray/trigger")
+                    allevents = join(left=trigger_table, right=simshower_table, keys=['obs_id', 'event_id'])
+                    
+                    # MC event selection based on the shower simulation table.
+                    if event_selection:
+                        for filter in event_selection:
+                            if 'min_value' in filter:
+                                allevents = allevents[allevents[filter['col_name']] >= filter['min_value']]
+                            if 'max_value' in filter:
+                                allevents = allevents[allevents[filter['col_name']] < filter['max_value']]
+
+                    # Apply the multiplicity cut on the subarray.
+                    # Therefore, two telescope types have to be selected at least.
+                    tels_with_trigger = np.array(allevents['tels_with_trigger'])
+                    sim_indices = np.array(allevents['sim_index'], np.int32)
+                    if len(selected_telescopes) > 1:
+                        # Get all tel ids from the subarray
+                        tel_ids = np.hstack(list(selected_telescopes.values()))
+                        # Construct a boolean array of allowed telescopes
+                        allowed_tels = np.array([1 if tel_id in tel_ids-1 else 0 for tel_id in range(tels_with_trigger.shape[1])], bool)
+                        # Construct the telescope trigger information restricted to allowed telescopes
+                        allowed_tels_with_trigger = tels_with_trigger * allowed_tels
+                        # Get the multiplicity and apply the subarray multiplicity cut
+                        subarray_multiplicity, _ = allowed_tels_with_trigger.nonzero()
+                        events, multiplicity = np.unique(subarray_multiplicity, axis=0, return_counts=True)
+                        selected_events = events[np.where(multiplicity >= multiplicity_selection['Subarray'])]
+                        sim_indices = sim_indices[selected_events]
+
+                    image_indices ={}
+                    for tel_type in selected_telescopes:
+                        # Get all selected tel ids of this telescope type
+                        tel_ids = np.array(selected_telescopes[tel_type])
+                        # Construct a boolean array of allowed telescopes of this telescope type
+                        allowed_tels = np.array([1 if tel_id in tel_ids-1 else 0 for tel_id in range(tels_with_trigger.shape[1])], bool)
+                        # Construct the telescope trigger information restricted to allowed telescopes of this telescope type
+                        allowed_tels_with_trigger = tels_with_trigger * allowed_tels
+                        # Apply the multiplicity cut on the telescope type only.
+                        if len(selected_telescopes) == 1:
+                            # Get the multiplicity of this telescope type and apply the multiplicity cut
+                            tel_type_multiplicity, _ = allowed_tels_with_trigger.nonzero()
+                            events, multiplicity = np.unique(tel_type_multiplicity, axis=0, return_counts=True)
+                            selected_events = events[np.where(multiplicity >= multiplicity_selection[tel_type])]
+                            sim_indices = sim_indices[selected_events]
+                        selected_events_trigger = allowed_tels_with_trigger[selected_events]
+                        # Get the position of each images of telescopes of this telescope type that triggered
+                        img_idx = -np.ones((len(selected_events), len(tel_ids)), np.int32)
+                        for tel_id in tel_ids:
+                            # Get the trigger information of this telescope
+                            tel_trigger_info = selected_events_trigger[:,tel_id-1]
+                            tel_trigger_info = np.where(tel_trigger_info)[0]
+                            # The telescope table is joined with the selected and merged table.
+                            tel_table = read_table(f, f"/dl1/event/telescope/parameters/tel_{tel_id:03d}")
+                            tel_table.add_column(np.arange(len(tel_table)), name='img_index', index=0)
+                            merged_table = join(left=tel_table, right=allevents[selected_events], keys=['obs_id', 'event_id'])
+                            # Get the original position of image in the telescope table.
+                            tel_img_index = np.array(merged_table['img_index'], np.int32)
+                            for lo, le in zip(tel_trigger_info, tel_img_index):
+                                img_idx[lo][np.where(tel_ids==tel_id)] = le
+                        image_indices[tel_type] = img_idx
+                    
+                    # TODO: Fix pointing over time (see ctapipe issue 1484 & 1562)
+                    if self.pointing_mode == "subarray":
+                        array_pointings = 0
+                    elif self.pointing_mode == "divergent":
+                        tel_ids = np.hstack(list(selected_telescopes.values()))
+                        array_pointings = np.zeros(len(tel_ids), np.int8)
+                    
+                    # Construct the example identifiers
+                    # TODO: Find a better way!?
+                    for idx, sim_idx in enumerate(sim_indices):
+                        img_idx = []
+                        for tel_type in selected_telescopes:
+                            img_idx.append(image_indices[tel_type][idx])
+                        if self.pointing_mode in ["subarray", "divergent"]:
+                            example_identifiers.append((file_idx, sim_idx, img_idx, array_pointings))
+                        else:
+                            example_identifiers.append((file_idx, sim_idx, img_idx))
+
+                # Confirm that the files are consistent and merge them
+                if not self.telescopes:
+                    self.telescopes = telescopes
+                if self.telescopes != telescopes:
+                    raise ValueError("Inconsistent telescope definition in "
+                                     "{}".format(filename))
+                self.selected_telescopes = selected_telescopes
+
+                if self.example_identifiers is None:
+                    self.example_identifiers = example_identifiers
+                else:
+                    self.example_identifiers.extend(example_identifiers)
+
+            # Dump example_identifiers and simulation_info to a pandas hdf5 file
+            if not isinstance(example_identifiers_file, dict):
+                pd.DataFrame(data=self.example_identifiers).to_hdf(example_identifiers_file, key='example_identifiers', mode='a')
+                if simulation_info:
+                    pd.DataFrame(data=pd.DataFrame(simulation_info, index=[0])).to_hdf(example_identifiers_file, key='simulation_info', mode='a')
+
+        # Shuffle the examples
+        if shuffle:
+            random.seed(seed)
+            random.shuffle(self.example_identifiers)
+
         if simulation_info:
             # Created pyIRF SimulatedEventsInfo
             self.pyIRFSimulatedEventsInfo = SimulatedEventsInfo(n_showers=int(simulation_info['num_showers'] * simulation_info['shower_reuse']),
@@ -387,17 +506,24 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                                                 spectral_index=simulation_info['spectral_index'],
                                                                 viewcone=u.Quantity(simulation_info['max_viewcone_radius'], u.deg))
 
-        # Shuffle the examples
-        if shuffle:
-            random.seed(seed)
-            random.shuffle(self.example_identifiers)
+        if self.pointing_mode == "fix_subarray":
+            subarray_pointing = self.files[first_file].root.dl1.monitoring.subarray.pointing
+            self.pointing = np.array([subarray_pointing[0]["array_altitude"], subarray_pointing[0]["array_azimuth"]], np.float32)
+        elif self.pointing_mode == "fix_divergent":
+            self.pointing = {}
+            for tel_type in selected_telescopes:
+                tel_ids = np.array(selected_telescopes[tel_type])
+                for tel_id in tel_ids:
+                    tel_table = "tel_{:03d}".format(tel_id)
+                    telescope_pointing = self.files[first_file].root.dl1.monitoring.telescope.pointing._f_get_child(tel_table)
+                    self.pointing[tel_id] = np.array([telescope_pointing[0]["altitude"], telescope_pointing[0]["azimuth"]], np.float32)
 
         self.parameter_list = parameter_list
         self.image_channels = image_channels
 
         # ImageMapper (1D charges -> 2D images)
         if self.image_channels is not None:
-            self.pixel_positions, self.num_pixels = self._construct_pixel_positions(f.root.configuration.instrument.telescope)
+            self.pixel_positions, self.num_pixels = self._construct_pixel_positions(self.files[first_file].root.configuration.instrument.telescope)
             if 'camera_types' not in mapping_settings:
                 mapping_settings['camera_types'] = self.pixel_positions.keys()
             self.image_mapper = ImageMapper(pixel_positions=self.pixel_positions,
@@ -410,7 +536,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     len(self.image_channels)  # number of channels
                 )
                 
-        super()._construct_unprocessed_example_description(f.root.configuration.instrument.subarray.layout, event_table)
+        super()._construct_unprocessed_example_description(self.files[first_file].root.configuration.instrument.subarray.layout, self.files[first_file].root.simulation.event.subarray.shower)
         
         self.processor = DL1DataProcessor(
             self.mode,
@@ -559,10 +685,11 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         return pixel_positions, num_pixels
         
     
-    def _load_tel_type_data(self, filename, nrow, tel_type, trigger_info):
+    def _load_tel_type_data(self, filename, nrow, tel_type, trigger_info, pointing_info=None):
         triggers = []
         images = []
         parameters_lists = []
+        pointings = []
         subarray_info = [[] for column in self.subarray_info]
         for i, tel_id in enumerate(self.selected_telescopes[tel_type]):
             if self.image_channels is not None:
@@ -589,6 +716,17 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         parameter_list.append(np.nan)
                 parameters_lists.append(np.array(parameter_list, dtype=np.float32))
 
+            if self.pointing_mode == "divergent":
+                child = None
+                with lock:
+                    tel_table = "tel_{:03d}".format(tel_id)
+                    if tel_table in self.files[filename].root.dl1.monitoring.telescope.pointing:
+                        child = self.files[filename].root.dl1.monitoring.telescope.pointing._f_get_child(tel_table)
+                if child:
+                    pointings.append(np.array([child[pointing_info[i]]["altitude"], child[pointing_info[i]]["azimuth"]], np.float32))
+                else:
+                    pointings.append(np.array([np.nan, np.nan], np.float32))
+
             tel_query = "tel_id == {}".format(tel_id)
             super()._append_subarray_info(self.files[filename].root.configuration.instrument.subarray.layout, subarray_info, tel_query)
         
@@ -597,6 +735,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             example.extend([np.stack(images)])
         if self.parameter_list is not None:
             example.extend([np.stack(parameters_lists)])
+        if self.pointing_mode == "divergent":
+            example.extend([np.stack(pointings)])
         example.extend([np.stack(info) for info in subarray_info])
         return example
     
@@ -606,12 +746,13 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         identifiers = self.example_identifiers[idx]
 
         # Get record for the event
-        filename = identifiers[0]
+        filename = list(self.files)[identifiers[0]]
 
         # Load the data and any selected array info
         if self.mode == "mono":
             # Get a single image
             nrow, index, tel_id = identifiers[1:4]
+            
             example = []
             if self.image_channels is not None:
                 with lock:
@@ -624,24 +765,46 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 with lock:
                     tel_table = "tel_{:03d}".format(tel_id)
                     child = self.files[filename].root.dl1.event.telescope.parameters._f_get_child(tel_table)
-                    parameter_list = child[index][self.parameter_list]
-                    example.append(np.array(list(parameter_list), dtype=np.float32))
+                parameter_list = child[index][self.parameter_list]
+                example.append(np.array(list(parameter_list), dtype=np.float32))
 
+            if self.pointing_mode == "subarray":
+                pointing_info = identifiers[4]
+                with lock:
+                    subarray_pointing = self.files[filename].root.dl1.monitoring.subarray.pointing
+                example.append(np.array([subarray_pointing[pointing_info]["array_altitude"], subarray_pointing[pointing_info]["array_azimuth"]], np.float32))
+            elif self.pointing_mode == "divergent":
+                pointing_info = identifiers[4]
+                with lock:
+                    tel_table = "tel_{:03d}".format(tel_id)
+                    if tel_table in self.files[filename].root.dl1.monitoring.telescope.pointing:
+                        child = self.files[filename].root.dl1.monitoring.telescope.pointing._f_get_child(tel_table)
+                example.append(np.array([child[pointing_info]["altitude"], child[pointing_info]["azimuth"]], np.float32))
+               
             subarray_info = [[] for column in self.subarray_info]
             tel_query = "tel_id == {}".format(tel_id)
             super()._append_subarray_info(self.files[filename].root.configuration.instrument.subarray.layout, subarray_info, tel_query)
             example.extend([np.stack(info) for info in subarray_info])
         elif self.mode == "stereo":
-            # Get a list of images and an array of binary trigger values
+            # Get a list of images and/or image parameters, an array of binary trigger values and telescope pointings
             # for each selected telescope type
             nrow = identifiers[1]
             trigger_info = identifiers[2]
+            pointing_info = None
+            if self.pointing_mode == "divergent":
+                pointing_info = identifiers[3]
 
             example = []
             for ind, tel_type in enumerate(self.selected_telescopes):
-                tel_type_example = self._load_tel_type_data(filename, nrow, tel_type, trigger_info[ind])
+                tel_type_example = self._load_tel_type_data(filename, nrow, tel_type, trigger_info[ind], pointing_info)
                 example.extend(tel_type_example)
-
+            
+            if self.pointing_mode == "subarray":
+                pointing_info = identifiers[3]
+                with lock:
+                    subarray_pointing = self.files[filename].root.dl1.monitoring.subarray.pointing
+                example.append(np.array([subarray_pointing[pointing_info]["array_altitude"], subarray_pointing[pointing_info]["array_azimuth"]], np.float32))
+                
         # Load event info
         with lock:
             events = self.files[filename].root.simulation.event.subarray.shower
