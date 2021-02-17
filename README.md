@@ -45,10 +45,10 @@ python setup_light.py install
 
 To install it as a conda package, first install Anaconda by following the instructions here: https://www.anaconda.com/distribution/.
 
-Then, create and enter a new Python 3.7 environment with:
+Then, create and enter a new Python 3.7 (with cython) environment with:
 
 ```bash
-conda create -n [ENVIRONMENT_NAME] python=3.7
+conda create -n [ENVIRONMENT_NAME] python=3.7 cython
 conda activate [ENVIRONMENT_NAME]
 ```
 
@@ -83,7 +83,7 @@ The main dependencies are:
 
 * PyTables >= 3.4.4
 * NumPy >= 1.15.0
-* ctapipe == 0.9.1
+* ctapipe == 0.10.3
 
 Also see setup.py.
 
