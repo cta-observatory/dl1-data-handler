@@ -456,6 +456,15 @@ class DL1DataReader:
 
         return example
 
+
+    # Convert a possibly-nested sequence to a tuple
+    def _totuple(self, a):
+        try:
+            return tuple(self._totuple(i) for i in a)
+        except TypeError:
+            return a
+
+
     # Return a dictionary of number of examples in the dataset, grouped by
     # the array names listed in the iterable group_by.
     # If example_indices is a list of indices, consider only those examples,
@@ -472,9 +481,8 @@ class DL1DataReader:
             example_indices = list(range(len(self)))
         for idx in example_indices:
             example = self[idx]
-            # Use tuple() and tolist() to convert list and NumPy array
-            # to hashable keys
-            group = tuple([example[idx].tolist() for idx in grouping_indices])
+            # Convert to a tuple to get a hashable key
+            group = self._totuple(example[idx].tolist() for idx in grouping_indices)
             if group in group_nums:
                 group_nums[group] += 1
             else:
