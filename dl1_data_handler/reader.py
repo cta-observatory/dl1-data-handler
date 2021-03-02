@@ -127,9 +127,9 @@ class DL1DataReader:
             if self.pointing_mode == 'divergent':
                 self.unprocessed_example_description.append(
                     {
-                        'name': 'pointings',
+                        'name': 'pointing',
                         'tel_type': self.tel_type,
-                        'base_name': 'pointings',
+                        'base_name': 'pointing',
                         'shape': (2,),
                         'dtype': np.dtype(np.float32)
                     }
@@ -322,7 +322,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         if mapping_settings is None:
             mapping_settings = {}
         
-        simulation_info = None
+        self.simulation_info = None
         self.example_identifiers = None
         if example_identifiers_file is None:
             example_identifiers_file = {}
@@ -332,7 +332,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         if '/example_identifiers' in list(example_identifiers_file.keys()):
             self.example_identifiers = pd.read_hdf(example_identifiers_file, key= '/example_identifiers').to_numpy()
             if '/simulation_info' in list(example_identifiers_file.keys()):
-                simulation_info = pd.read_hdf(example_identifiers_file, key= '/simulation_info').to_dict('records')[0]
+                self.simulation_info = pd.read_hdf(example_identifiers_file, key= '/simulation_info').to_dict('records')[0]
             self.telescopes, self.selected_telescopes = self._construct_telescopes_selection(self.files[first_file].root.configuration.instrument.subarray.layout, selected_telescope_types, selected_telescope_ids)
         else:
 
@@ -340,7 +340,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 
                 # Read simulation information from each observation needed for pyIRF
                 if self.event_info:
-                    simulation_info = self._construct_simulated_info(f.root.configuration.simulation, simulation_info)
+                    self.simulation_info = self._construct_simulated_info(f.root.configuration.simulation, self.simulation_info)
                 # Teslecope selection
                 telescopes, selected_telescopes = self._construct_telescopes_selection(f.root.configuration.instrument.subarray.layout, selected_telescope_types, selected_telescope_ids)
                 
@@ -498,17 +498,17 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             # Dump example_identifiers and simulation_info to a pandas hdf5 file
             if not isinstance(example_identifiers_file, dict):
                 pd.DataFrame(data=self.example_identifiers).to_hdf(example_identifiers_file, key='example_identifiers', mode='a')
-                if simulation_info:
-                    pd.DataFrame(data=pd.DataFrame(simulation_info, index=[0])).to_hdf(example_identifiers_file, key='simulation_info', mode='a')
+                if self.simulation_info:
+                    pd.DataFrame(data=pd.DataFrame(self.simulation_info, index=[0])).to_hdf(example_identifiers_file, key='simulation_info', mode='a')
 
         if self.event_info:
             # Created pyIRF SimulatedEventsInfo
-            self.pyIRFSimulatedEventsInfo = SimulatedEventsInfo(n_showers=int(simulation_info['num_showers'] * simulation_info['shower_reuse']),
-                                                                energy_min=u.Quantity(simulation_info['energy_range_min'], u.TeV),
-                                                                energy_max=u.Quantity(simulation_info['energy_range_max'], u.TeV),
-                                                                max_impact=u.Quantity(simulation_info['max_scatter_range'], u.m),
-                                                                spectral_index=simulation_info['spectral_index'],
-                                                                viewcone=u.Quantity(simulation_info['max_viewcone_radius'], u.deg))
+            self.pyIRFSimulatedEventsInfo = SimulatedEventsInfo(n_showers=int(self.simulation_info['num_showers'] * self.simulation_info['shower_reuse']),
+                                                                energy_min=u.Quantity(self.simulation_info['energy_range_min'], u.TeV),
+                                                                energy_max=u.Quantity(self.simulation_info['energy_range_max'], u.TeV),
+                                                                max_impact=u.Quantity(self.simulation_info['max_scatter_range'], u.m),
+                                                                spectral_index=self.simulation_info['spectral_index'],
+                                                                viewcone=u.Quantity(self.simulation_info['max_viewcone_radius'], u.deg))
 
         if self.pointing_mode == "fix_subarray":
             subarray_pointing = self.files[first_file].root.dl1.monitoring.subarray.pointing
@@ -612,7 +612,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
     def _construct_simulated_info(self, simulation_table, simulation_info):
         """
-        Construct the simulated_info from the DL1 hdf5 file for the pyIRF SimulatedEventsInfo table.
+        Construct the simulated_info from the DL1 hdf5 file for the pyIRF SimulatedEventsInfo table & GammaBoard.
         Parameters
         ----------
             simulation_table (tables.Tables): table containing the simulation information
@@ -632,6 +632,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         max_scatter_range = max(np.array(runs.cols._f_col("max_scatter_range")))
         spectral_index = np.array(runs.cols._f_col("spectral_index"))[0]
         max_viewcone_radius = max(np.array(runs.cols._f_col("max_viewcone_radius")))
+        min_alt = min(np.array(runs.cols._f_col("min_alt")))
+        max_alt = max(np.array(runs.cols._f_col("max_alt")))
         if simulation_info:
             simulation_info["num_showers"] += num_showers
             if simulation_info["shower_reuse"] > shower_reuse:
@@ -644,6 +646,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 simulation_info["max_scatter_range"] = max_scatter_range
             if simulation_info["max_viewcone_radius"] < max_viewcone_radius:
                 simulation_info["max_viewcone_radius"] = max_viewcone_radius
+            if simulation_info["min_alt"] > min_alt:
+                simulation_info["min_alt"] = min_alt
+            if simulation_info["max_alt"] < max_alt:
+                simulation_info["max_alt"] = max_alt
         else:
             simulation_info = {}
             simulation_info["num_showers"] = num_showers
@@ -653,6 +659,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             simulation_info["max_scatter_range"] = max_scatter_range
             simulation_info["spectral_index"] = spectral_index
             simulation_info["max_viewcone_radius"] = max_viewcone_radius
+            simulation_info["min_alt"] = min_alt
+            simulation_info["max_alt"] = max_alt
 
         return simulation_info
 
@@ -880,7 +888,7 @@ class DL1DataReaderDL1DH(DL1DataReader):
         if mapping_settings is None:
             mapping_settings = {}
             
-        simulation_info = None
+        self.simulation_info = None
         self.example_identifiers = None
         if example_identifiers_file is None:
             example_identifiers_file = {}
@@ -890,14 +898,14 @@ class DL1DataReaderDL1DH(DL1DataReader):
         if '/example_identifiers' in list(example_identifiers_file.keys()):
             self.example_identifiers = pd.read_hdf(example_identifiers_file, key= '/example_identifiers').to_numpy()
             if '/simulation_info' in list(example_identifiers_file.keys()):
-                simulation_info = pd.read_hdf(example_identifiers_file, key= '/simulation_info').to_dict('records')[0]
+                self.simulation_info = pd.read_hdf(example_identifiers_file, key= '/simulation_info').to_dict('records')[0]
             self.telescopes, self.selected_telescopes, cut_condition = self._construct_telescopes_selection(self.files[first_file].root.Array_Information, selected_telescope_types, selected_telescope_ids, selection_string)
         else:
 
             for file_idx, (filename, f) in enumerate(self.files.items()):
                 
                 if self.event_info:
-                    simulation_info = self._construct_simulated_info(f.root._v_attrs, simulation_info)
+                    self.simulation_info = self._construct_simulated_info(f.root._v_attrs, self.simulation_info)
                     
                 # Teslecope selection
                 telescopes, selected_telescopes, cut_condition = self._construct_telescopes_selection(f.root.Array_Information, selected_telescope_types, selected_telescope_ids, selection_string)
@@ -962,17 +970,17 @@ class DL1DataReaderDL1DH(DL1DataReader):
             # Dump example_identifiers and simulation_info to a pandas hdf5 file
             if not isinstance(example_identifiers_file, dict):
                 pd.DataFrame(data=self.example_identifiers).to_hdf(example_identifiers_file, key='example_identifiers', mode='a')
-                if simulation_info:
-                    pd.DataFrame(data=pd.DataFrame(simulation_info, index=[0])).to_hdf(example_identifiers_file, key='simulation_info', mode='a')
+                if self.simulation_info:
+                    pd.DataFrame(data=pd.DataFrame(self.simulation_info, index=[0])).to_hdf(example_identifiers_file, key='simulation_info', mode='a')
                     
         if self.event_info:
             # Created pyIRF SimulatedEventsInfo
-            self.pyIRFSimulatedEventsInfo = SimulatedEventsInfo(n_showers=int(simulation_info['num_showers'] * simulation_info['shower_reuse']),
-                                                                energy_min=u.Quantity(simulation_info['energy_range_min'], u.TeV),
-                                                                energy_max=u.Quantity(simulation_info['energy_range_max'], u.TeV),
-                                                                max_impact=u.Quantity(simulation_info['max_scatter_range'], u.m),
-                                                                spectral_index=simulation_info['spectral_index'],
-                                                                viewcone=u.Quantity(simulation_info['max_viewcone_radius'], u.deg))
+            self.pyIRFSimulatedEventsInfo = SimulatedEventsInfo(n_showers=int(self.simulation_info['num_showers'] * self.simulation_info['shower_reuse']),
+                                                                energy_min=u.Quantity(self.simulation_info['energy_range_min'], u.TeV),
+                                                                energy_max=u.Quantity(self.simulation_info['energy_range_max'], u.TeV),
+                                                                max_impact=u.Quantity(self.simulation_info['max_scatter_range'], u.m),
+                                                                spectral_index=self.simulation_info['spectral_index'],
+                                                                viewcone=u.Quantity(self.simulation_info['max_viewcone_radius'], u.deg))
 
         if self.pointing_mode == "fix_subarray":
             run_array_direction = self.files[first_file].root._v_attrs["run_array_direction"]
@@ -1084,7 +1092,7 @@ class DL1DataReaderDL1DH(DL1DataReader):
     
     def _construct_simulated_info(self, file_v_attrs, simulation_info):
         """
-        Construct the simulated_info from the DL1 hdf5 file for the pyIRF SimulatedEventsInfo table.
+        Construct the simulated_info from the DL1 hdf5 file for the pyIRF SimulatedEventsInfo table & GammaBoard.
         Parameters
         ----------
             file_v_attrs (tables.Tables): attributes of the file containing the simulation information
@@ -1103,6 +1111,8 @@ class DL1DataReaderDL1DH(DL1DataReader):
         max_scatter_range = file_v_attrs['max_scatter_range']
         spectral_index = file_v_attrs['spectral_index']
         max_viewcone_radius = file_v_attrs['max_viewcone_radius']
+        min_alt = file_v_attrs['min_alt']
+        max_alt = file_v_attrs['max_alt']
         if simulation_info:
             simulation_info["num_showers"] += num_showers
             if simulation_info["shower_reuse"] > shower_reuse:
@@ -1115,6 +1125,10 @@ class DL1DataReaderDL1DH(DL1DataReader):
                 simulation_info["max_scatter_range"] = max_scatter_range
             if simulation_info["max_viewcone_radius"] < max_viewcone_radius:
                 simulation_info["max_viewcone_radius"] = max_viewcone_radius
+            if simulation_info["min_alt"] > min_alt:
+                simulation_info["min_alt"] = min_alt
+            if simulation_info["max_alt"] < max_alt:
+                simulation_info["max_alt"] = max_alt
         else:
             simulation_info = {}
             simulation_info["num_showers"] = num_showers
@@ -1124,6 +1138,8 @@ class DL1DataReaderDL1DH(DL1DataReader):
             simulation_info["max_scatter_range"] = max_scatter_range
             simulation_info["spectral_index"] = spectral_index
             simulation_info["max_viewcone_radius"] = max_viewcone_radius
+            simulation_info["min_alt"] = min_alt
+            simulation_info["max_alt"] = max_alt
 
         return simulation_info
     
