@@ -482,7 +482,7 @@ class DL1DataReader:
         for idx in example_indices:
             example = self[idx]
             # Convert to a tuple to get a hashable key
-            group = self._totuple(example[idx] for idx in grouping_indices)
+            group = self._totuple(example[idx].tolist() for idx in grouping_indices)
             if group in group_nums:
                 group_nums[group] += 1
             else:
