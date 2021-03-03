@@ -63,12 +63,12 @@ conda config --add channels cta-observatory
 Install the package:
 
 ```bash
-conda install -c ctlearn-project dl1_data_handler
+conda install -c ctlearn-project dl1_data_handler==0.8.3
 ```
 
 This should automatically install all dependencies (NOTE: this may take some time, as by default MKL is included as a dependency of NumPy and it is very large).
 
-If you want to import any functionality from dl1-data-handler into your own Python scripts, then you are all set. However, if you wish to make use of any of the scripts in dl1-data-handler/scripts (like write_data.py), you should also clone the repository locally and checkout the corresponding tag (i.e. for version v0.8.2): 
+If you want to import any functionality from dl1-data-handler into your own Python scripts, then you are all set. However, if you wish to make use of any of the scripts in dl1-data-handler/scripts (like write_data.py), you should also clone the repository locally and checkout the corresponding tag (i.e. for version v0.8.3): 
 
 ```bash
 git clone https://github.com/cta-observatory/dl1-data-handler.git
@@ -96,14 +96,14 @@ Also see setup.py.
 To process data files into a desired format:
 
 ```bash
-scripts/write_data.py [runlist] [--config_file CONFIG_FILE_PATH] [--output_dir OUTPUT_DIR] [--debug]
+python scripts/write_data.py [runlist] [--config_file CONFIG_FILE_PATH] [--output_dir OUTPUT_DIR] [--debug]
 ```
 on the command line.
 
 ex:
 
 ```bash
-scripts/write_data.py runlist.yml --config_file example_config.yml --debug
+python scripts/write_data.py runlist.yml --config_file example_config.yml --debug
 ```
 
 * runlist - A YAML file containing groups of input files to load data from and output files to write to. See example runlist for format.
@@ -153,7 +153,7 @@ If processing data from simtel.gz files, as long as their filenames have the for
 It can be called as:
 
 ```bash
-scripts/generate_runlist.py [file_dir] [--num_inputs_per_run NUM_INPUTS_PER_RUN] [--output_file OUTPUT_FILE]
+python scripts/generate_runlist.py [file_dir] [--num_inputs_per_run NUM_INPUTS_PER_RUN] [--output_file OUTPUT_FILE]
 ```
 
 * file_dir - Path to a directory containing simtel.gz files with the filename format specified above.
