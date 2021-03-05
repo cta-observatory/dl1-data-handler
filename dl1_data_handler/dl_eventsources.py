@@ -81,6 +81,15 @@ class DLMAGICEventSource(EventSource):
             if "_S_" in file:
                 self.superstar = uproot_file["Events"]
                 self.meta = uproot_file["RunHeaders"]
+
+        # figure out if MC or Data run
+        self.mc = b'MMcCorsikaRunHeader.' in self.meta.keys()
+
+        if self.mc:
+            print("This file IS a simulation")
+        else:
+            print("This file is not real")
+
         self._mc_header = self._parse_mc_header()
 
     @property
@@ -94,7 +103,7 @@ class DLMAGICEventSource(EventSource):
         bool
 
         """
-        return True
+        return self.mc
 
     @property
     def datalevels(self):
