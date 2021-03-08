@@ -43,11 +43,6 @@ class DLMAGICEventSource(EventSource):
         del kwargs['input_url']
         super().__init__(input_url=self.file_list[0], **kwargs)
 
-        # get run number
-        mask = r".*_za\d+to\d+_\d_(\d+)_([A-Z]+)_.*"
-        parsed_info = re.findall(mask, self.file_list[0])
-        self.run_number = parsed_info[0][0]
-
         # MAGIC telescope positions in m wrt. to the center of CTA simulations
         self.magic_tel_positions = {
             1: [-27.24, -146.66, 50.00] * u.m,
@@ -85,10 +80,13 @@ class DLMAGICEventSource(EventSource):
         # figure out if MC or Data run
         self.mc = b'MMcCorsikaRunHeader.' in self.meta.keys()
 
+        # get the run number directly from the root file
         if self.mc:
-            print("This file IS a simulation")
+            self.run_number = int(uproot_file['RunHeaders']['MMcCorsikaRunHeader.']['MMcCorsikaRunHeader.fRunNumber'].array()[0])
+            print(f"This run {self.run_number} IS a simulation")
         else:
-            print("This file is not real")
+            self.run_number = int(uproot_file["RunHeaders"]["MRawRunHeader_1."]["MRawRunHeader_1.fRunNumber"].array()[0])
+            print(f"This run #{self.run_number} is REAL data!")
 
         self._mc_header = self._parse_mc_header()
 
