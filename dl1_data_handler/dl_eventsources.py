@@ -469,3 +469,12 @@ class DLMAGICEventSource(EventSource):
                 run_stop_ns = self.meta[b'MRawRunHeader_1.fRunStop.fNanoSec'].array()[0]
                 )
 
+    @staticmethod
+    def _decode_ascii_array(array):
+    
+        # find where the string ends
+        first_zero_index = np.where(array == 0)[0][0]
+        
+        # return the word
+        return ''.join(chr(letter) for letter in array[:first_zero_index])
+    
