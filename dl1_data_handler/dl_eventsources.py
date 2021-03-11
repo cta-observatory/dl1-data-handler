@@ -88,7 +88,7 @@ class DLMAGICEventSource(EventSource):
             self.run_number = int(uproot_file["RunHeaders"]["MRawRunHeader_1."]["MRawRunHeader_1.fRunNumber"].array()[0])
             print(f"This run #{self.run_number} is REAL data!")
 
-        self._mc_header = self._parse_mc_header()
+        self._header = self._parse_header()
 
     @property
     def is_simulation(self):
@@ -187,7 +187,7 @@ class DLMAGICEventSource(EventSource):
         data.meta['origin'] = "MAGIC"
         data.meta['input_url'] = self.input_url
         data.meta['is_simulation'] = True
-        data.mcheader = self._mc_header
+        data.header = self._header
 
         if self.calib_M1 is not None and self.calib_M2 is not None:
             #Reading data from root file for Events table
