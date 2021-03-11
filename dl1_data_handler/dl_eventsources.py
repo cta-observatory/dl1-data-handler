@@ -373,44 +373,99 @@ class DLMAGICEventSource(EventSource):
                 yield data
                 counter += 1
         return
-    def _parse_mc_header(self):
-        run_header = "MMcRunHeader" if self.superstar is None else "MMcRunHeader_1"
-        return containers.MAGICMCHeaderContainer(
-            corsika_version = self.meta["{}.fCorsikaVersion".format(run_header)].array()[0],
-            refl_version = self.meta["{}.fReflVersion".format(run_header)].array()[0],
-            cam_version = self.meta["{}.fCamVersion".format(run_header)].array()[0],
-            run_number = self.meta["{}.fMcRunNumber".format(run_header)].array()[0],
-            prod_site = self.meta["{}.fProductionSite".format(run_header)].array()[0],
-            date_run_mmcs = self.meta["{}.fDateRunMMCs".format(run_header)].array()[0],
-            date_run_cam = self.meta["{}.fDateRunCamera".format(run_header)].array()[0],
-            shower_theta_max = Angle(self.meta["{}.fShowerThetaMax".format(run_header)].array()[0], u.deg),
-            shower_theta_min = Angle(self.meta["{}.fShowerThetaMin".format(run_header)].array()[0], u.deg),
-            shower_phi_max = Angle(self.meta["{}.fShowerPhiMax".format(run_header)].array()[0], u.deg),
-            shower_phi_min = Angle(self.meta["{}.fShowerPhiMin".format(run_header)].array()[0], u.deg),
-            c_wave_lower = self.meta["{}.fCWaveLower".format(run_header)].array()[0],
-            c_wave_upper = self.meta["{}.fCWaveUpper".format(run_header)].array()[0],
-            num_obs_lev = self.meta["{}.fNumObsLev".format(run_header)].array()[0],
-            height_lev = self.meta["{}.fHeightLev[10]".format(run_header)].array(),
-            slope_spec = self.meta["{}.fSlopeSpec".format(run_header)].array()[0],
-            rand_pointing_cone_semi_angle = Angle(self.meta["{}.fRandomPointingConeSemiAngle".format(run_header)].array()[0], u.deg),
-            impact_max = self.meta["{}.fImpactMax".format(run_header)].array()[0],
-            star_field_rotate = self.meta["{}.fStarFieldRotate".format(run_header)].array()[0],
-            star_field_ra_h = self.meta["{}.fStarFieldRaH".format(run_header)].array()[0],
-            star_field_ra_m = self.meta["{}.fStarFieldRaM".format(run_header)].array()[0],
-            star_field_ra_s = self.meta["{}.fStarFieldRaS".format(run_header)].array()[0],
-            star_field_dec_d = self.meta["{}.fStarFieldDeD".format(run_header)].array()[0],
-            star_field_dec_m = self.meta["{}.fStarFieldDeM".format(run_header)].array()[0],
-            star_field_dec_s = self.meta["{}.fStarFieldDeS".format(run_header)].array()[0],
-            num_trig_cond = self.meta["{}.fNumTrigCond".format(run_header)].array()[0],
-            all_evts_trig = self.meta["{}.fAllEvtsTriggered".format(run_header)].array()[0],
-            mc_evt = self.meta["{}.fMcEvt".format(run_header)].array()[0],
-            mc_trig = self.meta["{}.fMcTrig".format(run_header)].array()[0],
-            mc_fadc = self.meta["{}.fMcFadc".format(run_header)].array()[0],
-            raw_evt = self.meta["{}.fRawEvt".format(run_header)].array()[0],
-            num_analised_pix = self.meta["{}.fNumAnalisedPixels".format(run_header)].array()[0],
-            num_simulated_showers = self.meta["{}.fNumSimulatedShowers".format(run_header)].array()[0],
-            num_stored_showers = self.meta["{}.fNumStoredShowers".format(run_header)].array()[0],
-            num_events = self.meta["{}.fNumEvents".format(run_header)].array()[0],
-            num_phe_from_dnsb = self.meta["{}.fNumPheFromDNSB".format(run_header)].array()[0],
-            elec_noise = self.meta["{}.fElecNoise".format(run_header)].array()[0],
-            optic_links_noise = self.meta["{}.fOpticLinksNoise".format(run_header)].array()[0] )
+
+
+    def _parse_header(self):
+
+        if self.is_simulation and self.superstar:
+            run_header = "MMcRunHeader_1"
+        elif not self.is_simulation and self.superstar:
+            run_header = "MRawRunHeader_1"
+        else:
+            run_header = "MMcRunHeader"
+
+        if self.is_simulation:
+            return containers.MAGICMCHeaderContainer(
+                corsika_version = self.meta["{}.fCorsikaVersion".format(run_header)].array()[0],
+                refl_version = self.meta["{}.fReflVersion".format(run_header)].array()[0],
+                cam_version = self.meta["{}.fCamVersion".format(run_header)].array()[0],
+                run_number = self.meta["{}.fMcRunNumber".format(run_header)].array()[0],
+                prod_site = self.meta["{}.fProductionSite".format(run_header)].array()[0],
+                date_run_mmcs = self.meta["{}.fDateRunMMCs".format(run_header)].array()[0],
+                date_run_cam = self.meta["{}.fDateRunCamera".format(run_header)].array()[0],
+                shower_theta_max = Angle(self.meta["{}.fShowerThetaMax".format(run_header)].array()[0], u.deg),
+                shower_theta_min = Angle(self.meta["{}.fShowerThetaMin".format(run_header)].array()[0], u.deg),
+                shower_phi_max = Angle(self.meta["{}.fShowerPhiMax".format(run_header)].array()[0], u.deg),
+                shower_phi_min = Angle(self.meta["{}.fShowerPhiMin".format(run_header)].array()[0], u.deg),
+                c_wave_lower = self.meta["{}.fCWaveLower".format(run_header)].array()[0],
+                c_wave_upper = self.meta["{}.fCWaveUpper".format(run_header)].array()[0],
+                num_obs_lev = self.meta["{}.fNumObsLev".format(run_header)].array()[0],
+                height_lev = self.meta["{}.fHeightLev[10]".format(run_header)].array(),
+                slope_spec = self.meta["{}.fSlopeSpec".format(run_header)].array()[0],
+                rand_pointing_cone_semi_angle = Angle(self.meta["{}.fRandomPointingConeSemiAngle".format(run_header)].array()[0], u.deg),
+                impact_max = self.meta["{}.fImpactMax".format(run_header)].array()[0],
+                star_field_rotate = self.meta["{}.fStarFieldRotate".format(run_header)].array()[0],
+                star_field_ra_h = self.meta["{}.fStarFieldRaH".format(run_header)].array()[0],
+                star_field_ra_m = self.meta["{}.fStarFieldRaM".format(run_header)].array()[0],
+                star_field_ra_s = self.meta["{}.fStarFieldRaS".format(run_header)].array()[0],
+                star_field_dec_d = self.meta["{}.fStarFieldDeD".format(run_header)].array()[0],
+                star_field_dec_m = self.meta["{}.fStarFieldDeM".format(run_header)].array()[0],
+                star_field_dec_s = self.meta["{}.fStarFieldDeS".format(run_header)].array()[0],
+                num_trig_cond = self.meta["{}.fNumTrigCond".format(run_header)].array()[0],
+                all_evts_trig = self.meta["{}.fAllEvtsTriggered".format(run_header)].array()[0],
+                mc_evt = self.meta["{}.fMcEvt".format(run_header)].array()[0],
+                mc_trig = self.meta["{}.fMcTrig".format(run_header)].array()[0],
+                mc_fadc = self.meta["{}.fMcFadc".format(run_header)].array()[0],
+                raw_evt = self.meta["{}.fRawEvt".format(run_header)].array()[0],
+                num_analised_pix = self.meta["{}.fNumAnalisedPixels".format(run_header)].array()[0],
+                num_simulated_showers = self.meta["{}.fNumSimulatedShowers".format(run_header)].array()[0],
+                num_stored_showers = self.meta["{}.fNumStoredShowers".format(run_header)].array()[0],
+                num_events = self.meta["{}.fNumEvents".format(run_header)].array()[0],
+                num_phe_from_dnsb = self.meta["{}.fNumPheFromDNSB".format(run_header)].array()[0],
+                elec_noise = self.meta["{}.fElecNoise".format(run_header)].array()[0],
+                optic_links_noise = self.meta["{}.fOpticLinksNoise".format(run_header)].array()[0] )
+
+        else:
+            # if real data:
+            return containers.MAGICHeaderContainer(
+                camera_version = self.meta["{}.fCameraVersion".format(run_header)].array()[0],
+                fadc_type = self.meta["{}.fFadcType".format(run_header)].array()[0],
+                fadc_resolution = self.meta["{}.fFadcResolution".format(run_header)].array()[0],
+                format_version = self.meta["{}.fFormatVersion".format(run_header)].array()[0],
+                magic_number = self.meta["{}.fMagicNumber".format(run_header)].array()[0],
+                num_bytes_per_sample = self.meta["{}.fNumBytesPerSample".format(run_header)].array()[0],
+                num_crates = self.meta["{}.fNumCrates".format(run_header)].array()[0],
+                num_pix_in_crate = self.meta["{}.fNumPixInCrate".format(run_header)].array()[0],
+                num_samples_hi_gain = self.meta["{}.fNumSamplesHiGain".format(run_header)].array()[0],
+                num_samples_lo_gain = self.meta["{}.fNumSamplesLoGain".format(run_header)].array()[0],
+                num_samples_removed_head = self.meta["{}.fNumSamplesRemovedHead".format(run_header)].array()[0],
+                num_samples_removed_tail = self.meta["{}.fNumSamplesRemovedTail".format(run_header)].array()[0],
+                run_type = self.meta["{}.fRunType".format(run_header)].array()[0],
+                online_domino_calib = self.meta["{}.fOnlineDominoCalib".format(run_header)].array()[0],
+                sample_frequency = self.meta["{}.fSamplingFrequency".format(run_header)].array()[0],
+                soft_version = self.meta["{}.fSoftVersion".format(run_header)].array()[0],
+                source_epoch_date = self.meta["{}.fSourceEpochDate".format(run_header)].array()[0],
+                num_events = self.meta["{}.fNumEvents".format(run_header)].array()[0],
+                num_events_read = self.meta["{}.fNumEventsRead".format(run_header)].array()[0],
+                channel_header_size = self.meta["{}.fChannelHeaderSize".format(run_header)].array()[0],
+                event_header_size = self.meta["{}.fEventHeaderSize".format(run_header)].array()[0],
+                run_header_size = self.meta["{}.fRunHeaderSize".format(run_header)].array()[0],
+                run_number = self.meta["{}.fRunNumber".format(run_header)].array()[0],
+                subrun_index = self.meta["{}.fSubRunIndex".format(run_header)].array()[0],
+                source_dec = self.meta["{}.fSourceDEC".format(run_header)].array()[0],
+                source_ra = self.meta["{}.fSourceRA".format(run_header)].array()[0],
+                telescope_dec = self.meta["{}.fTelescopeDEC".format(run_header)].array()[0],
+                telescope_ra = self.meta["{}.fTelescopeRA".format(run_header)].array()[0],
+                observation_mode = self._decode_ascii_array(self.meta["{}.fObservationMode[60]".format(run_header)].array()[0]),
+                project_name = self._decode_ascii_array(self.meta["{}.fProjectName[100]".format(run_header)].array()[0]),
+                source_epoch_char = self._decode_ascii_array(self.meta["{}.fSourceEpochChar[4]".format(run_header)].array()[0]),
+                source_name = self._decode_ascii_array(self.meta["{}.fSourceName[80]".format(run_header)].array()[0]),
+                calib_coeff_filename = self._decode_ascii_array(self.meta["{}.fCalibCoeffFilename[100]".format(run_header)].array()[0]),
+                run_start_mjd = self.meta[b'MRawRunHeader_1.fRunStart.fMjd'].array()[0],
+                run_start_ms = self.meta[b'MRawRunHeader_1.fRunStart.fTime.fMilliSec'].array()[0],
+                run_start_ns = self.meta[b'MRawRunHeader_1.fRunStart.fNanoSec'].array()[0],
+                run_stop_mjd = self.meta[b'MRawRunHeader_1.fRunStop.fMjd'].array()[0],
+                run_stop_ms = self.meta[b'MRawRunHeader_1.fRunStop.fTime.fMilliSec'].array()[0],
+                run_stop_ns = self.meta[b'MRawRunHeader_1.fRunStop.fNanoSec'].array()[0]
+                )
+
