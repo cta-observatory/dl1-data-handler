@@ -210,16 +210,20 @@ class DLMAGICEventSource(EventSource):
 
         if self.superstar is not None:
             #Reading data from root file for Events table
+
+            # only read MC information if it exists
+            if self.is_simulation:
+                zenith = np.asarray(self.superstar["MMcEvt_1.fTheta"].array())
+                azimuth = np.asarray(self.superstar["MMcEvt_1.fPhi"].array())
+                core_x = np.asarray(self.superstar["MMcEvt_1.fCoreX"].array())
+                core_y = np.asarray(self.superstar["MMcEvt_1.fCoreY"].array())
+                mc_energy = np.asarray(self.superstar["MMcEvt_1.fEnergy"].array())/1000.0
+                h_first_int = np.asarray(self.superstar["MMcEvt_1.fZFirstInteraction"].array())
+
             eventid_M1 = np.asarray(self.superstar["MRawEvtHeader_1.fStereoEvtNumber"].array())
             eventid_M2 = np.asarray(self.superstar["MRawEvtHeader_2.fStereoEvtNumber"].array())
-            zenith = np.asarray(self.superstar["MMcEvt_1.fTheta"].array())
             pointing_altitude = np.asarray(self.superstar["MPointingPos_1.fZd"].array())
-            azimuth = np.asarray(self.superstar["MMcEvt_1.fPhi"].array())
             pointing_azimuth = np.asarray(self.superstar["MPointingPos_1.fAz"].array())
-            core_x = np.asarray(self.superstar["MMcEvt_1.fCoreX"].array())
-            core_y = np.asarray(self.superstar["MMcEvt_1.fCoreY"].array())
-            mc_energy = np.asarray(self.superstar["MMcEvt_1.fEnergy"].array())/1000.0
-            h_first_int = np.asarray(self.superstar["MMcEvt_1.fZFirstInteraction"].array())
 
             #Reading data from root file for Parameter table
             hillas_intensity_M1 = np.asarray(self.superstar["MHillas_1.fSize"].array())
@@ -291,14 +295,15 @@ class DLMAGICEventSource(EventSource):
                     data.pointing.tel[tel_id].altitude = u.Quantity(np.deg2rad(90.0 - pointing_altitude[i]), u.rad)
 
                     #Adding MC data
-                    data.mc.alt = Angle(np.pi/2.0 - zenith[i], u.rad)
-                    data.mc.az = Angle(np.deg2rad(180.0-7.0) - azimuth[i], u.rad)
-                    data.mc.x_max = u.Quantity(0, X_MAX_UNIT)
-                    data.mc.h_first_int = u.Quantity(h_first_int[i], u.m)
-                    data.mc.core_x = u.Quantity(core_x[i], u.m)
-                    data.mc.core_y = u.Quantity(core_y[i], u.m)
-                    data.mc.energy = u.Quantity(mc_energy[i], u.TeV)
-                    data.mc.shower_primary_id = shower_primary_id
+                    if self.is_simulation:
+                        data.mc.alt = Angle(np.pi/2.0 - zenith[i], u.rad)
+                        data.mc.az = Angle(np.deg2rad(180.0-7.0) - azimuth[i], u.rad)
+                        data.mc.x_max = u.Quantity(0, X_MAX_UNIT)
+                        data.mc.h_first_int = u.Quantity(h_first_int[i], u.m)
+                        data.mc.core_x = u.Quantity(core_x[i], u.m)
+                        data.mc.core_y = u.Quantity(core_y[i], u.m)
+                        data.mc.energy = u.Quantity(mc_energy[i], u.TeV)
+                        data.mc.shower_primary_id = shower_primary_id
 
                     if self.superstar is not None:
                         leakage_values = LeakageContainer()
