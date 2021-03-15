@@ -184,6 +184,7 @@ class DLMAGICEventSource(EventSource):
 
         if self.calib_M1 is not None and self.calib_M2 is not None:
             #Reading data from root file for Events table
+            shower_primary_id = int(self.superstar["MMcEvt_1.fPartId"].array()[0])
             eventid_M1 = np.asarray(self.calib_M1["MRawEvtHeader.fStereoEvtNumber"].array())
             eventid_M2 = np.asarray(self.calib_M2["MRawEvtHeader.fStereoEvtNumber"].array())
             zenith = np.asarray(self.calib_M1["MMcEvt.fTheta"].array())
@@ -198,11 +199,19 @@ class DLMAGICEventSource(EventSource):
             #Reading data from root file for Image table
             charge_M1 = np.asarray(self.calib_M1["MCerPhotEvt.fPixels.fPhot"].array())
             peak_time_M1 = np.asarray(self.calib_M1["MArrivalTime.fData"].array())
+            image_mask_M1 = np.asarray(self.calib_M1["CleanCharge"].array())
+            for i, mask in enumerate(image_mask_M1):
+                image_mask_M1[i] = (np.array(mask) != 0)
+
             charge_M2 = np.asarray(self.calib_M2["MCerPhotEvt.fPixels.fPhot"].array())
             peak_time_M2 = np.asarray(self.calib_M2["MArrivalTime.fData"].array())
+            image_mask_M2 = np.asarray(self.calib_M2["CleanCharge"].array())
+            for i, mask in enumerate(image_mask_M2):
+                image_mask_M2[i] = (np.array(mask) != 0)
 
         if self.superstar is not None:
             #Reading data from root file for Events table
+            shower_primary_id = int(self.superstar["MMcEvt_1.fPartId"].array()[0])
             eventid_M1 = np.asarray(self.superstar["MRawEvtHeader_1.fStereoEvtNumber"].array())
             eventid_M2 = np.asarray(self.superstar["MRawEvtHeader_2.fStereoEvtNumber"].array())
             zenith = np.asarray(self.superstar["MMcEvt_1.fTheta"].array())
@@ -244,16 +253,16 @@ class DLMAGICEventSource(EventSource):
 
             #Reading data from root file for Image table (peak time and image mask not )
             charge_M1 = np.asarray(self.superstar["MCerPhotEvt_1.fPixels.fPhot"].array())
-            peak_time_M1 = np.zeros((charge_M1.shape[0], 1039))
-            image_mask_M1 = np.zeros((charge_M1.shape[0], 1039), dtype=bool)
-            charge_M2 = np.asarray(self.superstar["MCerPhotEvt_2.fPixels.fPhot"].array())
-            peak_time_M2 = np.zeros((charge_M2.shape[0], 1039))
-            image_mask_M2 = np.zeros((charge_M2.shape[0], 1039), dtype=bool)
+            peak_time_M1 = np.asarray(self.superstar["MArrivalTime_1.fData"].array())
+            image_mask_M1 = np.asarray(self.superstar["CleanCharge_1"].array())
+            for i, mask in enumerate(image_mask_M1):
+                image_mask_M1[i] = (np.array(mask) != 0)
 
-        # Get the shower primary id
-        shower_primary_id = 1
-        if self.file_list[0].split("/")[-1].startswith("GA"):
-            shower_primary_id = 1
+            charge_M2 = np.asarray(self.superstar["MCerPhotEvt_2.fPixels.fPhot"].array())
+            peak_time_M2 = np.asarray(self.superstar["MArrivalTime_2.fData"].array())
+            image_mask_M2 = np.asarray(self.superstar["CleanCharge_2"].array())
+            for i, mask in enumerate(image_mask_M2):
+                image_mask_M2[i] = (np.array(mask) != 0)
 
         #Iterating over all events, and saving only stereo ones
         total_events = min(len(charge_M1), len(charge_M2))
@@ -304,9 +313,9 @@ class DLMAGICEventSource(EventSource):
                     if tel_id == 1:
                         data.dl1.tel[tel_id].image = charge_M1[i][:1039]
                         data.dl1.tel[tel_id].peak_time = peak_time_M1[i][:1039]
-                        if self.superstar is not None:
-                            data.dl1.tel[tel_id].image_mask = image_mask_M1[i][:1039]
+                        data.dl1.tel[tel_id].image_mask = image_mask_M1[i][:1039]
 
+                        if self.superstar is not None:
                             hillas_parameters_values["intensity"] = hillas_intensity_M1[i]
                             hillas_parameters_values["x"] = u.Quantity(hillas_x_M1[i], unit=u.mm)
                             hillas_parameters_values["y"] = u.Quantity(hillas_y_M1[i], unit=u.mm)
@@ -326,9 +335,9 @@ class DLMAGICEventSource(EventSource):
                     else:
                         data.dl1.tel[tel_id].image = charge_M2[i][:1039]
                         data.dl1.tel[tel_id].peak_time = peak_time_M2[i][:1039]
-                        if self.superstar is not None:
-                            data.dl1.tel[tel_id].image_mask = image_mask_M2[i][:1039]
+                        data.dl1.tel[tel_id].image_mask = image_mask_M2[i][:1039]
 
+                        if self.superstar is not None:
                             hillas_parameters_values["intensity"] = hillas_intensity_M2[i]
                             hillas_parameters_values["x"] = u.Quantity(hillas_x_M2[i], unit=u.mm)
                             hillas_parameters_values["y"] = u.Quantity(hillas_y_M2[i], unit=u.mm)
