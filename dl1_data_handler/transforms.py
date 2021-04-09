@@ -5,8 +5,9 @@ from .processor import Transform
 
 class ShowerPrimaryID(Transform):
 
-    def __init__(self, name='particletype'):
+    def __init__(self, name='particletype', particle_id_col_name='true_shower_primary_id'):
         super().__init__()
+        self.particle_id_col_name=particle_id_col_name
         self.shower_primary_id_to_class = {
             0: 1,    # gamma
             101: 0,  # proton
@@ -18,7 +19,7 @@ class ShowerPrimaryID(Transform):
     def describe(self, description):
         self.description = [
             {**des, 'name': self.name, 'dtype': self.dtype}
-            if des['name'] == 'shower_primary_id'
+            if des['name'] == self.particle_id_col_name
             else des for des in description]
         return self.description
 
@@ -291,14 +292,15 @@ class DataForGammaLearn(Transform):
 
 class SortTelescopes(Transform):
 
-    def __init__(self, sorting='trigger'):
+    def __init__(self, sorting='trigger', tel_desc='LST_LST_LSTCam'):
         super().__init__()
+        self.tel_desc = tel_desc 
         params = {
             # List triggered telescopes first
-            'trigger': {'reverse': True, 'key': lambda x: x['trigger']},
+            'trigger': {'reverse': True, 'key': lambda x: x[self.tel_desc+'_triggers']},
             # List from largest to smallest sum of pixel charges
             'size': {'reverse': True,
-                     'key': lambda x: np.sum(x['image'][..., 0], (1, 2))}
+                     'key': lambda x: np.sum(x[self.tel_desc+'_images'][..., 0], (1, 2))}
             }
         if sorting in params:
             self.step = -1 if params[sorting]['reverse'] else 1
@@ -312,6 +314,6 @@ class SortTelescopes(Transform):
                    in zip(example, self.description)}
         indices = np.argsort(self.key(outputs))
         for i, (arr, des) in enumerate(zip(example, self.description)):
-            if des['base_name'] in ['image', 'trigger', 'x', 'y', 'z']:
+            if des['base_name'] in [self.tel_desc+'_images', self.tel_desc+'_triggers', 'x', 'y', 'z']:
                 example[i] = arr[indices[::self.step]]
         return example
