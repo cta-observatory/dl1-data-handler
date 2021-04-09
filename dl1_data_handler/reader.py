@@ -249,7 +249,7 @@ class DL1DataReader:
         vector = np.zeros(shape=(num_pixels, num_channels), dtype=np.float32)
         # If the telescope didn't trigger, the image index is -1 and a blank
         # image of all zeros with be loaded
-        if image_index != -1:
+        if image_index != -1 and child:
             with lock:
                 record = child[image_index]
                 for i, channel in enumerate(self.image_channels):
@@ -262,7 +262,12 @@ class DL1DataReader:
                             vector[:, i] = record['image'] * image_mask
                     else:
                         vector[:, i] = record[channel]
-        
+                    # Apply the transform to recover orginal floating point values if the file were compressed
+                    if channel in ['image', 'image_mask'] and self.image_scale:
+                        vector[:, i] /= self.image_scale
+                    if channel == 'peak_time' and self.peak_time_scale:
+                        vector[:, i] /= self.peak_time_scale
+
         # If 'indexed_conv' is selected, we only need the unmapped vector.
         if self.image_mapper.mapping_method[self._get_camera_type(tel_type)] == 'indexed_conv':
            return vector
@@ -342,7 +347,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         else:
 
             for file_idx, (filename, f) in enumerate(self.files.items()):
-                
                 # Read simulation information from each observation needed for pyIRF
                 if self.event_info:
                     self.simulation_info = self._construct_simulated_info(f.root.configuration.simulation, self.simulation_info)
@@ -529,9 +533,18 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         self.parameter_list = parameter_list
         self.image_channels = image_channels
+        self.image_scale = None
+        self.peak_time_scale = None
 
         # ImageMapper (1D charges -> 2D images)
         if self.image_channels is not None:
+
+            # Check the transform value used for the file compression 
+            if "image_TRANSFORM_SCALE" in self.files[first_file].root.dl1.event.telescope.images.tel_001._v_attrs:
+                self.image_scale = self.files[first_file].root.dl1.event.telescope.images.tel_001._v_attrs["image_TRANSFORM_SCALE"]
+            if "peak_time_TRANSFORM_SCALE" in self.files[first_file].root.dl1.event.telescope.images.tel_001._v_attrs:
+                self.peak_time_scale = self.files[first_file].root.dl1.event.telescope.images.tel_001._v_attrs["peak_time_TRANSFORM_SCALE"]
+
             self.pixel_positions, self.num_pixels = self._construct_pixel_positions(self.files[first_file].root.configuration.instrument.telescope)
             if 'camera_types' not in mapping_settings:
                 mapping_settings['camera_types'] = self.pixel_positions.keys()
@@ -701,8 +714,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 pixel_positions[camera] = np.squeeze(np.asarray(np.dot(rotation_matrix, pixel_positions[camera])))
 
         return pixel_positions, num_pixels
-        
-    
+
     def _load_tel_type_data(self, filename, nrow, tel_type, trigger_info, pointing_info=None):
         triggers = []
         images = []
@@ -716,9 +728,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     tel_table = "tel_{:03d}".format(tel_id)
                     if tel_table in self.files[filename].root.dl1.event.telescope.images:
                         child = self.files[filename].root.dl1.event.telescope.images._f_get_child(tel_table)
-                if child:
-                    image = super()._get_image(child, tel_type, trigger_info[i])
-                    images.append(image)
+                image = super()._get_image(child, tel_type, trigger_info[i])
+                images.append(image)
 
             if self.parameter_list is not None:
                 child = None
@@ -757,7 +768,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             example.extend([np.stack(pointings)])
         example.extend([np.stack(info) for info in subarray_info])
         return example
-    
 
     def __getitem__(self, idx):
 
@@ -893,6 +903,8 @@ class DL1DataReaderDL1DH(DL1DataReader):
         if mapping_settings is None:
             mapping_settings = {}
             
+        self.image_scale = None
+        self.peak_time_scale = None
         self.simulation_info = None
         self.example_identifiers = None
         if example_identifiers_file is None:
@@ -1244,7 +1256,7 @@ class DL1DataReaderDL1DH(DL1DataReader):
                 for parameter in self.parameter_list:
                     parameter_val = prmtr_child[index][parameter] if index != 0 else np.nan
                     parameter_list.append(parameter_val)
-            parameters_lists.append(np.array(parameter_list, dtype=np.float32))
+                parameters_lists.append(np.array(parameter_list, dtype=np.float32))
             
             query = "id == {}".format(tel_id)
             super()._append_subarray_info(self.files[filename].root.Array_Information, subarray_info, query)
@@ -1270,7 +1282,6 @@ class DL1DataReaderDL1DH(DL1DataReader):
         if self.mode == "mono":
             # Get a single image
             nrow, index, tel_id = identifiers[1:4]
-            
             example = []
             if self.image_channels is not None:
                 with lock:
