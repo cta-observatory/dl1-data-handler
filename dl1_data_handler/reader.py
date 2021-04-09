@@ -8,7 +8,6 @@ import tables
 from dl1_data_handler.image_mapper import ImageMapper
 from dl1_data_handler.processor import DL1DataProcessor
 
-from ctapipe.io import read_table  # let us read full tables inside the DL1 output file
 import astropy.units as u
 #from astropy import table
 from astropy.table import (
@@ -306,6 +305,12 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                  transforms=None,
                  validate_processor=False
                 ):
+
+        # Import ctapipe DL1 reader
+        try:
+            from ctapipe.io import read_table # let us read full tables inside the DL1 output file
+        except ImportError:
+            raise ImportError("The `ctapipe.io.read_table` python module is required for DL1DataReaderSTAGE1.")
         
         super().__init__(file_list=file_list, mode=mode, subarray_info=subarray_info, event_info=event_info)
 
