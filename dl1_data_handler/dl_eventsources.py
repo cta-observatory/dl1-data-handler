@@ -83,10 +83,10 @@ class DLMAGICEventSource(EventSource):
         # get the run number directly from the root file
         if self.mc:
             self.run_number = int(uproot_file['RunHeaders']['MMcCorsikaRunHeader.']['MMcCorsikaRunHeader.fRunNumber'].array()[0])
-            print(f"This run {self.run_number} IS a simulation")
+            # f"This run {self.run_number} IS a simulation")
         else:
             self.run_number = int(uproot_file["RunHeaders"]["MRawRunHeader_1."]["MRawRunHeader_1.fRunNumber"].array()[0])
-            print(f"This run #{self.run_number} is REAL data!")
+            # print(f"This run #{self.run_number} is REAL data!")
 
         self._header = self._parse_header()
 
