@@ -81,6 +81,7 @@ class DLMAGICEventSource(EventSource):
             if "_S_" in file:
                 self.superstar = uproot_file["Events"]
                 self.meta = uproot_file["RunHeaders"]
+
         self._mc_header = self._parse_mc_header()
 
     @property
@@ -380,6 +381,8 @@ class DLMAGICEventSource(EventSource):
             prod_site = self.meta["{}.fProductionSite".format(run_header)].array()[0],
             date_run_mmcs = self.meta["{}.fDateRunMMCs".format(run_header)].array()[0],
             date_run_cam = self.meta["{}.fDateRunCamera".format(run_header)].array()[0],
+            energy_range_max = self.meta["MMcCorsikaRunHeader.fEUppLim"].array()[0],
+            energy_range_min = self.meta["MMcCorsikaRunHeader.fELowLim"].array()[0],
             shower_theta_max = Angle(self.meta["{}.fShowerThetaMax".format(run_header)].array()[0], u.deg),
             shower_theta_min = Angle(self.meta["{}.fShowerThetaMin".format(run_header)].array()[0], u.deg),
             shower_phi_max = Angle(self.meta["{}.fShowerPhiMax".format(run_header)].array()[0], u.deg),
