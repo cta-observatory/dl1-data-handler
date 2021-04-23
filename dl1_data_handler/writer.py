@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Load data from ctapipe EventSources and dump to file."""
+"""--Deprecated DL1 writer. Use ctapipe stage1 tool instead-- Load data from ctapipe EventSources and dump to file."""
 
 from abc import ABC, abstractmethod
 import pkg_resources
