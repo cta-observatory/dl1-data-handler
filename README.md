@@ -96,14 +96,14 @@ Also see setup.py.
 To process data files into a desired format:
 
 ```bash
-scripts/write_data.py [runlist] [--config_file CONFIG_FILE_PATH] [--output_dir OUTPUT_DIR] [--debug]
+dl1dh-write_data [runlist] [--config_file,-c CONFIG_FILE_PATH] [--output_dir,-o OUTPUT_DIR] [--debug]
 ```
 on the command line.
 
 ex:
 
 ```bash
-scripts/write_data.py runlist.yml --config_file example_config.yml --debug
+dl1dh-write_data runlist.yml -c example_config.yml --debug
 ```
 
 * runlist - A YAML file containing groups of input files to load data from and output files to write to. See example runlist for format.
@@ -148,17 +148,18 @@ data_writer.process_data(run_list)
 ```
 #### Generating a run list
 
-If processing data from simtel.gz files, as long as their filenames have the format ``[particle_type]_[ze]deg_[az]deg_run[run_number]___[production info].simtel.gz`` or ``[particle_type]_[ze]deg_[az]deg_run[run_number]___[production info]_cone[cone_num].simtel.gz`` the scripts/generate_runlist.py can be used to automatically generate a runlist in the correct format.
+If processing data from simtel.gz files, as long as their filenames have the format ``[particle_type]_[ze]deg_[az]deg_run[run_number]___[production info].simtel.gz`` or ``[particle_type]_[ze]deg_[az]deg_run[run_number]___[production info]_cone[cone_num].simtel.gz`` the dl1dh-generate_runlist can be used to automatically generate a runlist in the correct format. The script can also generate a run list with the MAGIC-MARS superstar files.
 
 It can be called as:
 
 ```bash
-scripts/generate_runlist.py [file_dir] [--num_inputs_per_run NUM_INPUTS_PER_RUN] [--output_file OUTPUT_FILE]
+dl1dh-generate_runlist [file_dir] [--num_inputs_per_run,-n NUM_INPUTS_PER_RUN] [--output_file_name,-f OUTPUT_FILE_NAME] [--output_dir,-o OUTPUT_DIR]
 ```
 
 * file_dir - Path to a directory containing simtel.gz files with the filename format specified above.
 * num_inputs_per_run - Number of input files with the same particle type, ze, az, and production info to group together into each run (defaults to 10).
-* output_file - Path/filename of output runlist file. Defaults to ./runlist.yml
+* output_file - Path/filename of output runlist file without a postfix. Defaults to ./runlist
+* output_dir - Path where to save generated files. By default, the input directory is used.
 
 It will automatically sort the simtel files in the file_dir directory into groups with matching particle_type, zenith, azimuth, and production parameters. Within each of these groups, it will group together input files in sequential order into runs of size NUM_INPUTS_PER_RUN. The output filename for each run will be automatically generated as ``[particle_type]_[ze]deg_[az]deg_runs[run_number_range]___[production info].h5``. The output YAML file will be written to output_file.
 

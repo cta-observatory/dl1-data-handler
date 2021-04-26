@@ -13,5 +13,9 @@ setup(name='dl1_data_handler',
           'pytest-cov',
           'pyirf',
           ],
+      entry_points = {
+        'console_scripts': ['dl1dh-generate_runlist=dl1_data_handler.generate_runlist:main',
+                           'dl1dh-write_data=dl1_data_handler.write_data:main'],
+      },
       dependency_links=[],
       zip_safe=True)
