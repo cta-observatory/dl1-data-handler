@@ -38,6 +38,8 @@ class DL1DataReader:
         
         # Construct dict of filename:file_handle pairs
         self.files = OrderedDict()
+        # Order the file_list
+        file_list = np.sort(file_list)
         for filename in file_list:
             with lock:
                 self.files[filename] = tables.open_file(filename, mode='r')
@@ -351,7 +353,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             for file_idx, (filename, f) in enumerate(self.files.items()):
                 # Read simulation information from each observation needed for pyIRF
                 if self.event_info:
-                    self.simulation_info = self._construct_simulated_info(f.root.configuration.simulation, self.simulation_info)
+                    self.simulation_info = self._construct_simulated_info(f, self.simulation_info)
                 # Teslecope selection
                 telescopes, selected_telescopes = self._construct_telescopes_selection(f.root.configuration.instrument.subarray.layout, selected_telescope_types, selected_telescope_ids)
                 
@@ -514,7 +516,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         if self.event_info:
             # Created pyIRF SimulatedEventsInfo
-            self.pyIRFSimulatedEventsInfo = SimulatedEventsInfo(n_showers=int(self.simulation_info['num_showers'] * self.simulation_info['shower_reuse']),
+            self.pyIRFSimulatedEventsInfo = SimulatedEventsInfo(n_showers=int(self.simulation_info['num_showers']),
                                                                 energy_min=u.Quantity(self.simulation_info['energy_range_min'], u.TeV),
                                                                 energy_max=u.Quantity(self.simulation_info['energy_range_max'], u.TeV),
                                                                 max_impact=u.Quantity(self.simulation_info['max_scatter_range'], u.m),
@@ -524,6 +526,12 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         if self.pointing_mode == "fix_subarray":
             subarray_pointing = self.files[first_file].root.dl1.monitoring.subarray.pointing
             self.pointing = np.array([subarray_pointing[0]["array_altitude"], subarray_pointing[0]["array_azimuth"]], np.float32)
+            # Set the telescope pointing to the delta Alt/Az tranform
+            if transforms is not None:
+                for transform in transforms:
+                    if transform.name == 'deltaAltAz_fix_subarray':
+                        transform.set_tel_pointing(self.pointing)
+
         elif self.pointing_mode == "fix_divergent":
             self.pointing = {}
             for tel_type in selected_telescopes:
@@ -630,12 +638,12 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         return telescopes, selected_telescopes
 
 
-    def _construct_simulated_info(self, simulation_table, simulation_info):
+    def _construct_simulated_info(self, file, simulation_info):
         """
         Construct the simulated_info from the DL1 hdf5 file for the pyIRF SimulatedEventsInfo table & GammaBoard.
         Parameters
         ----------
-            simulation_table (tables.Tables): table containing the simulation information
+            hdf5 (file): file containing the simulation information
             simulation_info (dict): dictionary of pyIRF simulation info
 
         Returns
@@ -643,10 +651,15 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         simulation_info (dict): updated dictionary of pyIRF simulation info
         
         """
-        
+
+        simulation_table = file.root.configuration.simulation
         runs = simulation_table._f_get_child('run')
-        num_showers = sum(np.array(runs.cols._f_col("num_showers")))
         shower_reuse = max(np.array(runs.cols._f_col("shower_reuse")))
+        num_showers = sum(np.array(runs.cols._f_col("num_showers")))*shower_reuse
+        if "service" in file.root.simulation:
+            service_table = file.root.simulation.service
+            shower_distributions = service_table._f_get_child('shower_distribution')
+            num_showers = np.sum(np.array(shower_distributions.cols._f_col("histogram")))
         energy_range_min = min(np.array(runs.cols._f_col("energy_range_min")))
         energy_range_max = max(np.array(runs.cols._f_col("energy_range_max")))
         max_scatter_range = max(np.array(runs.cols._f_col("max_scatter_range")))
@@ -656,8 +669,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         max_alt = max(np.array(runs.cols._f_col("max_alt")))
         if simulation_info:
             simulation_info["num_showers"] += num_showers
-            if simulation_info["shower_reuse"] > shower_reuse:
-                simulation_info["shower_reuse"] = shower_reuse
             if simulation_info["energy_range_min"] > energy_range_min:
                 simulation_info["energy_range_min"] = energy_range_min
             if simulation_info["energy_range_max"] < energy_range_max:
@@ -673,7 +684,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         else:
             simulation_info = {}
             simulation_info["num_showers"] = num_showers
-            simulation_info["shower_reuse"] = shower_reuse
             simulation_info["energy_range_min"] = energy_range_min
             simulation_info["energy_range_max"] = energy_range_max
             simulation_info["max_scatter_range"] = max_scatter_range
@@ -994,10 +1004,10 @@ class DL1DataReaderDL1DH(DL1DataReader):
                     
         if self.event_info:
             # Created pyIRF SimulatedEventsInfo
-            self.pyIRFSimulatedEventsInfo = SimulatedEventsInfo(n_showers=int(self.simulation_info['num_showers'] * self.simulation_info['shower_reuse']),
-                                                                energy_min=u.Quantity(self.simulation_info['energy_range_min'], u.TeV),
-                                                                energy_max=u.Quantity(self.simulation_info['energy_range_max'], u.TeV),
-                                                                max_impact=u.Quantity(self.simulation_info['max_scatter_range'], u.m),
+            self.pyIRFSimulatedEventsInfo = SimulatedEventsInfo(n_showers=int(self.simulation_info['num_showers']),
+                                                                energy_min=u.Quantity(self.simulation_info['energy_range_min'], u.GeV),
+                                                                energy_max=u.Quantity(self.simulation_info['energy_range_max'], u.GeV),
+                                                                max_impact=u.Quantity(self.simulation_info['max_scatter_range'], u.cm),
                                                                 spectral_index=self.simulation_info['spectral_index'],
                                                                 viewcone=u.Quantity(self.simulation_info['max_viewcone_radius'], u.deg))
 
@@ -1122,20 +1132,17 @@ class DL1DataReaderDL1DH(DL1DataReader):
         simulation_info (dict): updated dictionary of pyIRF simulation info
         
         """
-    
-        num_showers = file_v_attrs['num_showers']
-        shower_reuse = file_v_attrs['shower_reuse']
+
+        num_showers = file_v_attrs['num_simulated_showers']
         energy_range_min = file_v_attrs['energy_range_min']
         energy_range_max = file_v_attrs['energy_range_max']
-        max_scatter_range = file_v_attrs['max_scatter_range']
-        spectral_index = file_v_attrs['spectral_index']
-        max_viewcone_radius = file_v_attrs['max_viewcone_radius']
-        min_alt = file_v_attrs['min_alt']
-        max_alt = file_v_attrs['max_alt']
+        max_scatter_range = file_v_attrs['impact_max']
+        spectral_index = file_v_attrs['slope_spec']
+        max_viewcone_radius = file_v_attrs['rand_pointing_cone_semi_angle']
+        min_alt = 90 - file_v_attrs['shower_theta_max']
+        max_alt = 90 - file_v_attrs['shower_theta_min']
         if simulation_info:
             simulation_info["num_showers"] += num_showers
-            if simulation_info["shower_reuse"] > shower_reuse:
-                simulation_info["shower_reuse"] = shower_reuse
             if simulation_info["energy_range_min"] > energy_range_min:
                 simulation_info["energy_range_min"] = energy_range_min
             if simulation_info["energy_range_max"] < energy_range_max:
@@ -1151,7 +1158,6 @@ class DL1DataReaderDL1DH(DL1DataReader):
         else:
             simulation_info = {}
             simulation_info["num_showers"] = num_showers
-            simulation_info["shower_reuse"] = shower_reuse
             simulation_info["energy_range_min"] = energy_range_min
             simulation_info["energy_range_max"] = energy_range_max
             simulation_info["max_scatter_range"] = max_scatter_range

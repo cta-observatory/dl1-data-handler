@@ -49,9 +49,10 @@ class NormalizeTelescopePositions(Transform):
 
 class MCEnergy(Transform):
 
-    def __init__(self, name='energy', unit='log(TeV)'):
+    def __init__(self, name='energy', energy_col_name='true_energy', unit='log(TeV)'):
         super().__init__()
         self.name = name
+        self.energy_col_name=energy_col_name
         self.shape = (1)
         self.dtype = np.dtype('float32')
         self.unit = unit
@@ -59,23 +60,28 @@ class MCEnergy(Transform):
     def describe(self, description):
         self.description = [
             {**des, 'name': self.name, 'dtype': self.dtype, 'unit': self.unit}
-            if des['name'] == 'mc_energy'
+            if des['name'] == self.energy_col_name
             else des for des in description]
         return self.description
 
     def __call__(self, example):
         for i, (val, des) in enumerate(zip(example, self.description)):
-            if des['base_name'] == 'mc_energy':
+            if des['base_name'] == self.energy_col_name:
                 example[i] = np.array([np.log10(val)]) if self.unit == 'log(TeV)' else np.array([val])
         return example
 
 
-class DeltaAltAz(Transform):
+class DeltaAltAz_fix_subarray(Transform):
 
-    def __init__(self):
+    def __init__(self, base_name='direction', alt_col_name='true_alt', az_col_name='true_az', deg2rad=True, north_pointing_correction=True):
         super().__init__()
-        self.name = 'deltaAltAz'
-        self.base_name = 'direction'
+
+        self.name = 'deltaAltAz_fix_subarray'
+        self.base_name = base_name
+        self.alt_col_name=alt_col_name
+        self.az_col_name=az_col_name
+        self.deg2rad = deg2rad
+        self.north_pointing_correction = north_pointing_correction
         self.shape = (2)
         self.dtype = np.dtype('float32')
         self.unit = 'rad'
@@ -101,10 +107,14 @@ class DeltaAltAz(Transform):
 
     def __call__(self, example):
         for i, (val, des) in enumerate(itertools.zip_longest(example, self.description)):
-            if des['base_name'] == 'alt':
-                alt = example[i] - self.tel_pointing[1]
-            elif des['base_name'] == 'az':
-                az = example[i] - self.tel_pointing[0]
+            if des['base_name'] == self.alt_col_name:
+                alt = np.radians(example[i]) if self.deg2rad else example[i]
+                alt -= self.tel_pointing[0]
+            elif des['base_name'] == self.az_col_name:
+                az = np.radians(example[i]) if self.deg2rad else example[i] 
+                if self.north_pointing_correction and az > np.pi:
+                    az -= 2*np.pi
+                az -= self.tel_pointing[1]
             elif des['base_name'] == self.base_name:
                 example.append(np.array([alt,az]))
         return example
@@ -112,9 +122,12 @@ class DeltaAltAz(Transform):
 
 class AltAz(Transform):
 
-    def __init__(self, name='direction'):
+    def __init__(self, name='direction', alt_col_name='true_alt', az_col_name='true_az', deg2rad=True):
         super().__init__()
         self.name = name
+        self.alt_col_name=alt_col_name
+        self.az_col_name=az_col_name
+        self.deg2rad = deg2rad
         self.shape = (2)
         self.dtype = np.dtype('float32')
         self.unit = 'rad'
@@ -135,10 +148,10 @@ class AltAz(Transform):
 
     def __call__(self, example):
         for i, (val, des) in enumerate(itertools.zip_longest(example, self.description)):
-            if des['base_name'] == 'alt':
-                alt = example[i]
-            elif des['base_name'] == 'az':
-                az = example[i]
+            if des['base_name'] == self.alt_col_name:
+                alt = np.radians(example[i]) if self.deg2rad else example[i]
+            elif des['base_name'] == self.az_col_name:
+                az = np.radians(example[i]) if self.deg2rad else example[i]
             elif des['base_name'] == self.name:
                 example.append(np.array([alt,az]))
         return example
@@ -294,6 +307,7 @@ class SortTelescopes(Transform):
 
     def __init__(self, sorting='trigger', tel_desc='LST_LST_LSTCam'):
         super().__init__()
+        self.name = "sortTelescopes"
         self.tel_desc = tel_desc 
         params = {
             # List triggered telescopes first
