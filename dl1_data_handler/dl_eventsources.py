@@ -43,6 +43,11 @@ class DLMAGICEventSource(EventSource):
         del kwargs['input_url']
         super().__init__(input_url=self.file_list[0], **kwargs)
 
+        # Translate MAGIC shower primary id to CTA convention
+        self.magic_to_cta_shower_primary_id = {
+            1: 0,    # gamma
+            14: 101,   # MAGIC proton
+        }
         # MAGIC telescope positions in m wrt. to the center of CTA simulations
         self.magic_tel_positions = {
             1: [-27.24, -146.66, 50.00] * u.m,
@@ -186,12 +191,12 @@ class DLMAGICEventSource(EventSource):
         data = DataContainer()
         data.meta['origin'] = "MAGIC"
         data.meta['input_url'] = self.input_url
-        data.meta['is_simulation'] = True
-        data.header = self._header
+        data.meta['is_simulation'] = self.mc
+        data.mcheader = self._header
 
         if self.calib_M1 is not None and self.calib_M2 is not None:
             #Reading data from root file for Events table
-            shower_primary_id = int(self.superstar["MMcEvt_1.fPartId"].array()[0])
+            shower_primary_id = self.magic_to_cta_shower_primary_id[int(self.superstar["MMcEvt_1.fPartId"].array()[0])]
             eventid_M1 = np.asarray(self.calib_M1["MRawEvtHeader.fStereoEvtNumber"].array())
             eventid_M2 = np.asarray(self.calib_M2["MRawEvtHeader.fStereoEvtNumber"].array())
             zenith = np.asarray(self.calib_M1["MMcEvt.fTheta"].array())
@@ -220,9 +225,9 @@ class DLMAGICEventSource(EventSource):
             #Reading data from root file for Events table
             # only read MC information if it exists
             if self.is_simulation:
-                shower_primary_id = int(self.superstar["MMcEvt_1.fPartId"].array()[0])
-                zenith = np.asarray(self.superstar["MMcEvt_1.fTheta"].array())
-                azimuth = np.asarray(self.superstar["MMcEvt_1.fPhi"].array())
+                shower_primary_id = self.magic_to_cta_shower_primary_id[int(self.superstar["MMcEvt_1.fPartId"].array()[0])]
+                src_pos_cam_Y = np.asarray(self.superstar["MSrcPosCam_1.fY"].array())
+                src_pos_cam_X = np.asarray(self.superstar["MSrcPosCam_1.fX"].array())
                 core_x = np.asarray(self.superstar["MMcEvt_1.fCoreX"].array())
                 core_y = np.asarray(self.superstar["MMcEvt_1.fCoreY"].array())
                 mc_energy = np.asarray(self.superstar["MMcEvt_1.fEnergy"].array())/1000.0
@@ -304,8 +309,8 @@ class DLMAGICEventSource(EventSource):
 
                     #Adding MC data
                     if self.is_simulation:
-                        data.mc.alt = Angle(np.pi/2.0 - zenith[i], u.rad)
-                        data.mc.az = Angle(np.deg2rad(180.0-7.0) - azimuth[i], u.rad)
+                        data.mc.alt = Angle(np.deg2rad(src_pos_cam_Y[i] * 0.00337), u.rad)
+                        data.mc.az = Angle(np.deg2rad(src_pos_cam_X[i] * 0.00337), u.rad)
                         data.mc.x_max = u.Quantity(0, X_MAX_UNIT)
                         data.mc.h_first_int = u.Quantity(h_first_int[i], u.m)
                         data.mc.core_x = u.Quantity(core_x[i], u.m)

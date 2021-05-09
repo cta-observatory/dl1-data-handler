@@ -11,8 +11,8 @@ class ShowerPrimaryID(Transform):
         self.shower_primary_id_to_class = {
             0: 1,    # gamma
             101: 0,  # proton
-            14: 0,   # MAGIC proton
-            1: 2     # electron
+            1: 2,    # electron
+            255: 0   # MAGIC real data
         }
         self.name = name
         self.dtype = np.dtype('int8')
