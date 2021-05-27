@@ -23,6 +23,24 @@ __all__ = [
     'DL1DataReaderDL1DH'
 ]
 
+split_datasets_by_tel_types = {
+    "/simulation/event/telescope/images/LST_LST_LSTCam",
+    "/simulation/event/telescope/images/MST_MST_FlashCam",
+    "/simulation/event/telescope/images/MST_MST_NectarCam",
+    "/simulation/event/telescope/images/SST_ASTRI_CHEC",
+    "/dl1/event/telescope/images/LST_LST_LSTCam",
+    "/dl1/event/telescope/images/MST_MST_FlashCam",
+    "/dl1/event/telescope/images/MST_MST_NectarCam",
+    "/dl1/event/telescope/images/SST_ASTRI_CHEC",
+    "/simulation/event/telescope/parameters/LST_LST_LSTCam",
+    "/simulation/event/telescope/parameters/MST_MST_FlashCam",
+    "/simulation/event/telescope/parameters/MST_MST_NectarCam",
+    "/simulation/event/telescope/parameters/SST_ASTRI_CHEC",
+    "/dl1/event/telescope/parameters/LST_LST_LSTCam",
+    "/dl1/event/telescope/parameters/MST_MST_FlashCam",
+    "/dl1/event/telescope/parameters/MST_MST_NectarCam",
+    "/dl1/event/telescope/parameters/SST_ASTRI_CHEC",
+}
 
 lock = threading.Lock()
 
@@ -245,9 +263,7 @@ class DL1DataReader:
     # return the unmapped vector.
     def _get_image(self, child, tel_type, image_index, parameter_table=-1):
 
-        num_pixels = self.num_pixels[self._get_camera_type(tel_type)]
-        num_channels = len(self.image_channels)
-        vector = np.zeros(shape=(num_pixels, num_channels), dtype=np.float32)
+        vector = np.zeros(shape=(self.num_pixels[self._get_camera_type(tel_type)], len(self.image_channels)), dtype=np.float32)
         # If the telescope didn't trigger, the image index is -1 and a blank
         # image of all zeros with be loaded
         if image_index != -1 and child:
@@ -256,11 +272,9 @@ class DL1DataReader:
                 for i, channel in enumerate(self.image_channels):
                     if channel == 'image_mask':
                         if parameter_table >= 0:
-                            image_mask = record[channel + str(parameter_table)]
-                            vector[:, i] = record['charge'] * image_mask
+                            vector[:, i] = record['charge'] * record[channel + str(parameter_table)]
                         else:
-                            image_mask = record[channel]
-                            vector[:, i] = record['image'] * image_mask
+                            vector[:, i] = record['image'] * record[channel]
                     else:
                         vector[:, i] = record[channel]
                     # Apply the transform to recover orginal floating point values if the file were compressed
@@ -272,8 +286,8 @@ class DL1DataReader:
         # If 'indexed_conv' is selected, we only need the unmapped vector.
         if self.image_mapper.mapping_method[self._get_camera_type(tel_type)] == 'indexed_conv':
            return vector
-        image = self.image_mapper.map_image(vector, self._get_camera_type(tel_type))
-        return image
+
+        return self.image_mapper.map_image(vector, self._get_camera_type(tel_type))
     
     def _append_subarray_info(self, subarray_table, subarray_info, query):
         with lock:
@@ -335,7 +349,49 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         if mapping_settings is None:
             mapping_settings = {}
-        
+
+        self.parameter_list = parameter_list
+        self.image_channels = image_channels
+        self.image_scale = None
+        self.peak_time_scale = None   
+
+        # Get stage1 split_datasets_by type
+        self.split_datasets_by = 'tel_id'
+        for table in split_datasets_by_tel_types:
+            if table in self.files[first_file].root:
+                self.split_datasets_by = 'tel_type'
+                if table.split("/")[-2] == 'images' and self.image_channels is not None:
+                    # Check the transform value used for the file compression 
+                    if "image_TRANSFORM_SCALE" in self.files[first_file].root[table]._v_attrs and self.image_scale is None:
+                        self.image_scale = self.files[first_file].root[table]._v_attrs["image_TRANSFORM_SCALE"]
+                    if "peak_time_TRANSFORM_SCALE" in self.files[first_file].root[table]._v_attrs and self.peak_time_scale is None:
+                        self.peak_time_scale = self.files[first_file].root[table]._v_attrs["peak_time_TRANSFORM_SCALE"]
+
+        # ImageMapper (1D charges -> 2D images)
+        if self.image_channels is not None:
+
+            # Check the transform value used for the file compression
+            for tel_id in np.arange(1,180):
+                tel_table = "tel_{:03d}".format(tel_id)
+                if tel_table in self.files[first_file].root.dl1.event.telescope.images:
+                    if "image_TRANSFORM_SCALE" in self.files[first_file].root.dl1.event.telescope.images[tel_table]._v_attrs and self.image_scale is None:
+                        self.image_scale = self.files[first_file].root.dl1.event.telescope.images[tel_table]._v_attrs["image_TRANSFORM_SCALE"]
+                    if "peak_time_TRANSFORM_SCALE" in self.files[first_file].root.dl1.event.telescope.images[tel_table]._v_attrs and self.peak_time_scale is None:
+                        self.peak_time_scale = self.files[first_file].root.dl1.event.telescope.images[tel_table]._v_attrs["peak_time_TRANSFORM_SCALE"]
+
+            self.pixel_positions, self.num_pixels = self._construct_pixel_positions(self.files[first_file].root.configuration.instrument.telescope)
+            if 'camera_types' not in mapping_settings:
+                mapping_settings['camera_types'] = self.pixel_positions.keys()
+            self.image_mapper = ImageMapper(pixel_positions=self.pixel_positions,
+                                            **mapping_settings)
+            
+            for camera_type in mapping_settings['camera_types']:
+                self.image_mapper.image_shapes[camera_type] = (
+                    self.image_mapper.image_shapes[camera_type][0],
+                    self.image_mapper.image_shapes[camera_type][1],
+                    len(self.image_channels)  # number of channels
+                )
+
         self.simulation_info = None
         self.example_identifiers = None
         if example_identifiers_file is None:
@@ -372,19 +428,28 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 # Construct the example identifiers for 'mono' or 'stereo' mode.
                 example_identifiers = []
                 if self.mode == 'mono':
-                
-                    # Construct the table containing all events.
-                    # First, the telescope tables are joined with the shower simulation
-                    # table and then those joined/merged tables are vertically stacked.
-                    tel_tables = []
-                    for tel_id in selected_telescopes[self.tel_type]:
-                        tel_table = read_table(f, f"/dl1/event/telescope/parameters/tel_{tel_id:03d}")
-                        tel_table.add_column(np.arange(len(tel_table)), name='img_index', index=0)
+
+                    if self.split_datasets_by == 'tel_id':
+                        # Construct the table containing all events.
+                        # First, the telescope tables are joined with the shower simulation
+                        # table and then those joined/merged tables are vertically stacked.
+                        tel_tables = []
+                        for tel_id in selected_telescopes[self.tel_type]:
+                            tel_table = read_table(f, f"/dl1/event/telescope/parameters/tel_{tel_id:03d}")
+                            tel_table.add_column(np.arange(len(tel_table)), name='img_index', index=0)
+                            simshower_table = read_table(f, "/simulation/event/subarray/shower")
+                            simshower_table.add_column(np.arange(len(simshower_table)), name='sim_index', index=0)
+                            tel_table = join(left=tel_table, right=simshower_table, keys=['obs_id', 'event_id'])
+                            tel_tables.append(tel_table)
+                        allevents = vstack(tel_tables)
+                    elif self.split_datasets_by == 'tel_type':
+                        # Construct the table containing all events.
+                        # Join the telescope type table with the shower simulation table.
+                        tel_type_table = read_table(f, f"/dl1/event/telescope/parameters/{self.tel_type}")
+                        tel_type_table.add_column(np.arange(len(tel_type_table)), name='img_index', index=0)
                         simshower_table = read_table(f, "/simulation/event/subarray/shower")
                         simshower_table.add_column(np.arange(len(simshower_table)), name='sim_index', index=0)
-                        tel_table = join(left=tel_table, right=simshower_table, keys=['obs_id', 'event_id'])
-                        tel_tables.append(tel_table)
-                    allevents = vstack(tel_tables)
+                        allevents = join(left=tel_type_table, right=simshower_table, keys=['obs_id', 'event_id'])
 
                     # MC event selection based on the shower simulation table
                     # and image and parameter selection based on the parameter tables
@@ -439,7 +504,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         events, multiplicity = np.unique(subarray_multiplicity, axis=0, return_counts=True)
                         selected_events = events[np.where(multiplicity >= multiplicity_selection['Subarray'])]
                         sim_indices = sim_indices[selected_events]
-
+                    
                     image_indices ={}
                     for tel_type in selected_telescopes:
                         # Get all selected tel ids of this telescope type
@@ -458,20 +523,36 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         selected_events_trigger = allowed_tels_with_trigger[selected_events]
                         # Get the position of each images of telescopes of this telescope type that triggered
                         img_idx = -np.ones((len(selected_events), len(tel_ids)), np.int32)
-                        for tel_id in tel_ids:
-                            # Get the trigger information of this telescope
-                            tel_trigger_info = selected_events_trigger[:,tel_id-1]
-                            tel_trigger_info = np.where(tel_trigger_info)[0]
+                        if self.split_datasets_by == 'tel_id':
+                            for tel_id in tel_ids:
+                                # Get the trigger information of this telescope
+                                tel_trigger_info = selected_events_trigger[:,tel_id-1]
+                                tel_trigger_info = np.where(tel_trigger_info)[0]
+                                # The telescope table is joined with the selected and merged table.
+                                tel_table = read_table(f, f"/dl1/event/telescope/parameters/tel_{tel_id:03d}")
+                                tel_table.add_column(np.arange(len(tel_table)), name='img_index', index=0)
+                                merged_table = join(left=tel_table, right=allevents[selected_events], keys=['obs_id', 'event_id'])
+                                # Get the original position of image in the telescope table.
+                                tel_img_index = np.array(merged_table['img_index'], np.int32)
+                                for trig, img in zip(tel_trigger_info, tel_img_index):
+                                    img_idx[trig][np.where(tel_ids==tel_id)] = img
+                            image_indices[tel_type] = img_idx
+                        elif self.split_datasets_by == 'tel_type':
                             # The telescope table is joined with the selected and merged table.
-                            tel_table = read_table(f, f"/dl1/event/telescope/parameters/tel_{tel_id:03d}")
-                            tel_table.add_column(np.arange(len(tel_table)), name='img_index', index=0)
-                            merged_table = join(left=tel_table, right=allevents[selected_events], keys=['obs_id', 'event_id'])
-                            # Get the original position of image in the telescope table.
-                            tel_img_index = np.array(merged_table['img_index'], np.int32)
-                            for trig, img in zip(tel_trigger_info, tel_img_index):
-                                img_idx[trig][np.where(tel_ids==tel_id)] = img
-                        image_indices[tel_type] = img_idx
-                    
+                            tel_type_table = read_table(f, f"/dl1/event/telescope/parameters/{tel_type}")
+                            tel_type_table.add_column(np.arange(len(tel_type_table)), name='img_index', index=0)
+                            merged_table = join(left=tel_type_table, right=allevents[selected_events], keys=['obs_id', 'event_id'])
+                            for tel_id in tel_ids:
+                                merged_table_per_tel_id = merged_table[merged_table['tel_id']==int(tel_id)]
+                                # Get the trigger information of this telescope
+                                tel_trigger_info = selected_events_trigger[:,tel_id-1]
+                                tel_trigger_info = np.where(tel_trigger_info)[0]
+                                # Get the original position of image in the telescope table.
+                                tel_img_index = np.array(merged_table_per_tel_id['img_index'], np.int32)
+                                for trig, img in zip(tel_trigger_info, tel_img_index):
+                                    img_idx[trig][np.where(tel_ids==tel_id)] = img
+                            image_indices[tel_type] = img_idx
+
                     # TODO: Fix pointing over time (see ctapipe issue 1484 & 1562)
                     if self.pointing_mode == "subarray":
                         array_pointings = 0
@@ -502,17 +583,17 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     self.example_identifiers = example_identifiers
                 else:
                     self.example_identifiers.extend(example_identifiers)
-
-            # Shuffle the examples
-            if shuffle:
-                random.seed(seed)
-                random.shuffle(self.example_identifiers)
                 
             # Dump example_identifiers and simulation_info to a pandas hdf5 file
             if not isinstance(example_identifiers_file, dict):
                 pd.DataFrame(data=self.example_identifiers).to_hdf(example_identifiers_file, key='example_identifiers', mode='a')
                 if self.simulation_info:
                     pd.DataFrame(data=pd.DataFrame(self.simulation_info, index=[0])).to_hdf(example_identifiers_file, key='simulation_info', mode='a')
+
+        # Shuffle the examples
+        if shuffle:
+            random.seed(seed)
+            random.shuffle(self.example_identifiers)
 
         if self.event_info:
             # Created pyIRF SimulatedEventsInfo
@@ -541,33 +622,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     telescope_pointing = self.files[first_file].root.dl1.monitoring.telescope.pointing._f_get_child(tel_table)
                     self.pointing[tel_id] = np.array([telescope_pointing[0]["altitude"], telescope_pointing[0]["azimuth"]], np.float32)
 
-        self.parameter_list = parameter_list
-        self.image_channels = image_channels
-        self.image_scale = None
-        self.peak_time_scale = None
-
-        # ImageMapper (1D charges -> 2D images)
-        if self.image_channels is not None:
-
-            # Check the transform value used for the file compression 
-            if "image_TRANSFORM_SCALE" in self.files[first_file].root.dl1.event.telescope.images.tel_001._v_attrs:
-                self.image_scale = self.files[first_file].root.dl1.event.telescope.images.tel_001._v_attrs["image_TRANSFORM_SCALE"]
-            if "peak_time_TRANSFORM_SCALE" in self.files[first_file].root.dl1.event.telescope.images.tel_001._v_attrs:
-                self.peak_time_scale = self.files[first_file].root.dl1.event.telescope.images.tel_001._v_attrs["peak_time_TRANSFORM_SCALE"]
-
-            self.pixel_positions, self.num_pixels = self._construct_pixel_positions(self.files[first_file].root.configuration.instrument.telescope)
-            if 'camera_types' not in mapping_settings:
-                mapping_settings['camera_types'] = self.pixel_positions.keys()
-            self.image_mapper = ImageMapper(pixel_positions=self.pixel_positions,
-                                            **mapping_settings)
-            
-            for camera_type in mapping_settings['camera_types']:
-                self.image_mapper.image_shapes[camera_type] = (
-                    self.image_mapper.image_shapes[camera_type][0],
-                    self.image_mapper.image_shapes[camera_type][1],
-                    len(self.image_channels)  # number of channels
-                )
-        
         if self.event_info:
             super()._construct_unprocessed_example_description(self.files[first_file].root.configuration.instrument.subarray.layout, self.files[first_file].root.simulation.event.subarray.shower)
         else:
@@ -733,40 +787,60 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         parameters_lists = []
         pointings = []
         subarray_info = [[] for column in self.subarray_info]
-        for i, tel_id in enumerate(self.selected_telescopes[tel_type]):
-            if self.image_channels is not None:
-                child = None
-                with lock:
-                    tel_table = "tel_{:03d}".format(tel_id)
-                    if tel_table in self.files[filename].root.dl1.event.telescope.images:
-                        child = self.files[filename].root.dl1.event.telescope.images._f_get_child(tel_table)
-                image = super()._get_image(child, tel_type, trigger_info[i])
-                images.append(image)
+        if self.split_datasets_by == 'tel_id':
+            for i, tel_id in enumerate(self.selected_telescopes[tel_type]):
+                if self.image_channels is not None:
+                    child = None
+                    with lock:
+                        tel_table = "tel_{:03d}".format(tel_id)
+                        if tel_table in self.files[filename].root.dl1.event.telescope.images:
+                            child = self.files[filename].root.dl1.event.telescope.images._f_get_child(tel_table)
+                    images.append(super()._get_image(child, tel_type, trigger_info[i]))
 
-            if self.parameter_list is not None:
-                child = None
-                with lock:
-                    tel_table = "tel_{:03d}".format(tel_id)
-                    if tel_table in self.files[filename].root.dl1.event.telescope.parameters:
-                        child = self.files[filename].root.dl1.event.telescope.parameters._f_get_child(tel_table)
-                parameter_list = []
-                for parameter in self.parameter_list:
-                    if trigger_info[i] != -1 and child:
-                        parameter_list.append(child[trigger_info[i]][parameter])
+                if self.parameter_list is not None:
+                    child = None
+                    with lock:
+                        tel_table = "tel_{:03d}".format(tel_id)
+                        if tel_table in self.files[filename].root.dl1.event.telescope.parameters:
+                            child = self.files[filename].root.dl1.event.telescope.parameters._f_get_child(tel_table)
+                    parameter_list = []
+                    for parameter in self.parameter_list:
+                        if trigger_info[i] != -1 and child:
+                            parameter_list.append(child[trigger_info[i]][parameter])
+                        else:
+                            parameter_list.append(np.nan)
+                    parameters_lists.append(np.array(parameter_list, dtype=np.float32))
+
+                if self.pointing_mode == "divergent":
+                    child = None
+                    with lock:
+                        tel_table = "tel_{:03d}".format(tel_id)
+                        if tel_table in self.files[filename].root.dl1.monitoring.telescope.pointing:
+                            child = self.files[filename].root.dl1.monitoring.telescope.pointing._f_get_child(tel_table)
+                    if child:
+                        pointings.append(np.array([child[pointing_info[i]]["altitude"], child[pointing_info[i]]["azimuth"]], np.float32))
                     else:
-                        parameter_list.append(np.nan)
-                parameters_lists.append(np.array(parameter_list, dtype=np.float32))
+                        pointings.append(np.array([np.nan, np.nan], np.float32))
 
-            if self.pointing_mode == "divergent":
-                child = None
+        elif self.split_datasets_by == 'tel_type':
+            if self.image_channels is not None:
                 with lock:
-                    tel_table = "tel_{:03d}".format(tel_id)
-                    if tel_table in self.files[filename].root.dl1.monitoring.telescope.pointing:
-                        child = self.files[filename].root.dl1.monitoring.telescope.pointing._f_get_child(tel_table)
-                if child:
-                    pointings.append(np.array([child[pointing_info[i]]["altitude"], child[pointing_info[i]]["azimuth"]], np.float32))
-                else:
-                    pointings.append(np.array([np.nan, np.nan], np.float32))
+                    img_child = self.files[filename].root.dl1.event.telescope.images._f_get_child(tel_type)
+            if self.parameter_list is not None:
+                with lock:
+                    prmtr_child = self.files[filename].root.dl1.event.telescope.parameters._f_get_child(tel_type)
+
+            for tel_id in self.selected_telescopes[tel_type]:                
+                tel_index = self.telescopes[tel_type].index(tel_id)
+
+                if self.image_channels is not None:
+                    images.append(super()._get_image(img_child, tel_type, trigger_info[tel_index]))
+
+                if self.parameter_list is not None:
+                    parameter_list = []
+                    for parameter in self.parameter_list:
+                        parameter_list.append(prmtr_child[index][parameter] if index != 0 else np.nan)
+                    parameters_lists.append(np.array(parameter_list, dtype=np.float32))
 
             tel_query = "tel_id == {}".format(tel_id)
             super()._append_subarray_info(self.files[filename].root.configuration.instrument.subarray.layout, subarray_info, tel_query)
@@ -794,20 +868,31 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             nrow, index, tel_id = identifiers[1:4]
             
             example = []
-            if self.image_channels is not None:
-                with lock:
-                    tel_table = "tel_{:03d}".format(tel_id)
-                    child = self.files[filename].root.dl1.event.telescope.images._f_get_child(tel_table)
-                image = super()._get_image(child, self.tel_type, index)
-                example.append(image)
+            if self.split_datasets_by == 'tel_id':
+                if self.image_channels is not None:
+                    with lock:
+                        tel_table = "tel_{:03d}".format(tel_id)
+                        child = self.files[filename].root.dl1.event.telescope.images._f_get_child(tel_table)
+                    example.append(super()._get_image(child, self.tel_type, index))
 
-            if self.parameter_list is not None:
-                with lock:
-                    tel_table = "tel_{:03d}".format(tel_id)
-                    child = self.files[filename].root.dl1.event.telescope.parameters._f_get_child(tel_table)
-                parameter_list = child[index][self.parameter_list]
-                example.append(np.array(list(parameter_list), dtype=np.float32))
-               
+                if self.parameter_list is not None:
+                    with lock:
+                        tel_table = "tel_{:03d}".format(tel_id)
+                        child = self.files[filename].root.dl1.event.telescope.parameters._f_get_child(tel_table)
+                    parameter_list = child[index][self.parameter_list]
+                    example.append(np.array(list(parameter_list), dtype=np.float32))
+            elif self.split_datasets_by == 'tel_type':
+                if self.image_channels is not None:
+                    with lock:
+                        child = self.files[filename].root.dl1.event.telescope.images._f_get_child(self.tel_type)
+                    example.append(super()._get_image(child, self.tel_type, index))
+
+                if self.parameter_list is not None:
+                    with lock:
+                        child = self.files[filename].root.dl1.event.telescope.parameters._f_get_child(self.tel_type)
+                    parameter_list = child[index][self.parameter_list]
+                    example.append(np.array(list(parameter_list), dtype=np.float32))
+
             subarray_info = [[] for column in self.subarray_info]
             tel_query = "tel_id == {}".format(tel_id)
             super()._append_subarray_info(self.files[filename].root.configuration.instrument.subarray.layout, subarray_info, tel_query)
@@ -1257,8 +1342,7 @@ class DL1DataReaderDL1DH(DL1DataReader):
             trigger = 0 if index == 0 else 1
             triggers.append(trigger)
             if self.image_channels is not None:
-                image = super()._get_image(img_child, tel_type, index, self.parameter_table)
-                images.append(image)
+                images.append(super()._get_image(img_child, tel_type, index, self.parameter_table))
             if self.parameter_list is not None:
                 parameter_list = []
                 for parameter in self.parameter_list:
@@ -1294,8 +1378,7 @@ class DL1DataReaderDL1DH(DL1DataReader):
             if self.image_channels is not None:
                 with lock:
                     child = self.files[filename].root['Images']._f_get_child(self.tel_type)
-                image = super()._get_image(child, self.tel_type, index, self.parameter_table)
-                example.append(image)
+                example.append(super()._get_image(child, self.tel_type, index, self.parameter_table))
 
             if self.parameter_list is not None:
                 with lock:
