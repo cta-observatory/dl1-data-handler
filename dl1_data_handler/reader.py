@@ -830,11 +830,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 with lock:
                     prmtr_child = self.files[filename].root.dl1.event.telescope.parameters._f_get_child(tel_type)
 
-            for tel_id in self.selected_telescopes[tel_type]:                
-                tel_index = self.telescopes[tel_type].index(tel_id)
-
+            for i, tel_id in enumerate(self.selected_telescopes[tel_type]):
                 if self.image_channels is not None:
-                    images.append(super()._get_image(img_child, tel_type, trigger_info[tel_index]))
+                    images.append(super()._get_image(img_child, tel_type, trigger_info[i]))
 
                 if self.parameter_list is not None:
                     parameter_list = []
