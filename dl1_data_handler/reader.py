@@ -404,6 +404,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             if '/simulation_info' in list(example_identifiers_file.keys()):
                 self.simulation_info = pd.read_hdf(example_identifiers_file, key= '/simulation_info').to_dict('records')[0]
             self.telescopes, self.selected_telescopes = self._construct_telescopes_selection(self.files[first_file].root.configuration.instrument.subarray.layout, selected_telescope_types, selected_telescope_ids)
+            example_identifiers_file.close()
         else:
 
             for file_idx, (filename, f) in enumerate(self.files.items()):
@@ -589,6 +590,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 pd.DataFrame(data=self.example_identifiers).to_hdf(example_identifiers_file, key='example_identifiers', mode='a')
                 if self.simulation_info:
                     pd.DataFrame(data=pd.DataFrame(self.simulation_info, index=[0])).to_hdf(example_identifiers_file, key='simulation_info', mode='a')
+                example_identifiers_file.close()
 
         # Shuffle the examples
         if shuffle:
