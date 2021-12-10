@@ -1,10 +1,10 @@
 package:
   name: dl1_data_handler
-  version: "0.9.0"
+  version: "0.10.0"
 
 source:
   git_url: https://github.com/cta-observatory/dl1-data-handler.git
-  git_rev: v0.9.0
+  git_rev: v0.10.0
 
 build:
   noarch: generic
@@ -15,19 +15,19 @@ requirements:
     - python ==3.7.6
     - numpy >=1.15.0
     - jupyter
-    - ctapipe ==0.9.1
+    - ctapipe ==0.10.5
     - pytables >=3.4.4 
   host:
     - python ==3.7.6
     - numpy >=1.15.0
     - jupyter
-    - ctapipe ==0.9.1
+    - ctapipe ==0.10.5
     - pytables >=3.4.4
   run:
     - python ==3.7.6
     - numpy >=1.15.0
     - jupyter
-    - ctapipe ==0.9.1
+    - ctapipe ==0.10.5
     - pytables >=3.4.4
   test:
     imports:
