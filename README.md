@@ -4,15 +4,16 @@
 [![build status](https://travis-ci.org/cta-observatory/dl1-data-handler.svg?branch=master)](https://travis-ci.org/cta-observatory/dl1-data-handler.svg?branch=master)
 [![Coverage Status](https://coveralls.io/repos/github/cta-observatory/dl1-data-handler/badge.svg?branch=master)](https://coveralls.io/github/cta-observatory/dl1-data-handler?branch=master)
 
-A package of utilities for writing, reading, and applying image processing to [Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") DL1 data (calibrated images) in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data.
+A package of utilities for writing (deprecated), reading, and applying image processing to [Cherenkov Telescope Array (CTA)](https://www.cta-observatory.org/ "CTA collaboration Homepage") DL1 data (calibrated images) in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data.
 
 Currently supports data in the CTA pyhessio sim_telarray format, with the possibility of supporting other IACT data formats in the future. Built using ctapipe and PyTables.
 
 Previously named image-extractor (v0.1.0 - v0.6.0). Currently under development, intended for internal use only.
 
 ## Data Format
+[Deprecated] DL1DataWriter implements a standardized format for storing simulated CTA DL1 event data into Pytables files. CTAMLDataDumper is the class which implements the conversion from ctapipe containers to the CTA ML data format. See the wiki page [here](https://github.com/cta-observatory/dl1-data-handler/wiki/CTA-ML-Data-Format) for a full description of this data format and an FAQ.
 
-DL1DataWriter implements a standardized format for storing simulated CTA DL1 event data into Pytables files. CTAMLDataDumper is the class which implements the conversion from ctapipe containers to the CTA ML data format. See the wiki page [here](https://github.com/cta-observatory/dl1-data-handler/wiki/CTA-ML-Data-Format) for a full description of this data format and an FAQ.
+ctapipe process tool should be used instead.
 
 ## Installation
 
@@ -33,12 +34,6 @@ To install into a virtualenv environment using pip:
 virtualenv /path/to/ENV
 source /path/to/ENV/bin/activate
 pip install .
-```
-
-For users that require other ctapipe version than the default one (v0.9.1) setup_light.py won’t install ctapipe along dl1-data-handler, thus allowing the user to install the ctapipe version of her/his choice (compatibility is not guaranteed for all ctapipe versions, though):
-
-```bash
-python setup_light.py install
 ```
 
 ### Installing as a conda package
@@ -72,7 +67,7 @@ If you want to import any functionality from dl1-data-handler into your own Pyth
 
 ```bash
 git clone https://github.com/cta-observatory/dl1-data-handler.git
-git checkout v0.9.0
+git checkout v0.10.0
 ```
 
 dl1-data-handler should already have been installed in your environment by Conda, so no further installation steps (i.e. with setuptools or pip) are necessary and you should be able to run scripts/write_data.py directly.
@@ -83,13 +78,13 @@ The main dependencies are:
 
 * PyTables >= 3.4.4
 * NumPy >= 1.15.0
-* ctapipe == 0.10.3
+* ctapipe == 0.10.5
 
 Also see setup.py.
 
 ## Usage
 
-### DL1DataWriter
+### [Deprecated] DL1DataWriter
 
 #### From the Command Line:
 
