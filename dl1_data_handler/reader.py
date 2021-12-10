@@ -299,7 +299,7 @@ class DL1DataReader:
     
     
 # CTA DL1 data model v1.1.0
-# ctapipe stage1 v0.10.3 (standard settings writing images and parameters)
+# ctapipe v0.10.5 (standard settings writing images and parameters)
 class DL1DataReaderSTAGE1(DL1DataReader):
 
     def __init__(self,
