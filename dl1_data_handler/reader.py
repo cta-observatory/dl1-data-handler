@@ -413,7 +413,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             tel_table = read_table(f, f"/dl1/event/telescope/parameters/tel_{tel_id:03d}")
                             tel_table.add_column(np.arange(len(tel_table)), name='img_index', index=0)
                             simshower_table = read_table(f, "/simulation/event/subarray/shower")
-                            self.true_shower_primary_id = simshower_table['true_shower_primary_id'][0]
+                            true_shower_primary_id = simshower_table['true_shower_primary_id'][0]
                             simshower_table.add_column(np.arange(len(simshower_table)), name='sim_index', index=0)
                             tel_table = join(left=tel_table, right=simshower_table, keys=['obs_id', 'event_id'])
                             tel_tables.append(tel_table)
@@ -424,7 +424,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         tel_type_table = read_table(f, f"/dl1/event/telescope/parameters/{self.tel_type}")
                         tel_type_table.add_column(np.arange(len(tel_type_table)), name='img_index', index=0)
                         simshower_table = read_table(f, "/simulation/event/subarray/shower")
-                        self.true_shower_primary_id = simshower_table['true_shower_primary_id'][0]
+                        true_shower_primary_id = simshower_table['true_shower_primary_id'][0]
                         simshower_table.add_column(np.arange(len(simshower_table)), name='sim_index', index=0)
                         allevents = join(left=tel_type_table, right=simshower_table, keys=['obs_id', 'event_id'])
 
@@ -443,10 +443,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
                     # Track number of events for each particle type
                     self.simulated_particles['total'] += len(allevents)
-                    if self.true_shower_primary_id in self.simulated_particles:
-                        self.simulated_particles[self.true_shower_primary_id] += len(allevents)
+                    if true_shower_primary_id in self.simulated_particles:
+                        self.simulated_particles[true_shower_primary_id] += len(allevents)
                     else:
-                        self.simulated_particles[self.true_shower_primary_id] = len(allevents)
+                        self.simulated_particles[true_shower_primary_id] = len(allevents)
 
                     # Construct the example identifiers
                     for sim_idx, img_idx, tel_id in zip(allevents["sim_index"], allevents["img_index"], allevents["tel_id"]):
@@ -460,7 +460,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     # Construct the table containing all events.
                     # The shower simulation table is joined with the subarray trigger table.
                     simshower_table = read_table(f, "/simulation/event/subarray/shower")
-                    self.true_shower_primary_id = simshower_table['true_shower_primary_id'][0]
+                    true_shower_primary_id = simshower_table['true_shower_primary_id'][0]
 
                     simshower_table.add_column(np.arange(len(simshower_table)), name='sim_index', index=0)
                     trigger_table = read_table(f, "/dl1/event/subarray/trigger")
@@ -548,10 +548,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
                     # Track number of events for each particle type
                     self.simulated_particles['total'] += len(sim_indices)
-                    if self.true_shower_primary_id in self.simulated_particles:
-                        self.simulated_particles[self.true_shower_primary_id] += len(sim_indices)
+                    if true_shower_primary_id in self.simulated_particles:
+                        self.simulated_particles[true_shower_primary_id] += len(sim_indices)
                     else:
-                        self.simulated_particles[self.true_shower_primary_id] = len(sim_indices)
+                        self.simulated_particles[true_shower_primary_id] = len(sim_indices)
 
                     # Construct the example identifiers
                     # TODO: Find a better way!?
@@ -997,6 +997,8 @@ class DL1DataReaderDL1DH(DL1DataReader):
         self.image_scale = None
         self.peak_time_scale = None
         self.simulation_info = None
+        self.simulated_particles = {}
+        self.simulated_particles['total'] = 0
         self.example_identifiers = None
         if example_identifiers_file is None:
             example_identifiers_file = {}
@@ -1007,6 +1009,8 @@ class DL1DataReaderDL1DH(DL1DataReader):
             self.example_identifiers = pd.read_hdf(example_identifiers_file, key= '/example_identifiers').to_numpy()
             if '/simulation_info' in list(example_identifiers_file.keys()):
                 self.simulation_info = pd.read_hdf(example_identifiers_file, key= '/simulation_info').to_dict('records')[0]
+            if '/simulated_particles' in list(example_identifiers_file.keys()):
+                self.simulated_particles = pd.read_hdf(example_identifiers_file, key= '/simulated_particles').to_dict('records')[0]
             self.telescopes, self.selected_telescopes, cut_condition = self._construct_telescopes_selection(self.files[first_file].root.Array_Information, selected_telescope_types, selected_telescope_ids, selection_string)
         else:
 
@@ -1014,7 +1018,7 @@ class DL1DataReaderDL1DH(DL1DataReader):
                 
                 if self.event_info:
                     self.simulation_info = self._construct_simulated_info(f.root._v_attrs, self.simulation_info)
-                    
+
                 # Teslecope selection
                 telescopes, selected_telescopes, cut_condition = self._construct_telescopes_selection(f.root.Array_Information, selected_telescope_types, selected_telescope_ids, selection_string)
                 
@@ -1054,8 +1058,15 @@ class DL1DataReaderDL1DH(DL1DataReader):
                             image_selection)
                         for image_index, nrow in zip(img_ids[mask],
                                                 np.array(selected_nrows)[mask]):
-                                example_identifiers.append((file_idx, nrow,
-                                                        image_index, tel_id))
+                                example_identifiers.append((file_idx, nrow, image_index, tel_id))
+
+                # Track number of events for each particle type
+                true_shower_primary_id = f.root.Events.cols._f_col('shower_primary_id')[0]
+                self.simulated_particles['total'] += len(example_identifiers)
+                if true_shower_primary_id in self.simulated_particles:
+                    self.simulated_particles[true_shower_primary_id] += len(example_identifiers)
+                else:
+                    self.simulated_particles[true_shower_primary_id] = len(example_identifiers)
 
                 # Confirm that the files are consistent and merge them
                 if not self.telescopes:
@@ -1069,18 +1080,20 @@ class DL1DataReaderDL1DH(DL1DataReader):
                     self.example_identifiers = example_identifiers
                 else:
                     self.example_identifiers.extend(example_identifiers)
-                    
-            # Shuffle the examples
-            if shuffle:
-                random.seed(seed)
-                random.shuffle(self.example_identifiers)
 
             # Dump example_identifiers and simulation_info to a pandas hdf5 file
             if not isinstance(example_identifiers_file, dict):
                 pd.DataFrame(data=self.example_identifiers).to_hdf(example_identifiers_file, key='example_identifiers', mode='a')
                 if self.simulation_info:
                     pd.DataFrame(data=pd.DataFrame(self.simulation_info, index=[0])).to_hdf(example_identifiers_file, key='simulation_info', mode='a')
-                    
+                if self.simulated_particles:
+                    pd.DataFrame(data=pd.DataFrame(self.simulated_particles, index=[0])).to_hdf(example_identifiers_file, key='simulated_particles', mode='a')
+
+        # Shuffle the examples
+        if shuffle:
+            random.seed(seed)
+            random.shuffle(self.example_identifiers)
+
         if self.event_info:
             # Created pyIRF SimulatedEventsInfo
             self.pyIRFSimulatedEventsInfo = SimulatedEventsInfo(n_showers=int(self.simulation_info['num_showers']),
