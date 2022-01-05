@@ -85,37 +85,6 @@ class DL1DataReader:
     def __len__(self):
         return len(self.example_identifiers)
 
-    # Convert a possibly-nested sequence to a tuple
-    def _totuple(self, a):
-        try:
-            return tuple(self._totuple(i) for i in a)
-        except TypeError:
-            return a
-
-    # Return a dictionary of number of examples in the dataset, grouped by
-    # the array names listed in the iterable group_by.
-    # If example_indices is a list of indices, consider only those examples,
-    # otherwise all examples in the reader are considered.
-    def num_examples(self, group_by=None, example_indices=None):
-        grouping_indices = []
-        if group_by is not None:
-            for name in group_by:
-                for idx, des in enumerate(self.example_description):
-                    if des['name'] == name:
-                        grouping_indices.append(idx)
-        group_nums = {}
-        if example_indices is None:
-            example_indices = list(range(len(self)))
-        for idx in example_indices:
-            example = self[idx]
-            # Convert to a tuple to get a hashable key
-            group = self._totuple(example[idx].tolist() for idx in grouping_indices)
-            if group in group_nums:
-                group_nums[group] += 1
-            else:
-                group_nums[group] = 1
-        return group_nums
-
     def _construct_unprocessed_example_description(self, subarray_table, events_table=None):
         """
         Construct example description (before preprocessing).
@@ -393,6 +362,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 )
 
         self.simulation_info = None
+        self.simulated_particles = {}
+        self.simulated_particles['total'] = 0
         self.example_identifiers = None
         if example_identifiers_file is None:
             example_identifiers_file = {}
@@ -408,6 +379,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         else:
 
             for file_idx, (filename, f) in enumerate(self.files.items()):
+
                 # Read simulation information from each observation needed for pyIRF
                 if self.event_info:
                     self.simulation_info = self._construct_simulated_info(f, self.simulation_info)
@@ -439,6 +411,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             tel_table = read_table(f, f"/dl1/event/telescope/parameters/tel_{tel_id:03d}")
                             tel_table.add_column(np.arange(len(tel_table)), name='img_index', index=0)
                             simshower_table = read_table(f, "/simulation/event/subarray/shower")
+                            self.true_shower_primary_id = simshower_table['true_shower_primary_id'][0]
                             simshower_table.add_column(np.arange(len(simshower_table)), name='sim_index', index=0)
                             tel_table = join(left=tel_table, right=simshower_table, keys=['obs_id', 'event_id'])
                             tel_tables.append(tel_table)
@@ -449,6 +422,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         tel_type_table = read_table(f, f"/dl1/event/telescope/parameters/{self.tel_type}")
                         tel_type_table.add_column(np.arange(len(tel_type_table)), name='img_index', index=0)
                         simshower_table = read_table(f, "/simulation/event/subarray/shower")
+                        self.true_shower_primary_id = simshower_table['true_shower_primary_id'][0]
                         simshower_table.add_column(np.arange(len(simshower_table)), name='sim_index', index=0)
                         allevents = join(left=tel_type_table, right=simshower_table, keys=['obs_id', 'event_id'])
 
@@ -464,7 +438,14 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     # TODO: Fix pointing over time (see ctapipe issue 1484 & 1562)
                     if self.pointing_mode in ["subarray", "divergent"]:
                         array_pointing = 0
-                    
+
+                    # Track number of events for each particle type
+                    self.simulated_particles['total'] += len(allevents)
+                    if self.true_shower_primary_id in self.simulated_particles:
+                        self.simulated_particles[self.true_shower_primary_id] += len(allevents)
+                    else:
+                        self.simulated_particles[self.true_shower_primary_id] = len(allevents)
+
                     # Construct the example identifiers
                     for sim_idx, img_idx, tel_id in zip(allevents["sim_index"], allevents["img_index"], allevents["tel_id"]):
                         if self.pointing_mode in ["subarray", "divergent"]:
@@ -477,6 +458,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     # Construct the table containing all events.
                     # The shower simulation table is joined with the subarray trigger table.
                     simshower_table = read_table(f, "/simulation/event/subarray/shower")
+                    self.true_shower_primary_id = simshower_table['true_shower_primary_id'][0]
+
                     simshower_table.add_column(np.arange(len(simshower_table)), name='sim_index', index=0)
                     trigger_table = read_table(f, "/dl1/event/subarray/trigger")
                     allevents = join(left=trigger_table, right=simshower_table, keys=['obs_id', 'event_id'])
@@ -560,7 +543,14 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     elif self.pointing_mode == "divergent":
                         tel_ids = np.hstack(list(selected_telescopes.values()))
                         array_pointings = np.zeros(len(tel_ids), np.int8)
-                    
+
+                    # Track number of events for each particle type
+                    self.simulated_particles['total'] += len(sim_indices)
+                    if self.true_shower_primary_id in self.simulated_particles:
+                        self.simulated_particles[self.true_shower_primary_id] += len(sim_indices)
+                    else:
+                        self.simulated_particles[self.true_shower_primary_id] = len(sim_indices)
+
                     # Construct the example identifiers
                     # TODO: Find a better way!?
                     for idx, sim_idx in enumerate(sim_indices):
