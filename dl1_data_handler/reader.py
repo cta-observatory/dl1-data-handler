@@ -328,6 +328,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         super().__init__(file_list=file_list, mode=mode, subarray_info=subarray_info, event_info=event_info)
 
         first_file = list(self.files)[0]
+        self.data_model_version = self.files[first_file].root._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
 
         # Set pointing mode
         # Fix_subarray: Fix subarray pointing (MC production)
@@ -663,11 +664,12 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         camera2index = {}
         for row in subarray_table:
             tel_type = row['tel_description'].decode()
-            camera_index = row['camera_index']
             if tel_type not in telescopes:
                 telescopes[tel_type] = []
-            if self._get_camera_type(tel_type) not in camera2index:
-                camera2index[self._get_camera_type(tel_type)] = camera_index
+            if self.data_model_version != 'v1.0.0':
+                camera_index = row['camera_index']
+                if self._get_camera_type(tel_type) not in camera2index:
+                    camera2index[self._get_camera_type(tel_type)] = camera_index
             telescopes[tel_type].append(row['tel_id'])
 
         # Enforce an automatic minimal telescope selection cut:
@@ -775,7 +777,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         pixel_positions = {}
         num_pixels = {}
         for camera in cameras:
-            cam_geom = telescope_type_information.camera._f_get_child('geometry_{}'.format(self.camera2index[camera]))
+            if self.data_model_version != 'v1.0.0':
+                cam_geom = telescope_type_information.camera._f_get_child('geometry_{}'.format(self.camera2index[camera]))
+            else:
+                cam_geom = telescope_type_information.camera._f_get_child('geometry_{}'.format(camera))
             pix_x = np.array(cam_geom.cols._f_col("pix_x"))
             pix_y = np.array(cam_geom.cols._f_col("pix_y"))
             num_pixels[camera] = len(pix_x)
