@@ -374,6 +374,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             self.example_identifiers = pd.read_hdf(example_identifiers_file, key= '/example_identifiers').to_numpy()
             if '/simulation_info' in list(example_identifiers_file.keys()):
                 self.simulation_info = pd.read_hdf(example_identifiers_file, key= '/simulation_info').to_dict('records')[0]
+            if '/simulated_particles' in list(example_identifiers_file.keys()):
+                self.simulated_particles = pd.read_hdf(example_identifiers_file, key= '/simulated_particles').to_dict('records')[0]
             self.telescopes, self.selected_telescopes = self._construct_telescopes_selection(self.files[first_file].root.configuration.instrument.subarray.layout, selected_telescope_types, selected_telescope_ids)
             example_identifiers_file.close()
         else:
@@ -580,6 +582,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 pd.DataFrame(data=self.example_identifiers).to_hdf(example_identifiers_file, key='example_identifiers', mode='a')
                 if self.simulation_info:
                     pd.DataFrame(data=pd.DataFrame(self.simulation_info, index=[0])).to_hdf(example_identifiers_file, key='simulation_info', mode='a')
+                if self.simulated_particles:
+                    pd.DataFrame(data=pd.DataFrame(self.simulated_particles, index=[0])).to_hdf(example_identifiers_file, key='simulated_particles', mode='a')
                 example_identifiers_file.close()
 
         # Shuffle the examples
