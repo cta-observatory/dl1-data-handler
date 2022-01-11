@@ -42,7 +42,7 @@ The following installation method (for Linux) is recommended:
 Installing as a conda package
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To install it as a conda package, first install Anaconda by following the instructions here: https://www.anaconda.com/distribution/.
+To install dl1-data-handler as a conda package, first install Anaconda by following the instructions here: https://www.anaconda.com/distribution/.
 
 The following command will set up a conda virtual environment, add the
 necessary package channels, and install dl1-data-handler specified version and its dependencies:
