@@ -39,49 +39,21 @@ Installation
 
 The following installation method (for Linux) is recommended:
 
-Installing with pip/setuptools from source
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-You can install dl1-data-handler using pip after cloning the repository:
-
-.. code-block:: bash
-
-   git clone https://github.com/cta-observatory/dl1-data-handler.git
-   cd dl1-data-handler
-
-To install into a virtualenv environment using pip:
-
-.. code-block:: bash
-
-   virtualenv /path/to/ENV
-   source /path/to/ENV/bin/activate
-   pip install .
-
 Installing as a conda package
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To install it as a conda package, first install Anaconda by following the instructions here: https://www.anaconda.com/distribution/.
 
-Then, create and enter a new Python 3.8 environment with:
+The following command will set up a conda virtual environment, add the
+necessary package channels, and install dl1-data-handler specified version and its dependencies:
 
 .. code-block:: bash
 
-   conda create -n [ENVIRONMENT_NAME] python=3.8
+   DL1DH_VER=0.10.1
+   wget https://raw.githubusercontent.com/cta-observatory/dl1-data-handler/v$DL1DH_VER/environment.yml
+   conda env create -n [ENVIRONMENT_NAME] -f environment.yml
    conda activate [ENVIRONMENT_NAME]
-
-From the environment, add the necessary channels for all dependencies:
-
-.. code-block:: bash
-
-   conda config --add channels anaconda
-   conda config --add channels conda-forge
-   conda config --add channels cta-observatory
-
-Install the package:
-
-.. code-block:: bash
-
-   conda install -c ctlearn-project dl1_data_handler
+   conda install -c ctlearn-project dl1_data_handler=$DL1DH_VER
 
 This should automatically install all dependencies (NOTE: this may take some time, as by default MKL is included as a dependency of NumPy and it is very large).
 
