@@ -2,14 +2,14 @@ import copy
 
 
 class DL1DataProcessor:
-
-    def __init__(self, mode, input_description, transforms=None,
-                 validate=False):
-        if mode in ['mono', 'stereo', 'multi-stereo']:
+    def __init__(self, mode, input_description, transforms=None, validate=False):
+        if mode in ["mono", "stereo", "multi-stereo"]:
             self.mode = mode
         else:
-            raise ValueError("Invalid mode selection '{}'. Valid options: "
-                             "'mono', 'stereo', 'multi-stereo'".format(mode))
+            raise ValueError(
+                "Invalid mode selection '{}'. Valid options: "
+                "'mono', 'stereo', 'multi-stereo'".format(mode)
+            )
         if transforms is None:
             transforms = []
         self.transforms = transforms
@@ -26,8 +26,8 @@ class DL1DataProcessor:
                 transform.validate(example)
         return example
 
-class Transform:
 
+class Transform:
     def __init__(self):
         self.description = []
 
@@ -40,17 +40,20 @@ class Transform:
 
     def validate(self, example):
         if len(example) != len(self.description):
-            raise ValueError("{}: Length mismatch. Description: {}. "
-                             "Example: {}.".format(self.__class__.__name__,
-                                                   len(self.description),
-                                                   len(example)))
+            raise ValueError(
+                "{}: Length mismatch. Description: {}. "
+                "Example: {}.".format(
+                    self.__class__.__name__, len(self.description), len(example)
+                )
+            )
         for arr, des in zip(example, self.description):
-            if arr.shape != des['shape']:
-                raise ValueError("{}: Shape mismatch. Description item: {}. "
-                                 "Example item: {}.".format(
-                                     self.__class__.__name__, des, arr))
-            if arr.dtype != des['dtype']:
-                raise ValueError("{}: Dtype mismatch. Description: {}. "
-                                 "Example: {}.".format(
-                                     self.__class__.__name__, des, arr))
-
+            if arr.shape != des["shape"]:
+                raise ValueError(
+                    "{}: Shape mismatch. Description item: {}. "
+                    "Example item: {}.".format(self.__class__.__name__, des, arr)
+                )
+            if arr.dtype != des["dtype"]:
+                raise ValueError(
+                    "{}: Dtype mismatch. Description: {}. "
+                    "Example: {}.".format(self.__class__.__name__, des, arr)
+                )
