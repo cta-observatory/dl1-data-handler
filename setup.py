@@ -4,7 +4,7 @@ from dl1_data_handler.version import *
 
 here = path.abspath(path.dirname(__file__))
 
-with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
+with open(path.join(here, "README.rst"), encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
@@ -14,7 +14,7 @@ setup(
     author_email="d.nieto@ucm.es",
     description="dl1 HDF5 data writer + reader + processor",
     long_description=long_description,
-    long_description_content_type='text/x-rst',
+    long_description_content_type="text/x-rst",
     url="http://github.com/cta-observatory/dl1-data-handler",
     license="MIT",
     packages=["dl1_data_handler"],
