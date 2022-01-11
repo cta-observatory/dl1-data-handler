@@ -297,6 +297,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         super().__init__(file_list=file_list, mode=mode, subarray_info=subarray_info, event_info=event_info)
 
         first_file = list(self.files)[0]
+        self.data_model_version = self.files[first_file].root._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
 
         # Set pointing mode
         # Fix_subarray: Fix subarray pointing (MC production)
@@ -322,7 +323,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         self.parameter_list = parameter_list
         self.image_channels = image_channels
         self.image_scale = None
-        self.peak_time_scale = None   
+        self.peak_time_scale = None
 
         # Get stage1 split_datasets_by type
         self.split_datasets_by = 'tel_id'
@@ -335,31 +336,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         self.image_scale = self.files[first_file].root[table]._v_attrs["image_TRANSFORM_SCALE"]
                     if "peak_time_TRANSFORM_SCALE" in self.files[first_file].root[table]._v_attrs and self.peak_time_scale is None:
                         self.peak_time_scale = self.files[first_file].root[table]._v_attrs["peak_time_TRANSFORM_SCALE"]
-
-        # ImageMapper (1D charges -> 2D images)
-        if self.image_channels is not None:
-
-            # Check the transform value used for the file compression
-            for tel_id in np.arange(1,180):
-                tel_table = "tel_{:03d}".format(tel_id)
-                if tel_table in self.files[first_file].root.dl1.event.telescope.images:
-                    if "image_TRANSFORM_SCALE" in self.files[first_file].root.dl1.event.telescope.images[tel_table]._v_attrs and self.image_scale is None:
-                        self.image_scale = self.files[first_file].root.dl1.event.telescope.images[tel_table]._v_attrs["image_TRANSFORM_SCALE"]
-                    if "peak_time_TRANSFORM_SCALE" in self.files[first_file].root.dl1.event.telescope.images[tel_table]._v_attrs and self.peak_time_scale is None:
-                        self.peak_time_scale = self.files[first_file].root.dl1.event.telescope.images[tel_table]._v_attrs["peak_time_TRANSFORM_SCALE"]
-
-            self.pixel_positions, self.num_pixels = self._construct_pixel_positions(self.files[first_file].root.configuration.instrument.telescope)
-            if 'camera_types' not in mapping_settings:
-                mapping_settings['camera_types'] = self.pixel_positions.keys()
-            self.image_mapper = ImageMapper(pixel_positions=self.pixel_positions,
-                                            **mapping_settings)
-            
-            for camera_type in mapping_settings['camera_types']:
-                self.image_mapper.image_shapes[camera_type] = (
-                    self.image_mapper.image_shapes[camera_type][0],
-                    self.image_mapper.image_shapes[camera_type][1],
-                    len(self.image_channels)  # number of channels
-                )
 
         self.simulation_info = None
         self.simulated_particles = {}
@@ -376,7 +352,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 self.simulation_info = pd.read_hdf(example_identifiers_file, key= '/simulation_info').to_dict('records')[0]
             if '/simulated_particles' in list(example_identifiers_file.keys()):
                 self.simulated_particles = pd.read_hdf(example_identifiers_file, key= '/simulated_particles').to_dict('records')[0]
-            self.telescopes, self.selected_telescopes = self._construct_telescopes_selection(self.files[first_file].root.configuration.instrument.subarray.layout, selected_telescope_types, selected_telescope_ids)
+            self.telescopes, self.selected_telescopes, self.camera2index = self._construct_telescopes_selection(self.files[first_file].root.configuration.instrument.subarray.layout, selected_telescope_types, selected_telescope_ids)
             example_identifiers_file.close()
         else:
 
@@ -386,7 +362,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 if self.event_info:
                     self.simulation_info = self._construct_simulated_info(f, self.simulation_info)
                 # Teslecope selection
-                telescopes, selected_telescopes = self._construct_telescopes_selection(f.root.configuration.instrument.subarray.layout, selected_telescope_types, selected_telescope_ids)
+                telescopes, selected_telescopes, camera2index = self._construct_telescopes_selection(f.root.configuration.instrument.subarray.layout, selected_telescope_types, selected_telescope_ids)
                 
                 # Multiplicity selection
                 subarray_multiplicity = 0
@@ -571,6 +547,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     raise ValueError("Inconsistent telescope definition in "
                                      "{}".format(filename))
                 self.selected_telescopes = selected_telescopes
+                self.camera2index = camera2index
 
                 if self.example_identifiers is None:
                     self.example_identifiers = example_identifiers
@@ -590,6 +567,32 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         if shuffle:
             random.seed(seed)
             random.shuffle(self.example_identifiers)
+
+        # ImageMapper (1D charges -> 2D images)
+        if self.image_channels is not None:
+
+            # Check the transform value used for the file compression
+            for tel_id in np.arange(1,180):
+                tel_table = "tel_{:03d}".format(tel_id)
+                if tel_table in self.files[first_file].root.dl1.event.telescope.images:
+                    if "image_TRANSFORM_SCALE" in self.files[first_file].root.dl1.event.telescope.images[tel_table]._v_attrs and self.image_scale is None:
+                        self.image_scale = self.files[first_file].root.dl1.event.telescope.images[tel_table]._v_attrs["image_TRANSFORM_SCALE"]
+                    if "peak_time_TRANSFORM_SCALE" in self.files[first_file].root.dl1.event.telescope.images[tel_table]._v_attrs and self.peak_time_scale is None:
+                        self.peak_time_scale = self.files[first_file].root.dl1.event.telescope.images[tel_table]._v_attrs["peak_time_TRANSFORM_SCALE"]
+
+            self.pixel_positions, self.num_pixels = self._construct_pixel_positions(self.files[first_file].root.configuration.instrument.telescope)
+            if 'camera_types' not in mapping_settings:
+                mapping_settings['camera_types'] = self.pixel_positions.keys()
+            self.image_mapper = ImageMapper(pixel_positions=self.pixel_positions,
+                                            **mapping_settings)
+
+            for camera_type in mapping_settings['camera_types']:
+                self.image_mapper.image_shapes[camera_type] = (
+                    self.image_mapper.image_shapes[camera_type][0],
+                    self.image_mapper.image_shapes[camera_type][1],
+                    len(self.image_channels)  # number of channels
+                )
+
 
         if self.event_info:
             # Created pyIRF SimulatedEventsInfo
@@ -646,15 +649,21 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         -------
         telescopes (dict): dictionary of `{: }`
         selected_telescopes (dict): dictionary of `{: }`
+        camera2index (dict): dictionary of `{: }`
 
         """
          
         # Get dict of all the tel_types in the file mapped to their tel_ids
         telescopes = {}
+        camera2index = {}
         for row in subarray_table:
             tel_type = row['tel_description'].decode()
             if tel_type not in telescopes:
                 telescopes[tel_type] = []
+            if self.data_model_version != 'v1.0.0':
+                camera_index = row['camera_index']
+                if self._get_camera_type(tel_type) not in camera2index:
+                    camera2index[self._get_camera_type(tel_type)] = camera_index
             telescopes[tel_type].append(row['tel_id'])
 
         # Enforce an automatic minimal telescope selection cut:
@@ -685,7 +694,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             else:
                 selected_telescopes[tel_type] = available_tel_ids
         
-        return telescopes, selected_telescopes
+        return telescopes, selected_telescopes, camera2index
 
 
     def _construct_simulated_info(self, file, simulation_info):
@@ -762,7 +771,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         pixel_positions = {}
         num_pixels = {}
         for camera in cameras:
-            cam_geom = telescope_type_information.camera._f_get_child('geometry_{}'.format(camera))
+            if self.data_model_version != 'v1.0.0':
+                cam_geom = telescope_type_information.camera._f_get_child('geometry_{}'.format(self.camera2index[camera]))
+            else:
+                cam_geom = telescope_type_information.camera._f_get_child('geometry_{}'.format(camera))
             pix_x = np.array(cam_geom.cols._f_col("pix_x"))
             pix_y = np.array(cam_geom.cols._f_col("pix_y"))
             num_pixels[camera] = len(pix_x)
