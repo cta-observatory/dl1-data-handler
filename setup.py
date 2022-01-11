@@ -3,13 +3,13 @@ from setuptools import setup
 from setuptools import find_packages
 
 setup(name='dl1_data_handler',
-      version='0.10.0',
+      version='0.10.1',
       description='dl1 HDF5 data writer + reader + processor',
       url='http://github.com/cta-observatory/dl1-data-handler',
       license='MIT',
       packages=['dl1_data_handler'],
       install_requires=[
-          'ctapipe==0.10.5',
+          'ctapipe==0.12.0',
           'pytest-cov',
           'pyirf',
           ],
