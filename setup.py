@@ -19,8 +19,8 @@ setup(
     license="MIT",
     packages=["dl1_data_handler"],
     install_requires=[
-        "numpy>1.15",
-        "astropy",
+        "numpy>1.16",
+        "astropy>=4.0.5,<5",
         "ctapipe==0.12.0",
         "jupyter",
         "pytest-cov",
