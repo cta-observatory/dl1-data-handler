@@ -5,8 +5,15 @@ the output PyTables .h5 files.
 
 """
 
-from tables import (IsDescription, UInt32Col, UInt16Col, UInt8Col,
-                    Float32Col, StringCol, Int32Col)
+from tables import (
+    IsDescription,
+    UInt32Col,
+    UInt16Col,
+    UInt8Col,
+    Float32Col,
+    StringCol,
+    Int32Col,
+)
 
 
 class EventTableRow(IsDescription):
@@ -69,6 +76,7 @@ class EventTableRow(IsDescription):
     array_pointing_alt = Float32Col()
     delta_direction = Float32Col(2)
 
+
 class TelTableRow(IsDescription):
     """Describe row format for telescope type table.
 
@@ -98,6 +106,7 @@ class TelTableRow(IsDescription):
     num_pixels = UInt32Col()
     pix_rotation = Float32Col()
     cam_rotation = Float32Col()
+
 
 class ArrayTableRow(IsDescription):
     """Describe row format for telescope array table.

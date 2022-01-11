@@ -2,6 +2,7 @@ from astropy import units as u
 from ctapipe.core import Container, Field
 from numpy import nan
 
+
 class MAGICMCHeaderContainer(Container):
     corsika_version = Field(nan, "CORSIKA version *  1000")
     refl_version = Field(nan, "refl version")
@@ -10,18 +11,20 @@ class MAGICMCHeaderContainer(Container):
     prod_site = Field(nan, "Production site")
     date_run_mmcs = Field(nan, "Date Run MMCs")
     date_run_cam = Field(nan, "Date Run Camera")
-    energy_range_max = Field(nan * u.GeV, "Energy range Maximum", unit = u.GeV)
-    energy_range_min = Field(nan * u.GeV, "Energy range Minimum", unit = u.GeV)
-    shower_theta_max = Field(nan * u.deg, "Shower Theta Maximum", unit = u.deg)
-    shower_theta_min = Field(nan * u.deg, "Shower Theta Minimum", unit = u.deg)
-    shower_phi_max = Field(nan * u.deg, "Shower Phi Maximum", unit = u.deg)
-    shower_phi_min = Field(nan * u.deg, "Shower Phi Minimum", unit = u.deg)
+    energy_range_max = Field(nan * u.GeV, "Energy range Maximum", unit=u.GeV)
+    energy_range_min = Field(nan * u.GeV, "Energy range Minimum", unit=u.GeV)
+    shower_theta_max = Field(nan * u.deg, "Shower Theta Maximum", unit=u.deg)
+    shower_theta_min = Field(nan * u.deg, "Shower Theta Minimum", unit=u.deg)
+    shower_phi_max = Field(nan * u.deg, "Shower Phi Maximum", unit=u.deg)
+    shower_phi_min = Field(nan * u.deg, "Shower Phi Minimum", unit=u.deg)
     c_wave_lower = Field(nan, "C Wave Lower")
     c_wave_upper = Field(nan, "C Wave Upper")
     num_obs_lev = Field(nan, "Number Observations Level")
     height_lev = Field([], "Height Level")
     slope_spec = Field(nan, "Slope Spec")
-    rand_pointing_cone_semi_angle = Field(nan * u.deg, "Random Pointing Cone Semi Angle", unit = u.deg)
+    rand_pointing_cone_semi_angle = Field(
+        nan * u.deg, "Random Pointing Cone Semi Angle", unit=u.deg
+    )
     impact_max = Field(nan, "Impact Maximum")
     star_field_rotate = Field(nan, "Star Field Rotate")
     star_field_ra_h = Field(nan, "Star Field RA H")
@@ -31,7 +34,7 @@ class MAGICMCHeaderContainer(Container):
     star_field_dec_m = Field(nan, "Star Field DEC M")
     star_field_dec_s = Field(nan, "Star Field DEC S")
     num_trig_cond = Field(nan, "Number Trigger Condition")
-    all_evts_trig = Field(nan,  "All Events Triggered")
+    all_evts_trig = Field(nan, "All Events Triggered")
     mc_evt = Field(nan, "MC Event")
     mc_trig = Field(nan, "MC Trigger")
     mc_fadc = Field(nan, "MC Fadc")
@@ -43,6 +46,7 @@ class MAGICMCHeaderContainer(Container):
     num_phe_from_dnsb = Field(nan, "Number Phe from DNSB")
     elec_noise = Field(nan, "Elec Noise")
     optic_links_noise = Field(nan, "Optic Links Noise")
+
 
 class MAGICHeaderContainer(Container):
     camera_version = Field(nan, "Camera Version")
