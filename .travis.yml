@@ -21,9 +21,9 @@ install:
       - conda update -q conda
         # Useful for debugging any issues with conda
       - conda info -a
-      - conda create -n test python=3.8 cython
-      - conda activate test
-      - python setup.py develop
+      - conda env create -f environment.yml
+      - source activate dl1dh
+      - python setup.py install
 script:
       - pytest --cov=dl1_data_handler
 after_success:
