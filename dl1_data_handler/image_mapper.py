@@ -12,30 +12,31 @@ logger = logging.getLogger(__name__)
 
 
 class ImageMapper:
-
-    def __init__(self,
-                 camera_types=None,
-                 pixel_positions=None,
-                 mapping_method=None,
-                 padding=None,
-                 interpolation_image_shape=None,
-                 mask_interpolation=False):
+    def __init__(
+        self,
+        camera_types=None,
+        pixel_positions=None,
+        mapping_method=None,
+        padding=None,
+        interpolation_image_shape=None,
+        mask_interpolation=False,
+    ):
 
         # image_shapes should be a non static field to prevent problems
         # when multiple instances of ImageMapper are created
         self.image_shapes = {
-            'LSTCam': (110, 110, 1),
-            'FlashCam': (112, 112, 1),
-            'NectarCam': (110, 110, 1),
-            'SCTCam': (120, 120, 1),
-            'DigiCam': (96, 96, 1),
-            'CHEC': (48, 48, 1),
-            'ASTRICam': (56, 56, 1),
-            'VERITAS': (54, 54, 1),
-            'MAGICCam': (78, 78, 1),
-            'FACT': (90, 90, 1),
-            'HESS-I': (72, 72, 1),
-            'HESS-II': (104, 104, 1)
+            "LSTCam": (110, 110, 1),
+            "FlashCam": (112, 112, 1),
+            "NectarCam": (110, 110, 1),
+            "SCTCam": (120, 120, 1),
+            "DigiCam": (96, 96, 1),
+            "CHEC": (48, 48, 1),
+            "ASTRICam": (56, 56, 1),
+            "VERITAS": (54, 54, 1),
+            "MAGICCam": (78, 78, 1),
+            "FACT": (90, 90, 1),
+            "HESS-I": (72, 72, 1),
+            "HESS-II": (104, 104, 1),
         }
 
         # Camera types
@@ -52,13 +53,18 @@ class ImageMapper:
         # Mapping method
         if mapping_method is None:
             mapping_method = {}
-        self.mapping_method = {**{c: 'oversampling' for c in self.camera_types}, **mapping_method}
+        self.mapping_method = {
+            **{c: "oversampling" for c in self.camera_types},
+            **mapping_method,
+        }
 
         # Interpolation image shape
         if interpolation_image_shape is None:
             interpolation_image_shape = {}
-        self.interpolation_image_shape = {**{c: self.image_shapes[c] for c in self.camera_types},
-                                          **interpolation_image_shape}
+        self.interpolation_image_shape = {
+            **{c: self.image_shapes[c] for c in self.camera_types},
+            **interpolation_image_shape,
+        }
 
         # Padding
         if padding is None:
@@ -80,51 +86,90 @@ class ImageMapper:
                 try:
                     from ctapipe.instrument.camera import CameraGeometry
                 except ImportError:
-                    raise ImportError("The `ctapipe.instrument.camera` python module is required, if pixel_positions is `None`.")
+                    raise ImportError(
+                        "The `ctapipe.instrument.camera` python module is required, if pixel_positions is `None`."
+                    )
                 camgeo = CameraGeometry.from_name(camtype)
                 self.num_pixels[camtype] = len(camgeo.pix_id)
-                self.pixel_positions[camtype] = np.column_stack([camgeo.pix_x.value, camgeo.pix_y.value]).T
-                if camtype in ['LSTCam', 'NectarCam', 'MAGICCam']:
-                    rotation_angle = -camgeo.pix_rotation.value * np.pi/180.0
-                    rotation_matrix = np.matrix([[np.cos(rotation_angle), -np.sin(rotation_angle)],
-                                                 [np.sin(rotation_angle), np.cos(rotation_angle)]], dtype=float)
-                    self.pixel_positions[camtype] = np.squeeze(np.asarray(np.dot(rotation_matrix, self.pixel_positions[camtype])))
+                self.pixel_positions[camtype] = np.column_stack(
+                    [camgeo.pix_x.value, camgeo.pix_y.value]
+                ).T
+                if camtype in ["LSTCam", "NectarCam", "MAGICCam"]:
+                    rotation_angle = -camgeo.pix_rotation.value * np.pi / 180.0
+                    rotation_matrix = np.matrix(
+                        [
+                            [np.cos(rotation_angle), -np.sin(rotation_angle)],
+                            [np.sin(rotation_angle), np.cos(rotation_angle)],
+                        ],
+                        dtype=float,
+                    )
+                    self.pixel_positions[camtype] = np.squeeze(
+                        np.asarray(
+                            np.dot(rotation_matrix, self.pixel_positions[camtype])
+                        )
+                    )
             else:
                 self.pixel_positions[camtype] = pixel_positions[camtype]
                 self.num_pixels[camtype] = pixel_positions[camtype].shape[1]
 
             map_method = self.mapping_method[camtype]
-            if map_method not in ['oversampling', 'rebinning', 'nearest_interpolation', 'bilinear_interpolation',
-                                  'bicubic_interpolation', 'image_shifting', 'axial_addressing', 'indexed_conv']:
-                raise ValueError("Hex conversion algorithm {} is not implemented.".format(map_method))
-            elif map_method in ['image_shifting', 'axial_addressing', 'indexed_conv'] and camtype in ['ASTRICam', 'CHEC', 'SCTCam']:
+            if map_method not in [
+                "oversampling",
+                "rebinning",
+                "nearest_interpolation",
+                "bilinear_interpolation",
+                "bicubic_interpolation",
+                "image_shifting",
+                "axial_addressing",
+                "indexed_conv",
+            ]:
                 raise ValueError(
-                    "{} (hexagonal convolution) is not available for square pixel cameras.".format(map_method))
+                    "Hex conversion algorithm {} is not implemented.".format(map_method)
+                )
+            elif map_method in [
+                "image_shifting",
+                "axial_addressing",
+                "indexed_conv",
+            ] and camtype in ["ASTRICam", "CHEC", "SCTCam"]:
+                raise ValueError(
+                    "{} (hexagonal convolution) is not available for square pixel cameras.".format(
+                        map_method
+                    )
+                )
 
-            if map_method in ['rebinning', 'nearest_interpolation', 'bilinear_interpolation', 'bicubic_interpolation']:
+            if map_method in [
+                "rebinning",
+                "nearest_interpolation",
+                "bilinear_interpolation",
+                "bicubic_interpolation",
+            ]:
                 self.image_shapes[camtype] = self.interpolation_image_shape[camtype]
 
             # At the edges of the cameras the mapping methods run into issues.
             # Therefore, we are using a default padding to ensure that the camera pixels aren't affected.
             # The default padding is removed after the conversion is finished.
-            if map_method in ['image_shifting', 'axial_addressing', 'indexed_conv']:
+            if map_method in ["image_shifting", "axial_addressing", "indexed_conv"]:
                 self.default_pad = 0
-            elif map_method == 'bicubic_interpolation':
+            elif map_method == "bicubic_interpolation":
                 self.default_pad = 3
             else:
                 self.default_pad = 2
 
-            if map_method != 'oversampling' or camtype in ['ASTRICam', 'CHEC', 'SCTCam']:
+            if map_method != "oversampling" or camtype in [
+                "ASTRICam",
+                "CHEC",
+                "SCTCam",
+            ]:
                 self.image_shapes[camtype] = (
                     self.image_shapes[camtype][0] + self.default_pad * 2,
                     self.image_shapes[camtype][1] + self.default_pad * 2,
-                    self.image_shapes[camtype][2]
+                    self.image_shapes[camtype][2],
                 )
             else:
                 self.image_shapes[camtype] = (
                     self.image_shapes[camtype][0] + self.default_pad * 4,
                     self.image_shapes[camtype][1] + self.default_pad * 4,
-                    self.image_shapes[camtype][2]
+                    self.image_shapes[camtype][2],
                 )
 
             # Initializing the indexed matrix
@@ -156,15 +201,16 @@ class ImageMapper:
             self.image_shapes[camera_type] = (
                 self.image_shapes[camera_type][0],
                 self.image_shapes[camera_type][1],
-                n_channels  # number of channels
-                )
+                n_channels,  # number of channels
+            )
 
         # We reshape each channel and then stack the result
         result = []
         for channel in range(n_channels):
             vector = pixels[:, channel]
-            image_2d = (vector.T @ map_tab).reshape(self.image_shapes[camera_type][0],
-                                                    self.image_shapes[camera_type][1], 1)
+            image_2d = (vector.T @ map_tab).reshape(
+                self.image_shapes[camera_type][0], self.image_shapes[camera_type][1], 1
+            )
             result.append(image_2d)
         telescope_image = np.concatenate(result, axis=-1)
         return telescope_image
@@ -176,7 +222,9 @@ class ImageMapper:
         """
         # Check if axial addressing is selected in the image_mapper
         if self.index_matrixes[camera_type] is None:
-            raise ValueError("The function get_indexmatrix() can only be called, when 'indexed_conv' is selected in the ImageMapper.")
+            raise ValueError(
+                "The function get_indexmatrix() can only be called, when 'indexed_conv' is selected in the ImageMapper."
+            )
         # Return the index matrix, which has been calculated in 'generate_table()'
         return self.index_matrixes[camera_type]
 
@@ -192,64 +240,93 @@ class ImageMapper:
 
         # Creating the hexagonal and the output grid for the conversion methods.
         grid_size_factor = 1
-        if map_method == 'rebinning':
+        if map_method == "rebinning":
             grid_size_factor = 10
         hex_grid, table_grid = self.get_grids(pos, camera_type, grid_size_factor)
         # Updating output_dim, since it could be modified in self.get_grid()
         output_dim = self.image_shapes[camera_type][0]
 
         # Oversampling and nearest interpolation
-        if map_method in ['oversampling', 'nearest_interpolation', 'image_shifting', 'axial_addressing', 'indexed_conv']:
+        if map_method in [
+            "oversampling",
+            "nearest_interpolation",
+            "image_shifting",
+            "axial_addressing",
+            "indexed_conv",
+        ]:
             # Finding the nearest point in the hexagonal grid for each point in the square grid
             tree = spatial.cKDTree(hex_grid)
             nn_index = np.reshape(tree.query(table_grid)[1], (output_dim, output_dim))
             # Store the nn_index array in the index_matrix. Replace virtual pixel indexes with -1.
-            if map_method == 'indexed_conv':
+            if map_method == "indexed_conv":
                 index_matrix = nn_index
                 index_matrix[index_matrix >= num_pixels] = -1
                 index_matrix = np.flip(index_matrix, axis=0)
                 self.index_matrixes[camera_type] = index_matrix
-            if map_method == 'oversampling' and camera_type not in ['ASTRICam', 'CHEC', 'SCTCam']:
+            if map_method == "oversampling" and camera_type not in [
+                "ASTRICam",
+                "CHEC",
+                "SCTCam",
+            ]:
                 pixel_weight = 1 / 4
             else:
                 pixel_weight = 1
-            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2), dtype=np.float32)
+            mapping_matrix3d = np.zeros(
+                (hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2),
+                dtype=np.float32,
+            )
             for y_grid in np.arange(output_dim):
                 for x_grid in np.arange(output_dim):
-                    mapping_matrix3d[nn_index[y_grid][x_grid]][y_grid + pad][x_grid + pad] = pixel_weight
+                    mapping_matrix3d[nn_index[y_grid][x_grid]][y_grid + pad][
+                        x_grid + pad
+                    ] = pixel_weight
 
         # Rebinning (approximation)
-        elif map_method == 'rebinning':
+        elif map_method == "rebinning":
             # Finding the nearest point in the hexagonal grid for each point in the square grid
             tree = spatial.cKDTree(hex_grid)
-            nn_index = np.reshape(tree.query(table_grid)[1],
-                                  (output_dim * grid_size_factor, output_dim * grid_size_factor))
+            nn_index = np.reshape(
+                tree.query(table_grid)[1],
+                (output_dim * grid_size_factor, output_dim * grid_size_factor),
+            )
 
             # Calculating the overlapping area/weights for each square pixel
-            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2), dtype=np.float32)
+            mapping_matrix3d = np.zeros(
+                (hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2),
+                dtype=np.float32,
+            )
             for y_grid in np.arange(0, output_dim * grid_size_factor, grid_size_factor):
-                for x_grid in np.arange(0, output_dim * grid_size_factor, grid_size_factor):
+                for x_grid in np.arange(
+                    0, output_dim * grid_size_factor, grid_size_factor
+                ):
                     counter = Counter(
-                        np.reshape(nn_index[y_grid:y_grid + grid_size_factor, x_grid:x_grid + grid_size_factor], -1))
+                        np.reshape(
+                            nn_index[
+                                y_grid : y_grid + grid_size_factor,
+                                x_grid : x_grid + grid_size_factor,
+                            ],
+                            -1,
+                        )
+                    )
                     pixel_index = np.array(list(counter.keys()))
                     weights = list(counter.values()) / np.sum(list(counter.values()))
                     for key in np.arange(len(pixel_index)):
-                        mapping_matrix3d[pixel_index[key]][int(y_grid / grid_size_factor) + pad][
-                            int(x_grid / grid_size_factor) + pad] = weights[key]
+                        mapping_matrix3d[pixel_index[key]][
+                            int(y_grid / grid_size_factor) + pad
+                        ][int(x_grid / grid_size_factor) + pad] = weights[key]
 
         # Bilinear interpolation
-        elif map_method == 'bilinear_interpolation':
+        elif map_method == "bilinear_interpolation":
             # Finding the nearest point in the hexagonal grid for each point in the square grid
             tree = spatial.cKDTree(hex_grid)
             nn_index = np.reshape(tree.query(table_grid)[1], (output_dim, output_dim))
 
-            if camera_type in ['ASTRICam', 'CHEC', 'SCTCam']:
+            if camera_type in ["ASTRICam", "CHEC", "SCTCam"]:
                 hex_grid_transpose = hex_grid.T
                 x_ticks = np.unique(hex_grid_transpose[0]).tolist()
                 y_ticks = np.unique(hex_grid_transpose[1]).tolist()
 
-                dict_hex_grid = {tuple(coord): i for i, coord
-                                 in enumerate(hex_grid)}
+                dict_hex_grid = {tuple(coord): i for i, coord in enumerate(hex_grid)}
 
                 dict_corner_indexes = {}
                 dict_corner_points = {}
@@ -279,7 +356,11 @@ class ImageMapper:
                         square_points = np.array(square_points)
                         square_indexes = []
                         for k in np.arange(square_points.shape[0]):
-                            square_indexes.append(dict_hex_grid[(square_points[k][0], square_points[k][1])])
+                            square_indexes.append(
+                                dict_hex_grid[
+                                    (square_points[k][0], square_points[k][1])
+                                ]
+                            )
                         square_indexes = np.array(square_indexes)
                         dict_corner_points[(i, j)] = square_points
                         dict_corner_indexes[(i, j)] = square_indexes
@@ -309,21 +390,28 @@ class ImageMapper:
 
             weights = self.get_weights(corner_points, table_grid)
             weights = np.reshape(weights, (output_dim, output_dim, weights.shape[1]))
-            corner_indexes = np.reshape(corner_indexes, (output_dim, output_dim, corner_indexes.shape[1]))
+            corner_indexes = np.reshape(
+                corner_indexes, (output_dim, output_dim, corner_indexes.shape[1])
+            )
 
-            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2), dtype=np.float32)
+            mapping_matrix3d = np.zeros(
+                (hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2),
+                dtype=np.float32,
+            )
             for i in np.arange(output_dim):
                 for j in np.arange(output_dim):
                     for k in np.arange(corner_indexes.shape[2]):
-                        mapping_matrix3d[corner_indexes[j][i][k]][j + pad][i + pad] = weights[j][i][k]
+                        mapping_matrix3d[corner_indexes[j][i][k]][j + pad][
+                            i + pad
+                        ] = weights[j][i][k]
 
         # Bicubic interpolation
-        elif map_method == 'bicubic_interpolation':
+        elif map_method == "bicubic_interpolation":
             # Finding the nearest point in the hexagonal grid for each point in the square grid
             tree = spatial.cKDTree(hex_grid)
             nn_index = np.reshape(tree.query(table_grid)[1], (output_dim, output_dim))
 
-            if camera_type in ['ASTRICam', 'CHEC', 'SCTCam']:
+            if camera_type in ["ASTRICam", "CHEC", "SCTCam"]:
                 # Drawing four bigger squares (*,+,-,~) around the target point (.)
                 # and then calculate the weights.
                 #
@@ -338,8 +426,7 @@ class ImageMapper:
                 hex_grid_transpose = hex_grid.T
                 x_ticks = np.unique(hex_grid_transpose[0]).tolist()
                 y_ticks = np.unique(hex_grid_transpose[1]).tolist()
-                dict_hex_grid = {tuple(coord): i for i, coord
-                                 in enumerate(hex_grid)}
+                dict_hex_grid = {tuple(coord): i for i, coord in enumerate(hex_grid)}
 
                 dict_corner_indexes = {}
                 dict_corner_points = {}
@@ -348,7 +435,12 @@ class ImageMapper:
                 for i, x_val in enumerate(x_ticks):
                     for j, y_val in enumerate(y_ticks):
                         square_points = []
-                        if i == 0 or j == 0 or i >= len(x_ticks) - 2 or j >= len(y_ticks) - 2:
+                        if (
+                            i == 0
+                            or j == 0
+                            or i >= len(x_ticks) - 2
+                            or j >= len(y_ticks) - 2
+                        ):
                             for k in np.arange(16):
                                 square_points.append([invalid_x_val, invalid_y_val])
                         else:
@@ -379,11 +471,17 @@ class ImageMapper:
                             if square_points[k][0] == invalid_x_val:
                                 square_indexes.append(-1)
                             else:
-                                square_indexes.append(dict_hex_grid[(square_points[k][0], square_points[k][1])])
+                                square_indexes.append(
+                                    dict_hex_grid[
+                                        (square_points[k][0], square_points[k][1])
+                                    ]
+                                )
                         square_indexes = np.array(square_indexes)
                         # reshape square_points and square_indexes
                         square_indexes = np.reshape(square_indexes, (4, 4))
-                        square_points = np.reshape(square_points, (4, 4, square_points.shape[1]))
+                        square_points = np.reshape(
+                            square_points, (4, 4, square_points.shape[1])
+                        )
 
                         dict_corner_points[(i, j)] = square_points
                         dict_corner_indexes[(i, j)] = square_indexes
@@ -417,9 +515,19 @@ class ImageMapper:
 
                 weights = np.array(weights)
                 corner_indexes = np.array(corner_indexes)
-                weights = np.reshape(weights, (output_dim, output_dim, weights.shape[1], weights.shape[2]))
-                corner_indexes = np.reshape(corner_indexes,
-                                            (output_dim, output_dim, corner_indexes.shape[1], corner_indexes.shape[2]))
+                weights = np.reshape(
+                    weights,
+                    (output_dim, output_dim, weights.shape[1], weights.shape[2]),
+                )
+                corner_indexes = np.reshape(
+                    corner_indexes,
+                    (
+                        output_dim,
+                        output_dim,
+                        corner_indexes.shape[1],
+                        corner_indexes.shape[2],
+                    ),
+                )
 
             else:
                 #
@@ -454,14 +562,17 @@ class ImageMapper:
                 weights_NN = []
                 simplexes_NN = []
                 for i in np.arange(simplex_index.shape[0]):
-                    if -1 in simplex_index_NN[i] or all(ind >= num_pixels for ind in table_simplex[i]):
+                    if -1 in simplex_index_NN[i] or all(
+                        ind >= num_pixels for ind in table_simplex[i]
+                    ):
                         w = np.array([0, 0, 0])
                         weights_NN.append(w)
                         corner_simplexes_2NN = np.array([-1, -1, -1])
                         simplexes_NN.append(corner_simplexes_2NN)
                     else:
-                        corner_points_NN, corner_simplexes_NN = self.get_triangle(tri, hex_grid, simplex_index_NN[i],
-                                                                                  table_simplex[i])
+                        corner_points_NN, corner_simplexes_NN = self.get_triangle(
+                            tri, hex_grid, simplex_index_NN[i], table_simplex[i]
+                        )
                         target = table_grid[i]
                         target = np.expand_dims(target, axis=0)
                         w = self.get_weights(corner_points_NN, target)
@@ -480,16 +591,19 @@ class ImageMapper:
                     simplexes = []
                     for j in np.arange(simplex_index.shape[0]):
                         table_simplex_NN = tri.simplices[simplex_index_NN[j][i]]
-                        if -1 in simplex_index_2NN[j][i] or -1 in simplex_index_NN[j] or all(
-                                ind >= num_pixels for ind in table_simplex_NN):
+                        if (
+                            -1 in simplex_index_2NN[j][i]
+                            or -1 in simplex_index_NN[j]
+                            or all(ind >= num_pixels for ind in table_simplex_NN)
+                        ):
                             w = np.array([0, 0, 0])
                             weights.append(w)
                             corner_simplexes_2NN = np.array([-1, -1, -1])
                             simplexes.append(corner_simplexes_2NN)
                         else:
-                            corner_points_2NN, corner_simplexes_2NN = self.get_triangle(tri, hex_grid,
-                                                                                        simplex_index_2NN[j][i],
-                                                                                        table_simplex_NN)
+                            corner_points_2NN, corner_simplexes_2NN = self.get_triangle(
+                                tri, hex_grid, simplex_index_2NN[j][i], table_simplex_NN
+                            )
                             target = table_grid[j]
                             target = np.expand_dims(target, axis=0)
                             w = self.get_weights(corner_points_2NN, target)
@@ -506,67 +620,122 @@ class ImageMapper:
                 simplexes_2NN.append(simplexes_NN)
                 weights_2NN = np.array(weights_2NN)
                 simplexes_2NN = np.array(simplexes_2NN)
-                weights = np.reshape(weights_2NN, (weights_2NN.shape[0], output_dim, output_dim, weights_2NN.shape[2]))
-                corner_indexes = np.reshape(simplexes_2NN,
-                                            (simplexes_2NN.shape[0], output_dim, output_dim, simplexes_2NN.shape[2]))
+                weights = np.reshape(
+                    weights_2NN,
+                    (
+                        weights_2NN.shape[0],
+                        output_dim,
+                        output_dim,
+                        weights_2NN.shape[2],
+                    ),
+                )
+                corner_indexes = np.reshape(
+                    simplexes_2NN,
+                    (
+                        simplexes_2NN.shape[0],
+                        output_dim,
+                        output_dim,
+                        simplexes_2NN.shape[2],
+                    ),
+                )
 
-            mapping_matrix3d = np.zeros((hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2), dtype=np.float32)
+            mapping_matrix3d = np.zeros(
+                (hex_grid.shape[0], output_dim + pad * 2, output_dim + pad * 2),
+                dtype=np.float32,
+            )
             for i in np.arange(4):
                 for j in np.arange(output_dim):
                     for k in np.arange(output_dim):
                         for l in np.arange(weights.shape[3]):
                             if weights.shape[3] == 3:
-                                mapping_matrix3d[corner_indexes[i][k][j][l]][k + pad][j + pad] = weights[i][k][j][
-                                                                                                         l] / 4
+                                mapping_matrix3d[corner_indexes[i][k][j][l]][k + pad][
+                                    j + pad
+                                ] = (weights[i][k][j][l] / 4)
                             elif weights.shape[3] == 4:
-                                mapping_matrix3d[corner_indexes[k][j][i][l]][k + pad][j + pad] = weights[k][j][i][
-                                                                                                         l] / 4
+                                mapping_matrix3d[corner_indexes[k][j][i][l]][k + pad][
+                                    j + pad
+                                ] = (weights[k][j][i][l] / 4)
 
         # Cutting the mapping table after num_pixels, since the virtual pixels have intensity zero.
         mapping_matrix3d = mapping_matrix3d[:num_pixels]
         # Mask interpolation
-        if self.mask and map_method in ['bilinear_interpolation', 'bicubic_interpolation']:
-            mapping_matrix3d = self.apply_mask_interpolation(mapping_matrix3d, nn_index, num_pixels, pad)
+        if self.mask and map_method in [
+            "bilinear_interpolation",
+            "bicubic_interpolation",
+        ]:
+            mapping_matrix3d = self.apply_mask_interpolation(
+                mapping_matrix3d, nn_index, num_pixels, pad
+            )
         # Normalization (approximation) of the mapping table
-        if map_method in ['rebinning', 'nearest_interpolation', 'bilinear_interpolation', 'bicubic_interpolation']:
-            mapping_matrix3d = self.normalize_mapping_matrix(mapping_matrix3d, num_pixels)
+        if map_method in [
+            "rebinning",
+            "nearest_interpolation",
+            "bilinear_interpolation",
+            "bicubic_interpolation",
+        ]:
+            mapping_matrix3d = self.normalize_mapping_matrix(
+                mapping_matrix3d, num_pixels
+            )
 
         if (pad + default_pad) != 0:
-            if map_method != 'oversampling' or camera_type in ['ASTRICam', 'CHEC', 'SCTCam']:
-                map_mat = np.zeros((mapping_matrix3d.shape[0], output_dim + (pad - default_pad) * 2,
-                                    output_dim + (pad - default_pad) * 2), dtype=np.float32)
+            if map_method != "oversampling" or camera_type in [
+                "ASTRICam",
+                "CHEC",
+                "SCTCam",
+            ]:
+                map_mat = np.zeros(
+                    (
+                        mapping_matrix3d.shape[0],
+                        output_dim + (pad - default_pad) * 2,
+                        output_dim + (pad - default_pad) * 2,
+                    ),
+                    dtype=np.float32,
+                )
                 for i in np.arange(mapping_matrix3d.shape[0]):
-                    map_mat[i] = mapping_matrix3d[i][default_pad:output_dim + pad * 2 - default_pad,
-                                 default_pad:output_dim + pad * 2 - default_pad]
+                    map_mat[i] = mapping_matrix3d[i][
+                        default_pad : output_dim + pad * 2 - default_pad,
+                        default_pad : output_dim + pad * 2 - default_pad,
+                    ]
                 self.image_shapes[camera_type] = (
                     self.image_shapes[camera_type][0] + (pad - default_pad) * 2,
                     self.image_shapes[camera_type][1] + (pad - default_pad) * 2,
-                    self.image_shapes[camera_type][2]
+                    self.image_shapes[camera_type][2],
                 )
             else:
-                map_mat = np.zeros((mapping_matrix3d.shape[0], output_dim + pad * 2 - default_pad * 4,
-                                    output_dim + pad * 2 - default_pad * 4), dtype=np.float32)
+                map_mat = np.zeros(
+                    (
+                        mapping_matrix3d.shape[0],
+                        output_dim + pad * 2 - default_pad * 4,
+                        output_dim + pad * 2 - default_pad * 4,
+                    ),
+                    dtype=np.float32,
+                )
                 for i in np.arange(mapping_matrix3d.shape[0]):
-                    map_mat[i] = mapping_matrix3d[i][default_pad * 2:output_dim + pad * 2 - default_pad * 2,
-                                 default_pad * 2:output_dim + pad * 2 - default_pad * 2]
+                    map_mat[i] = mapping_matrix3d[i][
+                        default_pad * 2 : output_dim + pad * 2 - default_pad * 2,
+                        default_pad * 2 : output_dim + pad * 2 - default_pad * 2,
+                    ]
                 self.image_shapes[camera_type] = (
                     self.image_shapes[camera_type][0] + pad * 2 - default_pad * 4,
                     self.image_shapes[camera_type][1] + pad * 2 - default_pad * 4,
-                    self.image_shapes[camera_type][2]
+                    self.image_shapes[camera_type][2],
                 )
         else:
             map_mat = mapping_matrix3d
 
         # Applying a flip to all mapping tables that the image indexing starts from the top left corner.
         for i in np.arange(map_mat.shape[0]):
-            map_mat[i] = np.flip(map_mat[i],axis=0)
+            map_mat[i] = np.flip(map_mat[i], axis=0)
 
-        sparse_map_mat = csr_matrix(map_mat.reshape(map_mat.shape[0],
-                                                    self.image_shapes[camera_type][0] *
-                                                    self.image_shapes[camera_type][1]), dtype=np.float32)
+        sparse_map_mat = csr_matrix(
+            map_mat.reshape(
+                map_mat.shape[0],
+                self.image_shapes[camera_type][0] * self.image_shapes[camera_type][1],
+            ),
+            dtype=np.float32,
+        )
 
         return sparse_map_mat
-
 
     def get_triangle(self, tri, hex_grid, simplex_index_NN, table_simplex):
         """
@@ -644,12 +813,30 @@ class ImageMapper:
             #
             for i in np.arange(p.shape[0]):
                 w = [0, 0, 0]
-                divisor = float(((p[i][1][1] - p[i][2][1]) * (p[i][0][0] - p[i][2][0]) + (p[i][2][0] - p[i][1][0]) * (
-                            p[i][0][1] - p[i][2][1])))
-                w[0] = float(((p[i][1][1] - p[i][2][1]) * (target[i][0] - p[i][2][0]) + (p[i][2][0] - p[i][1][0]) * (
-                            target[i][1] - p[i][2][1]))) / divisor
-                w[1] = float(((p[i][2][1] - p[i][0][1]) * (target[i][0] - p[i][2][0]) + (p[i][0][0] - p[i][2][0]) * (
-                            target[i][1] - p[i][2][1]))) / divisor
+                divisor = float(
+                    (
+                        (p[i][1][1] - p[i][2][1]) * (p[i][0][0] - p[i][2][0])
+                        + (p[i][2][0] - p[i][1][0]) * (p[i][0][1] - p[i][2][1])
+                    )
+                )
+                w[0] = (
+                    float(
+                        (
+                            (p[i][1][1] - p[i][2][1]) * (target[i][0] - p[i][2][0])
+                            + (p[i][2][0] - p[i][1][0]) * (target[i][1] - p[i][2][1])
+                        )
+                    )
+                    / divisor
+                )
+                w[1] = (
+                    float(
+                        (
+                            (p[i][2][1] - p[i][0][1]) * (target[i][0] - p[i][2][0])
+                            + (p[i][0][0] - p[i][2][0]) * (target[i][1] - p[i][2][1])
+                        )
+                    )
+                    / divisor
+                )
                 w[2] = 1 - w[0] - w[1]
                 weights.append(w)
 
@@ -684,10 +871,22 @@ class ImageMapper:
             for i in np.arange(p.shape[0]):
                 w = [0, 0, 0, 0]
                 divisor = float((p[i][3][0] - p[i][0][0]) * (p[i][3][1] - p[i][0][1]))
-                w[0] = float((p[i][3][0] - target[i][0]) * (p[i][3][1] - target[i][1])) / divisor
-                w[1] = float((p[i][3][0] - target[i][0]) * (target[i][1] - p[i][0][1])) / divisor
-                w[2] = float((target[i][0] - p[i][0][0]) * (p[i][3][1] - target[i][1])) / divisor
-                w[3] = float((target[i][0] - p[i][0][0]) * (target[i][1] - p[i][0][1])) / divisor
+                w[0] = (
+                    float((p[i][3][0] - target[i][0]) * (p[i][3][1] - target[i][1]))
+                    / divisor
+                )
+                w[1] = (
+                    float((p[i][3][0] - target[i][0]) * (target[i][1] - p[i][0][1]))
+                    / divisor
+                )
+                w[2] = (
+                    float((target[i][0] - p[i][0][0]) * (p[i][3][1] - target[i][1]))
+                    / divisor
+                )
+                w[3] = (
+                    float((target[i][0] - p[i][0][0]) * (target[i][1] - p[i][0][1]))
+                    / divisor
+                )
                 weights.append(w)
 
         return np.array(weights, dtype=np.float32)
@@ -711,9 +910,9 @@ class ImageMapper:
         x_ticks = np.unique(x).tolist()
         y_ticks = np.unique(y).tolist()
 
-        if camera_type in ['CHEC', 'ASTRICam', 'SCTCam']:
+        if camera_type in ["CHEC", "ASTRICam", "SCTCam"]:
 
-            if camera_type == 'CHEC':
+            if camera_type == "CHEC":
                 # The algorithm doesn't work with the CHEC camera. Additional smoothing
                 # for the 'x_ticks' and 'y_ticks' array for CHEC pixel positions.
                 num_x_ticks = len(x_ticks)
@@ -756,8 +955,12 @@ class ImageMapper:
             y = np.concatenate((y, virtual_pixels[:, 1]))
             hex_grid = np.column_stack([x, y])
 
-            xx = np.linspace(np.min(x), np.max(x), num=output_dim * grid_size_factor, endpoint=True)
-            yy = np.linspace(np.min(y), np.max(y), num=output_dim * grid_size_factor, endpoint=True)
+            xx = np.linspace(
+                np.min(x), np.max(x), num=output_dim * grid_size_factor, endpoint=True
+            )
+            yy = np.linspace(
+                np.min(y), np.max(y), num=output_dim * grid_size_factor, endpoint=True
+            )
             x_grid, y_grid = np.meshgrid(xx, yy)
             x_grid = np.reshape(x_grid, -1)
             y_grid = np.reshape(y_grid, -1)
@@ -778,36 +981,52 @@ class ImageMapper:
             dist_first = np.around(abs(first_ticks[0] - first_ticks[1]), decimals=3)
             dist_second = np.around(abs(second_ticks[0] - second_ticks[1]), decimals=3)
 
-            if map_method in ['oversampling', 'image_shifting']:
-                tick_diff = (len(first_ticks) * 2 - len(second_ticks))
+            if map_method in ["oversampling", "image_shifting"]:
+                tick_diff = len(first_ticks) * 2 - len(second_ticks)
                 tick_diff_each_side = np.array(int(tick_diff / 2))
             else:
                 tick_diff = 0
                 tick_diff_each_side = 0
             for i in np.arange(tick_diff_each_side + default_pad * 2):
-                second_ticks.append(np.around(second_ticks[-1] + dist_second, decimals=3))
-                second_ticks.insert(0, np.around(second_ticks[0] - dist_second, decimals=3))
+                second_ticks.append(
+                    np.around(second_ticks[-1] + dist_second, decimals=3)
+                )
+                second_ticks.insert(
+                    0, np.around(second_ticks[0] - dist_second, decimals=3)
+                )
             for i in np.arange(default_pad):
                 first_ticks.append(np.around(first_ticks[-1] + dist_first, decimals=3))
-                first_ticks.insert(0, np.around(first_ticks[0] - dist_first, decimals=3))
+                first_ticks.insert(
+                    0, np.around(first_ticks[0] - dist_first, decimals=3)
+                )
 
             if tick_diff % 2 != 0:
-                second_ticks.insert(0, np.around(second_ticks[0] - dist_second, decimals=3))
+                second_ticks.insert(
+                    0, np.around(second_ticks[0] - dist_second, decimals=3)
+                )
 
             # Create the virtual pixels outside of the camera
-            if map_method not in ['axial_addressing', 'indexed_conv']:
+            if map_method not in ["axial_addressing", "indexed_conv"]:
                 virtual_pixels = []
                 for i in np.arange(2):
-                    vp1 = self.get_virtual_pixels(first_ticks[i::2], second_ticks[0::2],first_pos, second_pos)
-                    vp2 = self.get_virtual_pixels(first_ticks[i::2], second_ticks[1::2],first_pos, second_pos)
-                    virtual_pixels.append(vp1) if vp1.shape[0] < vp2.shape[0] else virtual_pixels.append(vp2)
+                    vp1 = self.get_virtual_pixels(
+                        first_ticks[i::2], second_ticks[0::2], first_pos, second_pos
+                    )
+                    vp2 = self.get_virtual_pixels(
+                        first_ticks[i::2], second_ticks[1::2], first_pos, second_pos
+                    )
+                    virtual_pixels.append(vp1) if vp1.shape[0] < vp2.shape[
+                        0
+                    ] else virtual_pixels.append(vp2)
 
                 virtual_pixels = np.concatenate(virtual_pixels)
 
                 first_pos = np.concatenate((first_pos, np.array(virtual_pixels[:, 0])))
-                second_pos = np.concatenate((second_pos, np.array(virtual_pixels[:, 1])))
+                second_pos = np.concatenate(
+                    (second_pos, np.array(virtual_pixels[:, 1]))
+                )
 
-            if map_method == 'oversampling':
+            if map_method == "oversampling":
                 grid_first = []
                 for i in first_ticks:
                     grid_first.append(i - dist_first / 4.0)
@@ -816,26 +1035,36 @@ class ImageMapper:
                 for j in second_ticks:
                     grid_second.append(j + dist_second / 2.0)
 
-            elif map_method == 'image_shifting':
+            elif map_method == "image_shifting":
                 for i in np.arange(len(second_pos)):
                     if second_pos[i] in second_ticks[::2]:
-                        second_pos[i] = second_ticks[second_ticks.index(second_pos[i]) + 1]
+                        second_pos[i] = second_ticks[
+                            second_ticks.index(second_pos[i]) + 1
+                        ]
 
                 grid_first = np.unique(first_pos).tolist()
                 grid_second = np.unique(second_pos).tolist()
-                self.image_shapes[camera_type] = (len(grid_first), len(grid_second), self.image_shapes[camera_type][2])
+                self.image_shapes[camera_type] = (
+                    len(grid_first),
+                    len(grid_second),
+                    self.image_shapes[camera_type][2],
+                )
 
-            elif map_method in ['axial_addressing', 'indexed_conv']:
+            elif map_method in ["axial_addressing", "indexed_conv"]:
                 virtual_pixels = []
                 # manipulate y ticks with extra ticks
                 num_extra_ticks = len(y_ticks)
                 for i in np.arange(num_extra_ticks):
-                    second_ticks.append(np.around(second_ticks[-1] + dist_second, decimals=3))
+                    second_ticks.append(
+                        np.around(second_ticks[-1] + dist_second, decimals=3)
+                    )
                 first_ticks = reversed(first_ticks)
                 for shift, ticks in enumerate(first_ticks):
                     for i in np.arange(len(second_pos)):
                         if first_pos[i] == ticks and second_pos[i] in second_ticks:
-                            second_pos[i] = second_ticks[second_ticks.index(second_pos[i]) + shift]
+                            second_pos[i] = second_ticks[
+                                second_ticks.index(second_pos[i]) + shift
+                            ]
 
                 grid_first = np.unique(first_pos).tolist()
                 grid_second = np.unique(second_pos).tolist()
@@ -843,20 +1072,32 @@ class ImageMapper:
                 # Squaring the output image if grid axes have not the same length.
                 if len(grid_first) > len(grid_second):
                     for i in np.arange(len(grid_first) - len(grid_second)):
-                        grid_second.append(np.around(grid_second[-1] + dist_second, decimals=3))
+                        grid_second.append(
+                            np.around(grid_second[-1] + dist_second, decimals=3)
+                        )
                 elif len(grid_first) < len(grid_second):
                     for i in np.arange(len(grid_second) - len(grid_first)):
-                        grid_first.append(np.around(grid_first[-1] + dist_first, decimals=3))
+                        grid_first.append(
+                            np.around(grid_first[-1] + dist_first, decimals=3)
+                        )
 
                 # Creating the virtual pixels outside of the camera.
-                virtual_pixels.append(self.get_virtual_pixels(
-                    grid_first, grid_second,
-                    first_pos, second_pos))
+                virtual_pixels.append(
+                    self.get_virtual_pixels(
+                        grid_first, grid_second, first_pos, second_pos
+                    )
+                )
                 virtual_pixels = np.concatenate(virtual_pixels)
 
                 first_pos = np.concatenate((first_pos, np.array(virtual_pixels[:, 0])))
-                second_pos = np.concatenate((second_pos, np.array(virtual_pixels[:, 1])))
-                self.image_shapes[camera_type] = (len(grid_first), len(grid_second), self.image_shapes[camera_type][2])
+                second_pos = np.concatenate(
+                    (second_pos, np.array(virtual_pixels[:, 1]))
+                )
+                self.image_shapes[camera_type] = (
+                    len(grid_first),
+                    len(grid_second),
+                    self.image_shapes[camera_type][2],
+                )
 
             else:
                 # Add corner
@@ -872,8 +1113,9 @@ class ImageMapper:
                 first_pos = np.concatenate((first_pos, [maximum]))
                 second_pos = np.concatenate((second_pos, [maximum]))
 
-                grid_first = grid_second = np.linspace(minimum, maximum, num=output_dim * grid_size_factor,
-                                                       endpoint=True)
+                grid_first = grid_second = np.linspace(
+                    minimum, maximum, num=output_dim * grid_size_factor, endpoint=True
+                )
 
             if len(x_ticks) < len(y_ticks):
                 hex_grid = np.column_stack([first_pos, second_pos])
@@ -903,7 +1145,9 @@ class ImageMapper:
 
     @staticmethod
     def apply_mask_interpolation(mapping_matrix3d, nn_index, num_pixels, pad):
-        mask = np.zeros((nn_index.shape[0] + pad * 2, nn_index.shape[1] + pad * 2), dtype=np.float32)
+        mask = np.zeros(
+            (nn_index.shape[0] + pad * 2, nn_index.shape[1] + pad * 2), dtype=np.float32
+        )
         for i in range(nn_index.shape[0]):
             for j in range(nn_index.shape[1]):
                 if nn_index[j][i] < num_pixels:

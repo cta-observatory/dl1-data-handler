@@ -8,6 +8,7 @@ import re
 
 # gamma_20deg_0deg_run26640___cta-prod3-lapalma-2147m-LaPalma-SCT_cone10.simtel.gz
 
+
 def parse_simtel_filename(filename):
     """Extract run parameters from a simtel.gz filename.
     Parameters
@@ -31,20 +32,19 @@ def parse_simtel_filename(filename):
         N/A.
 
     """
-    basename = os.path.basename(filename).replace('.simtel.gz', '')
-    foutputs = re.split(
-        '___', basename)
+    basename = os.path.basename(filename).replace(".simtel.gz", "")
+    foutputs = re.split("___", basename)
     prod_info = foutputs[1]
-    soutputs = re.split(
-        '_', foutputs[0])
+    soutputs = re.split("_", foutputs[0])
     particle_type, ze, az, run_number = soutputs
     identifiers = [particle_type, ze, az, prod_info]
 
-    identifiers[1] = int(re.sub('deg$', '', identifiers[1]))
-    identifiers[2] = int(re.sub('deg$', '', identifiers[2]))
-    run_number = int(re.sub('^run', '', run_number))
+    identifiers[1] = int(re.sub("deg$", "", identifiers[1]))
+    identifiers[2] = int(re.sub("deg$", "", identifiers[2]))
+    run_number = int(re.sub("^run", "", run_number))
 
     return run_number, identifiers, False
+
 
 def parse_root_filename(filename):
     """Extract run parameters from a root filename.
@@ -60,9 +60,8 @@ def parse_root_filename(filename):
         Identifiers depending on the origin of the input (simu/real)
     """
 
-    basename = os.path.basename(filename).replace('.root', '')
-    soutputs = re.split(
-       '_', basename)
+    basename = os.path.basename(filename).replace(".root", "")
+    soutputs = re.split("_", basename)
 
     if soutputs[0].isnumeric():
         date, run_number, alpha, source = soutputs
@@ -71,33 +70,51 @@ def parse_root_filename(filename):
         particle_type, info, num, run_number, alpha, w = soutputs
         identifiers = [particle_type, info, num, alpha, w]
 
-    run_number = int(re.sub('^run', '', run_number))
+    run_number = int(re.sub("^run", "", run_number))
 
     return run_number, identifiers
 
+
 def parse_filename(filename, filename_type):
-    return parse_root_filename(filename) if filename_type == "root" else parse_root_filename(filename)
+    return (
+        parse_root_filename(filename)
+        if filename_type == "root"
+        else parse_root_filename(filename)
+    )
+
 
 def main():
 
     parser = argparse.ArgumentParser(
-        description=("Generate a runlist automatically from simtel.gz or root \
+        description=(
+            "Generate a runlist automatically from simtel.gz or root \
                      files following the naming convention \
                      [particle_type]_[ze]deg_[az]deg_run[run_number]___ \
                      [production info].simtel.gz or the naming convention\
-                     of the MAGIC-MARS superstar files, respectively."))
-    parser.add_argument('file_dir',
-                        help=("path to directory containing all simtel files"))
-    parser.add_argument('--num_inputs_per_run', '-n',
-                        help='number of input files between each run',
-                        default=10)
-    parser.add_argument('--output_file_name', '-f',
-                        help='filepath/name of runlist file without a postfix',
-                        default="./runlist")
-    parser.add_argument('--output_dir', '-o',
-                        help='path where to save generated files. By default, the input directory is used.',
-                        default=None,
-                       )
+                     of the MAGIC-MARS superstar files, respectively."
+        )
+    )
+    parser.add_argument(
+        "file_dir", help=("path to directory containing all simtel files")
+    )
+    parser.add_argument(
+        "--num_inputs_per_run",
+        "-n",
+        help="number of input files between each run",
+        default=10,
+    )
+    parser.add_argument(
+        "--output_file_name",
+        "-f",
+        help="filepath/name of runlist file without a postfix",
+        default="./runlist",
+    )
+    parser.add_argument(
+        "--output_dir",
+        "-o",
+        help="path where to save generated files. By default, the input directory is used.",
+        default=None,
+    )
     args = parser.parse_args()
 
     runlist = []
@@ -112,7 +129,9 @@ def main():
 
     filename_groups = {}
 
-    output_dir = abs_file_dir if args.output_dir is None else os.path.abspath(args.output_dir)
+    output_dir = (
+        abs_file_dir if args.output_dir is None else os.path.abspath(args.output_dir)
+    )
 
     # Separate files by identifiers:
     # simtel: particle type, ze, az, processing info, cone
@@ -136,17 +155,17 @@ def main():
                 start_run_number = run_number
             inputs.append(filename)
 
-            if len(inputs) >= int(args.num_inputs_per_run) or i == (
-                    len(list) - 1):
+            if len(inputs) >= int(args.num_inputs_per_run) or i == (len(list) - 1):
                 if filename_type == "root":
                     if identifiers[0].isnumeric():
                         date, alpha, source = key
                         target_filename = "{}/{}_runs{}_{}_{}.h5".format(
                             output_dir,
                             date,
-                            '{}-{}'.format(start_run_number, run_number),
+                            "{}-{}".format(start_run_number, run_number),
                             alpha,
-                            source)
+                            source,
+                        )
                     else:
                         particle_type, info, num, alpha, w = key
                         target_filename = "{}/{}_{}_{}_runs{}_{}_{}.h5".format(
@@ -154,9 +173,10 @@ def main():
                             particle_type,
                             info,
                             num,
-                            '{}-{}'.format(start_run_number, run_number),
+                            "{}-{}".format(start_run_number, run_number),
                             alpha,
-                            w)
+                            w,
+                        )
                 elif filename_type == "simtel":
                     particle_type, ze, az, prod_info = key
 
@@ -165,25 +185,24 @@ def main():
                         particle_type,
                         ze,
                         az,
-                        '{}-{}'.format(start_run_number, run_number),
-                        prod_info)
+                        "{}-{}".format(start_run_number, run_number),
+                        prod_info,
+                    )
 
-                runlist.append({
-                    'inputs': inputs,
-                    'target': target_filename
-                })
+                runlist.append({"inputs": inputs, "target": target_filename})
 
                 dl_runlist.append(target_filename)
 
                 inputs = []
 
     # dump to file
-    stream = open(f'{args.output_file_name}.yml', 'w')
+    stream = open(f"{args.output_file_name}.yml", "w")
     yaml.dump(runlist, stream)
 
-    with open(f'{args.output_file_name}.txt', 'w') as f:
+    with open(f"{args.output_file_name}.txt", "w") as f:
         for item in dl_runlist:
             f.write("%s\n" % item)
+
 
 if __name__ == "__main__":
     main()

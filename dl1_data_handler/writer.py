@@ -16,10 +16,19 @@ from traitlets.config.loader import Config
 import ctapipe
 from ctapipe import io, calib
 from ctapipe import containers
-from ctapipe.image import cleaning, extractor, leakage, hillas_parameters, concentration, timing_parameters, morphology_parameters
+from ctapipe.image import (
+    cleaning,
+    extractor,
+    leakage,
+    hillas_parameters,
+    concentration,
+    timing_parameters,
+    morphology_parameters,
+)
 from ctapipe.instrument.camera import CameraGeometry
 from dl1_data_handler import table_definitions as table_defs
 from dl1_data_handler import dl_eventsources
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,7 +44,7 @@ class DL1DataDumper(ABC):
             string filepath to output file.
         """
         self.output_filename = output_filename
-        self.event_index = 0 # Be sure to initialize self.event_index
+        self.event_index = 0  # Be sure to initialize self.event_index
 
     # Write a single event's information (dl1 data, monte carlo information)
     @abstractmethod
@@ -46,7 +55,7 @@ class DL1DataDumper(ABC):
         event_container : ctapipe.io.containers.DataContainer
             ctapipe parent event container.
         """
-        self.event_index += 1 # Be sure to increment self.event_index
+        self.event_index += 1  # Be sure to increment self.event_index
 
     # Write a single event's information (dl1 data, monte carlo information)
     @abstractmethod
@@ -63,7 +72,9 @@ class DL1DataDumper(ABC):
 
     # Prepare the file's header, telescope/array descriptions, event and image tables
     @abstractmethod
-    def prepare_file(self, input_filename, subarray, mcheader, cleaning_algorithm_metadata):
+    def prepare_file(
+        self, input_filename, subarray, mcheader, cleaning_algorithm_metadata
+    ):
         """Dump file-level data to file and setup file structure.
         Creates Event and image tables. Sets self.subarray for later fast lookup.
         Parameters
@@ -94,17 +105,19 @@ class CTAMLDataDumper(DL1DataDumper):
 
     DEFAULT_IMGS_PER_EVENT = 1.0
 
-    def __init__(self,
-                 output_filename,
-                 filter_settings=None,
-                 expected_tel_types=10,
-                 expected_tels=300,
-                 expected_events=100,
-                 expected_mc_events=50000,
-                 expected_images_per_event=None,
-                 index_columns=None,
-                 save_mc_events=False,
-                 cleaning_settings=None):
+    def __init__(
+        self,
+        output_filename,
+        filter_settings=None,
+        expected_tel_types=10,
+        expected_tels=300,
+        expected_events=100,
+        expected_mc_events=50000,
+        expected_images_per_event=None,
+        index_columns=None,
+        save_mc_events=False,
+        cleaning_settings=None,
+    ):
         """Instantiate a CTAMLDataDumper instance.
         Parameters
         ----------
@@ -138,10 +151,7 @@ class CTAMLDataDumper(DL1DataDumper):
         self.file = tables.open_file(output_filename, mode="w")
 
         if filter_settings is None:
-            self.filter_settings = {
-                     'complib': 'lzo',
-                     'complevel': 1
-            }
+            self.filter_settings = {"complib": "lzo", "complevel": 1}
         else:
             self.filter_settings = filter_settings
         self.filters = tables.Filters(**self.filter_settings)
@@ -152,26 +162,28 @@ class CTAMLDataDumper(DL1DataDumper):
         self.expected_mc_events = expected_mc_events
 
         if expected_images_per_event is None:
-            self.expected_images_per_event = {
-                     'LSTCam': 0.5,
-                     'NectarCam': 2.0,
-                     'FlashCam': 2.0,
-                     'SCTCam': 1.5,
-                     'DigiCam': 1.25,
-                     'ASTRICam': 1.25,
-                     'CHEC': 1.25,
-                     'MAGICCam': 2.0,
-                 },
+            self.expected_images_per_event = (
+                {
+                    "LSTCam": 0.5,
+                    "NectarCam": 2.0,
+                    "FlashCam": 2.0,
+                    "SCTCam": 1.5,
+                    "DigiCam": 1.25,
+                    "ASTRICam": 1.25,
+                    "CHEC": 1.25,
+                    "MAGICCam": 2.0,
+                },
+            )
         else:
             self.expected_images_per_event = expected_images_per_event
 
         if index_columns is None:
             self.index_columns = [
-                     ('/Events', 'mc_energy'),
-                     ('/Events', 'alt'),
-                     ('/Events', 'az'),
-                     ('tel', 'event_index')
-                 ]
+                ("/Events", "mc_energy"),
+                ("/Events", "alt"),
+                ("/Events", "az"),
+                ("tel", "event_index"),
+            ]
         else:
             self.index_columns = index_columns
 
@@ -183,8 +195,7 @@ class CTAMLDataDumper(DL1DataDumper):
 
         self.save_mc_events = save_mc_events
 
-        self.cleaning_settings = (cleaning_settings
-                                  if cleaning_settings else {})
+        self.cleaning_settings = cleaning_settings if cleaning_settings else {}
 
     def __del__(self):
         """Cleanup + finalize output file."""
@@ -215,19 +226,36 @@ class CTAMLDataDumper(DL1DataDumper):
                 tel_desc = subarray.tels[tel_id]
 
                 if str(tel_desc) != "LST_MAGIC_MAGICCam":
-                    rows = [row for row in array_table.iterrows()
-                            if row["id"] == tel_id and
-                            row["type"].decode('utf-8') == str(tel_desc) and
-                            row["x"] == subarray.positions[tel_id].value[0] and
-                            row["y"] == subarray.positions[tel_id].value[1] and
-                            row["z"] == subarray.positions[tel_id].value[2]]
+                    rows = [
+                        row
+                        for row in array_table.iterrows()
+                        if row["id"] == tel_id
+                        and row["type"].decode("utf-8") == str(tel_desc)
+                        and row["x"] == subarray.positions[tel_id].value[0]
+                        and row["y"] == subarray.positions[tel_id].value[1]
+                        and row["z"] == subarray.positions[tel_id].value[2]
+                    ]
 
                     if len(rows) != 1:
                         logger.error("Printing all entries in Array_Information...")
                         for row in array_table.iterrows():
-                            logger.error("{}, {}, [{}, {}, {}]".format(row["id"], row["type"].decode('utf-8'), row["x"], row["y"], row["z"]))
-                        logger.error("Failed to find: {}, {}, {}".format(tel_id, str(tel_desc), subarray.positions[tel_id].value))
-                        raise ValueError("Failed to validate telescope description in Array_Information.")
+                            logger.error(
+                                "{}, {}, [{}, {}, {}]".format(
+                                    row["id"],
+                                    row["type"].decode("utf-8"),
+                                    row["x"],
+                                    row["y"],
+                                    row["z"],
+                                )
+                            )
+                        logger.error(
+                            "Failed to find: {}, {}, {}".format(
+                                tel_id, str(tel_desc), subarray.positions[tel_id].value
+                            )
+                        )
+                        raise ValueError(
+                            "Failed to validate telescope description in Array_Information."
+                        )
 
         else:
             array_table = self._create_array_table()
@@ -248,7 +276,9 @@ class CTAMLDataDumper(DL1DataDumper):
             tel_table = self.file.root.Telescope_Type_Information
             max_px = max([len(x.camera.geometry.pix_id) for x in subarray.tel.values()])
 
-            logger.info("Telescope_Type_Information table already present. Validating...")
+            logger.info(
+                "Telescope_Type_Information table already present. Validating..."
+            )
             for tel_type in subarray.telescope_types:
                 tel_id = subarray.get_tel_ids_for_type(tel_type)[0]
                 tel_desc = subarray.tels[tel_id]
@@ -261,22 +291,47 @@ class CTAMLDataDumper(DL1DataDumper):
                 pix_rotation = subarray.tel[tel_id].camera.geometry.pix_rotation.value
                 cam_rotation = subarray.tel[tel_id].camera.geometry.cam_rotation.value
 
-                rows = [row for row in tel_table.iterrows() if
-                            row["type"].decode('utf-8') == str(tel_desc) and
-                            row["optics"].decode('utf-8') == str(tel_desc.optics) and
-                            row["camera"].decode('utf-8') == str(tel_desc.camera) and
-                            row["num_pixels"] == len(subarray.tel[tel_id].camera.geometry.pix_id) and
-                            np.allclose(row["pixel_positions"], pos) and
-                            np.around(row["pix_rotation"], decimals=1) == np.around(pix_rotation,1) and
-                            row["cam_rotation"] == cam_rotation]
+                rows = [
+                    row
+                    for row in tel_table.iterrows()
+                    if row["type"].decode("utf-8") == str(tel_desc)
+                    and row["optics"].decode("utf-8") == str(tel_desc.optics)
+                    and row["camera"].decode("utf-8") == str(tel_desc.camera)
+                    and row["num_pixels"]
+                    == len(subarray.tel[tel_id].camera.geometry.pix_id)
+                    and np.allclose(row["pixel_positions"], pos)
+                    and np.around(row["pix_rotation"], decimals=1)
+                    == np.around(pix_rotation, 1)
+                    and row["cam_rotation"] == cam_rotation
+                ]
 
                 if len(rows) != 1:
                     for row in tel_table.iterrows():
-                        logger.error("{}, {}, {}, {}, {}, {}".format(row["type"].decode('utf-8'), row["optics"].decode('utf-8'), row["camera"].decode('utf-8'), row["num_pixels"], row["pix_rotation"], row["cam_rotation"]))
+                        logger.error(
+                            "{}, {}, {}, {}, {}, {}".format(
+                                row["type"].decode("utf-8"),
+                                row["optics"].decode("utf-8"),
+                                row["camera"].decode("utf-8"),
+                                row["num_pixels"],
+                                row["pix_rotation"],
+                                row["cam_rotation"],
+                            )
+                        )
                         logger.error(row["pixel_positions"])
-                    logger.error("New input file: {}-{}-{}-{}-{}-{}".format(str(tel_desc), str(tel_desc.optics), str(tel_desc.camera), len(subarray.tel[tel_id].camera.geometry.pix_id), pix_rotation, cam_rotation))
+                    logger.error(
+                        "New input file: {}-{}-{}-{}-{}-{}".format(
+                            str(tel_desc),
+                            str(tel_desc.optics),
+                            str(tel_desc.camera),
+                            len(subarray.tel[tel_id].camera.geometry.pix_id),
+                            pix_rotation,
+                            cam_rotation,
+                        )
+                    )
                     logger.error(pos)
-                    raise ValueError("Failed to validate telescope type description in Telescope_Type_Information.")
+                    raise ValueError(
+                        "Failed to validate telescope type description in Telescope_Type_Information."
+                    )
         else:
             # Compute maximum number of pixels across all camera types
             max_px = max([len(x.camera.geometry.pix_id) for x in subarray.tel.values()])
@@ -299,8 +354,12 @@ class CTAMLDataDumper(DL1DataDumper):
                 row["camera"] = str(tel_description.camera)
                 row["num_pixels"] = len(subarray.tel[tel_id].camera.geometry.pix_id)
                 row["pixel_positions"] = pos
-                row["pix_rotation"] = np.around(subarray.tel[tel_id].camera.geometry.pix_rotation.value, decimals=1)
-                row["cam_rotation"] = subarray.tel[tel_id].camera.geometry.cam_rotation.value
+                row["pix_rotation"] = np.around(
+                    subarray.tel[tel_id].camera.geometry.pix_rotation.value, decimals=1
+                )
+                row["cam_rotation"] = subarray.tel[
+                    tel_id
+                ].camera.geometry.cam_rotation.value
                 row.append()
             tel_table.flush()
 
@@ -325,22 +384,41 @@ class CTAMLDataDumper(DL1DataDumper):
                     attributes[field] = attributes[field] + mcheader_dict[field]
                 elif field == "run_array_direction":
                     if not np.allclose(attributes[field], mcheader_dict[field].value):
-                        raise ValueError("Attribute {} in output file root attributes does not match new value in input file: {} vs {}".format(field, attributes[field], mcheader_dict[field].value))
+                        raise ValueError(
+                            "Attribute {} in output file root attributes does not match new value in input file: {} vs {}".format(
+                                field, attributes[field], mcheader_dict[field].value
+                            )
+                        )
                 elif field == "shower_prog_start" or field == "detector_prog_start":
                     continue
                 else:
                     if str(tel_desc) != "LST_MAGIC_MAGICCam":
-                        if hasattr(mcheader_dict[field], 'value'):
-                            match = math.isclose(attributes[field], mcheader_dict[field].value)
-                        elif type(mcheader_dict[field]) is str or type(mcheader_dict[field]) is int:
-                            match = (attributes[field] == mcheader_dict[field])
+                        if hasattr(mcheader_dict[field], "value"):
+                            match = math.isclose(
+                                attributes[field], mcheader_dict[field].value
+                            )
+                        elif (
+                            type(mcheader_dict[field]) is str
+                            or type(mcheader_dict[field]) is int
+                        ):
+                            match = attributes[field] == mcheader_dict[field]
                         elif type(mcheader_dict[field]) is float:
-                            match = math.isclose(attributes[field], mcheader_dict[field])
+                            match = math.isclose(
+                                attributes[field], mcheader_dict[field]
+                            )
                         else:
-                            raise ValueError("Found unexpected type for field {} in MC header: {}".format(field, type(mcheader_dict[field])))
+                            raise ValueError(
+                                "Found unexpected type for field {} in MC header: {}".format(
+                                    field, type(mcheader_dict[field])
+                                )
+                            )
 
                         if not match:
-                            raise ValueError("Attribute {} in output file root attributes does not match new value in input file: {} vs {}".format(field, attributes[field], mcheader_dict[field]))
+                            raise ValueError(
+                                "Attribute {} in output file root attributes does not match new value in input file: {} vs {}".format(
+                                    field, attributes[field], mcheader_dict[field]
+                                )
+                            )
             else:
                 attributes[field] = mcheader_dict[field]
 
@@ -353,20 +431,22 @@ class CTAMLDataDumper(DL1DataDumper):
         input_filename : str
             Full path to input file being dumped.
         """
-        logger.info(
-            "Writing general header information to file attributes...")
+        logger.info("Writing general header information to file attributes...")
 
         attributes = self.file.root._v_attrs
 
-        if not hasattr(attributes, 'dl1_data_handler_version'):
-            attributes['dl1_data_handler_version'] = pkg_resources.get_distribution('dl1_data_handler').version
-        if not hasattr(attributes, 'ctapipe_version'):
-            attributes['ctapipe_version'] = pkg_resources.get_distribution('ctapipe').version
+        if not hasattr(attributes, "dl1_data_handler_version"):
+            attributes["dl1_data_handler_version"] = pkg_resources.get_distribution(
+                "dl1_data_handler"
+            ).version
+        if not hasattr(attributes, "ctapipe_version"):
+            attributes["ctapipe_version"] = pkg_resources.get_distribution(
+                "ctapipe"
+            ).version
 
-        if not hasattr(attributes, 'runlist'):
+        if not hasattr(attributes, "runlist"):
             attributes.runlist = []
-        attributes.runlist = attributes.runlist + [os.path.basename(
-            input_filename)]
+        attributes.runlist = attributes.runlist + [os.path.basename(input_filename)]
 
     def dump_event(self, event_container):
         """Dump ctapipe event data (event params and images) to output file.
@@ -379,36 +459,39 @@ class CTAMLDataDumper(DL1DataDumper):
             ctapipe container of all event data for a given event.
         """
         event_row = self.file.root.Events.row
-        event_row['event_id'] = event_container.index.event_id
-        event_row['obs_id'] = event_container.index.obs_id
+        event_row["event_id"] = event_container.index.event_id
+        event_row["obs_id"] = event_container.index.obs_id
 
         if event_container.mc:
-            event_row['shower_primary_id'] = (
-                event_container.mc.shower_primary_id)
-            event_row['core_x'] = event_container.mc.core_x.value
-            event_row['core_y'] = event_container.mc.core_y.value
-            event_row['h_first_int'] = event_container.mc.h_first_int.value
-            event_row['x_max'] = event_container.mc.x_max.value
-            event_row['mc_energy'] = event_container.mc.energy.value
-            event_row['log_mc_energy'] = np.log10(event_container.mc.energy.value)
-            event_row['alt'] = event_container.mc.alt.value
-            event_row['az'] = event_container.mc.az.value
-            event_row['array_pointing_alt'] = event_container.pointing.array_altitude.value
-            event_row['array_pointing_az'] = event_container.pointing.array_azimuth.value
+            event_row["shower_primary_id"] = event_container.mc.shower_primary_id
+            event_row["core_x"] = event_container.mc.core_x.value
+            event_row["core_y"] = event_container.mc.core_y.value
+            event_row["h_first_int"] = event_container.mc.h_first_int.value
+            event_row["x_max"] = event_container.mc.x_max.value
+            event_row["mc_energy"] = event_container.mc.energy.value
+            event_row["log_mc_energy"] = np.log10(event_container.mc.energy.value)
+            event_row["alt"] = event_container.mc.alt.value
+            event_row["az"] = event_container.mc.az.value
+            event_row[
+                "array_pointing_alt"
+            ] = event_container.pointing.array_altitude.value
+            event_row[
+                "array_pointing_az"
+            ] = event_container.pointing.array_azimuth.value
             # North pointing correction
-            delta_alt = event_row['alt']-event_row['array_pointing_alt']
-            delta_az = event_row['az']-event_row['array_pointing_az']
+            delta_alt = event_row["alt"] - event_row["array_pointing_alt"]
+            delta_az = event_row["az"] - event_row["array_pointing_az"]
             if delta_az > np.pi:
-                delta_az -= 2*np.pi
+                delta_az -= 2 * np.pi
             elif delta_az < -np.pi:
-                delta_az += 2*np.pi
-            event_row['delta_direction'] = np.array([delta_alt, delta_az], np.float32)
+                delta_az += 2 * np.pi
+            event_row["delta_direction"] = np.array([delta_alt, delta_az], np.float32)
 
         store_event = False
         for tel_type in self.subarray:
             image_table = self.file.get_node(
-                '/Images/' + str(tel_type),
-                classname='Table')
+                "/Images/" + str(tel_type), classname="Table"
+            )
             image_row = image_table.row
 
             index_vector = []
@@ -424,166 +507,312 @@ class CTAMLDataDumper(DL1DataDumper):
 
             for tel_id in self.subarray[tel_type]:
                 if tel_id in event_container.dl1.tel:
-                    image_row['charge'] = event_container.dl1.tel[tel_id].image
-                    image_row['peak_time'] = event_container.dl1.tel[tel_id].peak_time
+                    image_row["charge"] = event_container.dl1.tel[tel_id].image
+                    image_row["peak_time"] = event_container.dl1.tel[tel_id].peak_time
                     image_row["event_index"] = self.event_index
 
-                    for index_parameters_table in range(0, len(self.cleaning_settings)+1):
+                    for index_parameters_table in range(
+                        0, len(self.cleaning_settings) + 1
+                    ):
                         parameter_table = self.file.get_node(
-                            '/Parameters' + str(index_parameters_table) + '/' + str(tel_type),
-                            classname='Table')
+                            "/Parameters"
+                            + str(index_parameters_table)
+                            + "/"
+                            + str(tel_type),
+                            classname="Table",
+                        )
                         parameter_row = parameter_table.row
 
                         parameter_row["event_index"] = self.event_index
 
                         if index_parameters_table == 0:
-                            image_row['image_mask0'] = event_container.dl1.tel[tel_id].image_mask
-                            image_row['inv_image_mask0'] = np.invert(event_container.dl1.tel[tel_id].image_mask)
+                            image_row["image_mask0"] = event_container.dl1.tel[
+                                tel_id
+                            ].image_mask
+                            image_row["inv_image_mask0"] = np.invert(
+                                event_container.dl1.tel[tel_id].image_mask
+                            )
 
                             parameter_row["event_index"] = self.event_index
-                            parameter_row["leakage_intensity_1"] = event_container.dl1.tel[
-                                tel_id].parameters.leakage.intensity_width_1
-                            parameter_row["leakage_intensity_2"] = event_container.dl1.tel[
-                                tel_id].parameters.leakage.intensity_width_2
+                            parameter_row[
+                                "leakage_intensity_1"
+                            ] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.leakage.intensity_width_1
+                            parameter_row[
+                                "leakage_intensity_2"
+                            ] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.leakage.intensity_width_2
                             parameter_row["leakage_pixels_1"] = event_container.dl1.tel[
-                                tel_id].parameters.leakage.pixels_width_1
+                                tel_id
+                            ].parameters.leakage.pixels_width_1
                             parameter_row["leakage_pixels_2"] = event_container.dl1.tel[
-                                tel_id].parameters.leakage.pixels_width_2
+                                tel_id
+                            ].parameters.leakage.pixels_width_2
 
                             parameter_row["hillas_intensity"] = event_container.dl1.tel[
-                                tel_id].parameters.hillas.intensity
-                            parameter_row["hillas_log_intensity"] = np.log10(event_container.dl1.tel[
-                                tel_id].parameters.hillas.intensity)
-                            parameter_row["hillas_x"] = event_container.dl1.tel[tel_id].parameters.hillas.x.value
-                            parameter_row["hillas_y"] = event_container.dl1.tel[tel_id].parameters.hillas.y.value
-                            parameter_row["hillas_r"] = event_container.dl1.tel[tel_id].parameters.hillas.r.value
+                                tel_id
+                            ].parameters.hillas.intensity
+                            parameter_row["hillas_log_intensity"] = np.log10(
+                                event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.hillas.intensity
+                            )
+                            parameter_row["hillas_x"] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.hillas.x.value
+                            parameter_row["hillas_y"] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.hillas.y.value
+                            parameter_row["hillas_r"] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.hillas.r.value
                             parameter_row["hillas_phi"] = event_container.dl1.tel[
-                                tel_id].parameters.hillas.phi.value
+                                tel_id
+                            ].parameters.hillas.phi.value
                             parameter_row["hillas_length"] = event_container.dl1.tel[
-                                tel_id].parameters.hillas.length.value
+                                tel_id
+                            ].parameters.hillas.length.value
                             parameter_row["hillas_width"] = event_container.dl1.tel[
-                                tel_id].parameters.hillas.width.value
+                                tel_id
+                            ].parameters.hillas.width.value
                             parameter_row["hillas_psi"] = event_container.dl1.tel[
-                                tel_id].parameters.hillas.psi.value
+                                tel_id
+                            ].parameters.hillas.psi.value
                             parameter_row["hillas_skewness"] = event_container.dl1.tel[
-                                tel_id].parameters.hillas.skewness
+                                tel_id
+                            ].parameters.hillas.skewness
                             parameter_row["hillas_kurtosis"] = event_container.dl1.tel[
-                                tel_id].parameters.hillas.kurtosis
+                                tel_id
+                            ].parameters.hillas.kurtosis
 
-                            parameter_row['concentration_cog'] = event_container.dl1.tel[
-                                tel_id].parameters.concentration.cog
-                            parameter_row['concentration_core'] = event_container.dl1.tel[
-                                tel_id].parameters.concentration.core
-                            parameter_row['concentration_pixel'] = event_container.dl1.tel[
-                                tel_id].parameters.concentration.pixel
+                            parameter_row[
+                                "concentration_cog"
+                            ] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.concentration.cog
+                            parameter_row[
+                                "concentration_core"
+                            ] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.concentration.core
+                            parameter_row[
+                                "concentration_pixel"
+                            ] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.concentration.pixel
 
-                            parameter_row['timing_slope'] = event_container.dl1.tel[tel_id].parameters.timing.slope.value
-                            parameter_row['timing_slope_err'] = event_container.dl1.tel[tel_id].parameters.timing.slope_err.value
-                            parameter_row['timing_intercept'] = event_container.dl1.tel[tel_id].parameters.timing.intercept
-                            parameter_row['timing_intercept_err'] = event_container.dl1.tel[tel_id].parameters.timing.intercept_err
-                            parameter_row['timing_deviation'] = event_container.dl1.tel[tel_id].parameters.timing.deviation
+                            parameter_row["timing_slope"] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.timing.slope.value
+                            parameter_row["timing_slope_err"] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.timing.slope_err.value
+                            parameter_row["timing_intercept"] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.timing.intercept
+                            parameter_row[
+                                "timing_intercept_err"
+                            ] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.timing.intercept_err
+                            parameter_row["timing_deviation"] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.timing.deviation
 
-                            parameter_row['morphology_num_pixels'] = event_container.dl1.tel[
-                                tel_id].parameters.morphology.num_pixels
-                            parameter_row['morphology_num_islands'] = event_container.dl1.tel[
-                                tel_id].parameters.morphology.num_islands
-                            parameter_row['morphology_num_small_islands'] = event_container.dl1.tel[
-                                tel_id].parameters.morphology.num_small_islands
-                            parameter_row['morphology_num_medium_islands'] = event_container.dl1.tel[
-                                tel_id].parameters.morphology.num_medium_islands
-                            parameter_row['morphology_num_large_islands'] = event_container.dl1.tel[
-                                tel_id].parameters.morphology.num_large_islands
+                            parameter_row[
+                                "morphology_num_pixels"
+                            ] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.morphology.num_pixels
+                            parameter_row[
+                                "morphology_num_islands"
+                            ] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.morphology.num_islands
+                            parameter_row[
+                                "morphology_num_small_islands"
+                            ] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.morphology.num_small_islands
+                            parameter_row[
+                                "morphology_num_medium_islands"
+                            ] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.morphology.num_medium_islands
+                            parameter_row[
+                                "morphology_num_large_islands"
+                            ] = event_container.dl1.tel[
+                                tel_id
+                            ].parameters.morphology.num_large_islands
 
                         else:
 
-                            cleaning_method = getattr(cleaning,
-                                                      self.cleaning_settings[index_parameters_table - 1]['algorithm'])
+                            cleaning_method = getattr(
+                                cleaning,
+                                self.cleaning_settings[index_parameters_table - 1][
+                                    "algorithm"
+                                ],
+                            )
 
-                            cleanmask = cleaning_method(self.cam_geometry[tel_type],
-                                                        event_container.dl1.tel[tel_id].image,
-                                                        **self.cleaning_settings[index_parameters_table - 1]['args'])
+                            cleanmask = cleaning_method(
+                                self.cam_geometry[tel_type],
+                                event_container.dl1.tel[tel_id].image,
+                                **self.cleaning_settings[index_parameters_table - 1][
+                                    "args"
+                                ]
+                            )
 
-                            image_row["image_mask"+str(index_parameters_table)] = cleanmask
-                            image_row["inv_image_mask"+str(index_parameters_table)] = np.invert(cleanmask)
+                            image_row[
+                                "image_mask" + str(index_parameters_table)
+                            ] = cleanmask
+                            image_row[
+                                "inv_image_mask" + str(index_parameters_table)
+                            ] = np.invert(cleanmask)
 
                             leakage_values = containers.LeakageContainer()
-                            hillas_parameters_values = containers.HillasParametersContainer()
+                            hillas_parameters_values = (
+                                containers.HillasParametersContainer()
+                            )
                             concentration_values = containers.ConcentrationContainer()
                             timing_values = containers.TimingParametersContainer()
                             morphology_values = containers.MorphologyContainer()
 
                             if any(cleanmask):
-                                leakage_values = leakage(self.cam_geometry[tel_type],
-                                                         event_container.dl1.tel[tel_id].image,
-                                                         cleanmask)
+                                leakage_values = leakage(
+                                    self.cam_geometry[tel_type],
+                                    event_container.dl1.tel[tel_id].image,
+                                    cleanmask,
+                                )
 
                                 hillas_parameters_values = hillas_parameters(
                                     self.cam_geometry[tel_type][cleanmask],
-                                    event_container.dl1.tel[tel_id].image[cleanmask])
+                                    event_container.dl1.tel[tel_id].image[cleanmask],
+                                )
 
-                                concentration_values = concentration(self.cam_geometry[tel_type],
-                                                                     event_container.dl1.tel[tel_id].image,
-                                                                     hillas_parameters_values)
+                                concentration_values = concentration(
+                                    self.cam_geometry[tel_type],
+                                    event_container.dl1.tel[tel_id].image,
+                                    hillas_parameters_values,
+                                )
                                 try:
-                                    timing_values = timing_parameters(self.cam_geometry[tel_type],
-                                                                  event_container.dl1.tel[tel_id].image,
-                                                                  event_container.dl1.tel[tel_id].peak_time,
-                                                                  hillas_parameters_values,
-                                                                  cleanmask)
+                                    timing_values = timing_parameters(
+                                        self.cam_geometry[tel_type],
+                                        event_container.dl1.tel[tel_id].image,
+                                        event_container.dl1.tel[tel_id].peak_time,
+                                        hillas_parameters_values,
+                                        cleanmask,
+                                    )
                                 except:
-                                    timing_values = containers.TimingParametersContainer()
+                                    timing_values = (
+                                        containers.TimingParametersContainer()
+                                    )
 
                                 morphology_values = morphology_parameters(
-                                    self.cam_geometry[tel_type],
-                                    cleanmask)
+                                    self.cam_geometry[tel_type], cleanmask
+                                )
 
                             # leakage
-                            parameter_row["leakage_intensity_1"] = leakage_values['intensity_width_1']
-                            parameter_row["leakage_intensity_2"] = leakage_values['intensity_width_2']
-                            parameter_row["leakage_pixels_1"] = leakage_values['pixels_width_1']
-                            parameter_row["leakage_pixels_2"] = leakage_values['pixels_width_2']
+                            parameter_row["leakage_intensity_1"] = leakage_values[
+                                "intensity_width_1"
+                            ]
+                            parameter_row["leakage_intensity_2"] = leakage_values[
+                                "intensity_width_2"
+                            ]
+                            parameter_row["leakage_pixels_1"] = leakage_values[
+                                "pixels_width_1"
+                            ]
+                            parameter_row["leakage_pixels_2"] = leakage_values[
+                                "pixels_width_2"
+                            ]
 
                             # hillas
-                            parameter_row["hillas_intensity"] = hillas_parameters_values['intensity']
-                            parameter_row["hillas_log_intensity"] = np.log10(hillas_parameters_values['intensity'])
-                            parameter_row["hillas_x"] = hillas_parameters_values['x'].value
-                            parameter_row["hillas_y"] = hillas_parameters_values['y'].value
-                            parameter_row["hillas_r"] = hillas_parameters_values['r'].value
-                            parameter_row["hillas_phi"] = hillas_parameters_values['phi'].value
-                            parameter_row["hillas_length"] = hillas_parameters_values['length'].value
-                            parameter_row["hillas_width"] = hillas_parameters_values['width'].value
-                            parameter_row["hillas_psi"] = hillas_parameters_values['psi'].value
-                            parameter_row["hillas_skewness"] = hillas_parameters_values['skewness']
-                            parameter_row["hillas_kurtosis"] = hillas_parameters_values['kurtosis']
+                            parameter_row[
+                                "hillas_intensity"
+                            ] = hillas_parameters_values["intensity"]
+                            parameter_row["hillas_log_intensity"] = np.log10(
+                                hillas_parameters_values["intensity"]
+                            )
+                            parameter_row["hillas_x"] = hillas_parameters_values[
+                                "x"
+                            ].value
+                            parameter_row["hillas_y"] = hillas_parameters_values[
+                                "y"
+                            ].value
+                            parameter_row["hillas_r"] = hillas_parameters_values[
+                                "r"
+                            ].value
+                            parameter_row["hillas_phi"] = hillas_parameters_values[
+                                "phi"
+                            ].value
+                            parameter_row["hillas_length"] = hillas_parameters_values[
+                                "length"
+                            ].value
+                            parameter_row["hillas_width"] = hillas_parameters_values[
+                                "width"
+                            ].value
+                            parameter_row["hillas_psi"] = hillas_parameters_values[
+                                "psi"
+                            ].value
+                            parameter_row["hillas_skewness"] = hillas_parameters_values[
+                                "skewness"
+                            ]
+                            parameter_row["hillas_kurtosis"] = hillas_parameters_values[
+                                "kurtosis"
+                            ]
 
                             # concentration
-                            parameter_row['concentration_cog'] = concentration_values['cog']
-                            parameter_row['concentration_core'] = concentration_values['core']
-                            parameter_row['concentration_pixel'] = concentration_values['pixel']
+                            parameter_row["concentration_cog"] = concentration_values[
+                                "cog"
+                            ]
+                            parameter_row["concentration_core"] = concentration_values[
+                                "core"
+                            ]
+                            parameter_row["concentration_pixel"] = concentration_values[
+                                "pixel"
+                            ]
 
                             # timing
-                            parameter_row['timing_deviation'] = timing_values['deviation']
-                            parameter_row['timing_intercept'] = timing_values['intercept']
-                            parameter_row['timing_intercept_err'] = timing_values['intercept_err']
-                            parameter_row['timing_slope'] = timing_values['slope'].value
-                            parameter_row['timing_slope_err'] = timing_values['slope_err'].value
+                            parameter_row["timing_deviation"] = timing_values[
+                                "deviation"
+                            ]
+                            parameter_row["timing_intercept"] = timing_values[
+                                "intercept"
+                            ]
+                            parameter_row["timing_intercept_err"] = timing_values[
+                                "intercept_err"
+                            ]
+                            parameter_row["timing_slope"] = timing_values["slope"].value
+                            parameter_row["timing_slope_err"] = timing_values[
+                                "slope_err"
+                            ].value
 
                             # morphology
-                            parameter_row['morphology_num_pixels'] = morphology_values['num_pixels']
-                            parameter_row['morphology_num_islands'] = morphology_values['num_islands']
-                            parameter_row['morphology_num_small_islands'] = morphology_values[
-                                'num_small_islands']
-                            parameter_row['morphology_num_medium_islands'] = morphology_values['num_medium_islands']
-                            parameter_row['morphology_num_large_islands'] = morphology_values[
-                                'num_large_islands']
+                            parameter_row["morphology_num_pixels"] = morphology_values[
+                                "num_pixels"
+                            ]
+                            parameter_row["morphology_num_islands"] = morphology_values[
+                                "num_islands"
+                            ]
+                            parameter_row[
+                                "morphology_num_small_islands"
+                            ] = morphology_values["num_small_islands"]
+                            parameter_row[
+                                "morphology_num_medium_islands"
+                            ] = morphology_values["num_medium_islands"]
+                            parameter_row[
+                                "morphology_num_large_islands"
+                            ] = morphology_values["num_large_islands"]
 
                         parameter_row.append()
 
                     image_row.append()
 
-            event_row[str(tel_type) + '_indices'] = index_vector
-            event_row[str(tel_type) + '_multiplicity'] = sum(
-                index > 0 for index in index_vector)
+            event_row[str(tel_type) + "_indices"] = index_vector
+            event_row[str(tel_type) + "_multiplicity"] = sum(
+                index > 0 for index in index_vector
+            )
 
         if store_event:
             event_row.append()
@@ -603,20 +832,24 @@ class CTAMLDataDumper(DL1DataDumper):
         """
         event_row = self.file.root.MC_Events.row
 
-        event_row['event_id'] = eventio_mc_event['event_id']
-        event_row['obs_id'] = obs_id
-        event_row['shower_primary_id'] = eventio_mc_event['mc_shower']['primary_id']
-        event_row['core_x'] = eventio_mc_event['mc_event']['xcore']
-        event_row['core_y'] = eventio_mc_event['mc_event']['ycore']
-        event_row['h_first_int'] = eventio_mc_event['mc_shower']['h_first_int']
-        event_row['x_max'] = eventio_mc_event['mc_shower']['xmax']
-        event_row['mc_energy'] = eventio_mc_event['mc_shower']['energy']
-        event_row['log_mc_energy'] = eventio_mc_event['mc_shower']['log_mc_energy']
-        event_row['alt'] = eventio_mc_event['mc_shower']['altitude']
-        event_row['az'] = eventio_mc_event['mc_shower']['azimuth']
-        event_row['array_pointing_alt'] = eventio_mc_event['mc_shower']['array_pointing_alt']
-        event_row['array_pointing_az'] = eventio_mc_event['mc_shower']['array_pointing_az']
-        event_row['delta_direction'] = event_row['delta_direction']
+        event_row["event_id"] = eventio_mc_event["event_id"]
+        event_row["obs_id"] = obs_id
+        event_row["shower_primary_id"] = eventio_mc_event["mc_shower"]["primary_id"]
+        event_row["core_x"] = eventio_mc_event["mc_event"]["xcore"]
+        event_row["core_y"] = eventio_mc_event["mc_event"]["ycore"]
+        event_row["h_first_int"] = eventio_mc_event["mc_shower"]["h_first_int"]
+        event_row["x_max"] = eventio_mc_event["mc_shower"]["xmax"]
+        event_row["mc_energy"] = eventio_mc_event["mc_shower"]["energy"]
+        event_row["log_mc_energy"] = eventio_mc_event["mc_shower"]["log_mc_energy"]
+        event_row["alt"] = eventio_mc_event["mc_shower"]["altitude"]
+        event_row["az"] = eventio_mc_event["mc_shower"]["azimuth"]
+        event_row["array_pointing_alt"] = eventio_mc_event["mc_shower"][
+            "array_pointing_alt"
+        ]
+        event_row["array_pointing_az"] = eventio_mc_event["mc_shower"][
+            "array_pointing_az"
+        ]
+        event_row["delta_direction"] = event_row["delta_direction"]
 
         event_row.append()
 
@@ -625,30 +858,31 @@ class CTAMLDataDumper(DL1DataDumper):
         event_table_desc = table_defs.EventTableRow
 
         if self.save_mc_events:
-            mc_event_table = self.file.create_table(self.file.root,
-                                                    'MC_Events',
-                                                    event_table_desc,
-                                                    "Table of MC Event Information",
-                                                    filters=self.filters,
-                                                    expectedrows=(
-                                                     self.expected_mc_events))
+            mc_event_table = self.file.create_table(
+                self.file.root,
+                "MC_Events",
+                event_table_desc,
+                "Table of MC Event Information",
+                filters=self.filters,
+                expectedrows=(self.expected_mc_events),
+            )
 
         for tel_type in subarray.telescope_types:
+            event_table_desc.columns[str(tel_type) + "_indices"] = tables.UInt32Col(
+                shape=(len(subarray.get_tel_ids_for_type(tel_type)))
+            )
             event_table_desc.columns[
-                str(tel_type) + '_indices'] = (
-                tables.UInt32Col(shape=(
-                    len(subarray.get_tel_ids_for_type(tel_type)))))
-            event_table_desc.columns[
-                str(tel_type) + '_multiplicity'] = (
-                tables.UInt32Col())
+                str(tel_type) + "_multiplicity"
+            ] = tables.UInt32Col()
 
-        event_table = self.file.create_table(self.file.root,
-                                             'Events',
-                                             event_table_desc,
-                                             "Table of Event Information",
-                                             filters=self.filters,
-                                             expectedrows=(
-                                                 self.expected_events))
+        event_table = self.file.create_table(
+            self.file.root,
+            "Events",
+            event_table_desc,
+            "Table of Event Information",
+            filters=self.filters,
+            expectedrows=(self.expected_events),
+        )
 
     def _create_image_tables(self, subarray):
         self.file.create_group(self.file.root, "Images")
@@ -667,123 +901,144 @@ class CTAMLDataDumper(DL1DataDumper):
                     "peak_time": tables.Float32Col(shape=image_shape),
                 }
 
-                for index_parameters_table in range(0, len(self.cleaning_settings)+1):
-                    columns_dict["image_mask"+str(index_parameters_table)] = tables.BoolCol(shape=image_shape)
-                    columns_dict["inv_image_mask"+str(index_parameters_table)] = tables.BoolCol(shape=image_shape)
+                for index_parameters_table in range(0, len(self.cleaning_settings) + 1):
+                    columns_dict[
+                        "image_mask" + str(index_parameters_table)
+                    ] = tables.BoolCol(shape=image_shape)
+                    columns_dict[
+                        "inv_image_mask" + str(index_parameters_table)
+                    ] = tables.BoolCol(shape=image_shape)
 
-                description = type('description',
-                                  (tables.IsDescription,),
-                                  columns_dict)
+                description = type("description", (tables.IsDescription,), columns_dict)
 
                 # Calculate expected number of rows for compression
                 if tel_name in self.expected_images_per_event:
                     expected_rows = (
-                        self.expected_events * self.expected_images_per_event[
-                                tel_name])
+                        self.expected_events * self.expected_images_per_event[tel_name]
+                    )
                 else:
-                    expected_rows = (
-                        self.DEFAULT_IMGS_PER_EVENT * self.expected_events)
+                    expected_rows = self.DEFAULT_IMGS_PER_EVENT * self.expected_events
 
                 image_table = self.file.create_table(
-                         self.file.root.Images,
-                         tel_name,
-                         description,
-                         "Image table of {} images".format(tel_name),
-                         filters=self.filters,
-                         expectedrows=expected_rows)
-
-
+                    self.file.root.Images,
+                    tel_name,
+                    description,
+                    "Image table of {} images".format(tel_name),
+                    filters=self.filters,
+                    expectedrows=expected_rows,
+                )
 
                 # Place blank image at index 0 of all image tables
                 image_row = image_table.row
 
-                image_row['charge'] = np.zeros(image_shape, dtype=np.float32)
-                image_row['event_index'] = -1
-                image_row['peak_time'] = np.zeros(image_shape, dtype=np.float32)
-                for index_parameters_table in range(0, len(self.cleaning_settings)+1):
-                    image_row["image_mask"+str(index_parameters_table)] = np.zeros(image_shape, dtype=np.bool_)
-                    image_row["inv_image_mask"+str(index_parameters_table)] = np.ones(image_shape, dtype=np.bool_)
+                image_row["charge"] = np.zeros(image_shape, dtype=np.float32)
+                image_row["event_index"] = -1
+                image_row["peak_time"] = np.zeros(image_shape, dtype=np.float32)
+                for index_parameters_table in range(0, len(self.cleaning_settings) + 1):
+                    image_row["image_mask" + str(index_parameters_table)] = np.zeros(
+                        image_shape, dtype=np.bool_
+                    )
+                    image_row["inv_image_mask" + str(index_parameters_table)] = np.ones(
+                        image_shape, dtype=np.bool_
+                    )
                 image_row.append()
                 image_table.flush()
 
-    def _create_parameter_tables(self, subarray, index_parameters_table, cleaning_main_algorithm_metadata):
-        self.file.create_group(self.file.root, "Parameters"+str(index_parameters_table))
+    def _create_parameter_tables(
+        self, subarray, index_parameters_table, cleaning_main_algorithm_metadata
+    ):
+        self.file.create_group(
+            self.file.root, "Parameters" + str(index_parameters_table)
+        )
         for tel_desc in set(subarray.tels.values()):
             tel_name = str(tel_desc)
-            parameter_table_number = getattr(self.file.root, "Parameters" + str(index_parameters_table))
+            parameter_table_number = getattr(
+                self.file.root, "Parameters" + str(index_parameters_table)
+            )
             if ("/{}".format(tel_name)) not in parameter_table_number:
                 logger.info("Creating {} parameter table...".format(tel_name))
 
                 # Calculate expected number of rows for compression
                 if tel_name in self.expected_images_per_event:
                     expected_rows = (
-                        self.expected_events * self.expected_images_per_event[
-                            tel_name])
+                        self.expected_events * self.expected_images_per_event[tel_name]
+                    )
                 else:
-                    expected_rows = (
-                        self.DEFAULT_IMGS_PER_EVENT * self.expected_events)
+                    expected_rows = self.DEFAULT_IMGS_PER_EVENT * self.expected_events
 
                 if index_parameters_table == 0:
-                    parameter_table = self.file.create_table(parameter_table_number,
-                                                         tel_name,
-                                                         table_defs.ParametersTableRow,
-                                                         "Parameter table of {} parameters, algorithm: {}, args: {}".format(tel_name,
-                                                                                           cleaning_main_algorithm_metadata['algorithm'],
-                                                                                           cleaning_main_algorithm_metadata['args']),
-                                                         filters=self.filters,
-                                                         expectedrows=expected_rows)
-                else :
-                    parameter_table = self.file.create_table(parameter_table_number,
-                                                         tel_name,
-                                                         table_defs.ParametersTableRow,
-                                                         "Parameter table of {} parameters, algorithm: {}, args: {}".format(tel_name,
-                                                                  self.cleaning_settings[index_parameters_table -1]['algorithm'],
-                                                                  self.cleaning_settings[index_parameters_table -1]['args']),
-                                                        filters=self.filters,
-                                                        expectedrows=expected_rows)
+                    parameter_table = self.file.create_table(
+                        parameter_table_number,
+                        tel_name,
+                        table_defs.ParametersTableRow,
+                        "Parameter table of {} parameters, algorithm: {}, args: {}".format(
+                            tel_name,
+                            cleaning_main_algorithm_metadata["algorithm"],
+                            cleaning_main_algorithm_metadata["args"],
+                        ),
+                        filters=self.filters,
+                        expectedrows=expected_rows,
+                    )
+                else:
+                    parameter_table = self.file.create_table(
+                        parameter_table_number,
+                        tel_name,
+                        table_defs.ParametersTableRow,
+                        "Parameter table of {} parameters, algorithm: {}, args: {}".format(
+                            tel_name,
+                            self.cleaning_settings[index_parameters_table - 1][
+                                "algorithm"
+                            ],
+                            self.cleaning_settings[index_parameters_table - 1]["args"],
+                        ),
+                        filters=self.filters,
+                        expectedrows=expected_rows,
+                    )
 
                 # Place blank image at index 0 of all image tables
                 parameter_row = parameter_table.row
 
-                parameter_row['event_index'] = -1
+                parameter_row["event_index"] = -1
 
-                parameter_row['leakage_intensity_1'] = np.float32(np.nan)
-                parameter_row['leakage_intensity_2'] = np.float32(np.nan)
-                parameter_row['leakage_pixels_1'] = np.float32(np.nan)
-                parameter_row['leakage_pixels_2'] = np.float32(np.nan)
+                parameter_row["leakage_intensity_1"] = np.float32(np.nan)
+                parameter_row["leakage_intensity_2"] = np.float32(np.nan)
+                parameter_row["leakage_pixels_1"] = np.float32(np.nan)
+                parameter_row["leakage_pixels_2"] = np.float32(np.nan)
 
-                parameter_row['hillas_intensity'] = np.float32(np.nan)
-                parameter_row['hillas_log_intensity'] = np.float32(np.nan)
-                parameter_row['hillas_x'] = np.float32(np.nan)
-                parameter_row['hillas_y'] = np.float32(np.nan)
-                parameter_row['hillas_r'] = np.float32(np.nan)
-                parameter_row['hillas_phi'] = np.float32(np.nan)
-                parameter_row['hillas_length'] = np.float32(np.nan)
-                parameter_row['hillas_width'] = np.float32(np.nan)
-                parameter_row['hillas_psi'] = np.float32(np.nan)
-                parameter_row['hillas_skewness'] = np.float32(np.nan)
-                parameter_row['hillas_kurtosis'] = np.float32(np.nan)
+                parameter_row["hillas_intensity"] = np.float32(np.nan)
+                parameter_row["hillas_log_intensity"] = np.float32(np.nan)
+                parameter_row["hillas_x"] = np.float32(np.nan)
+                parameter_row["hillas_y"] = np.float32(np.nan)
+                parameter_row["hillas_r"] = np.float32(np.nan)
+                parameter_row["hillas_phi"] = np.float32(np.nan)
+                parameter_row["hillas_length"] = np.float32(np.nan)
+                parameter_row["hillas_width"] = np.float32(np.nan)
+                parameter_row["hillas_psi"] = np.float32(np.nan)
+                parameter_row["hillas_skewness"] = np.float32(np.nan)
+                parameter_row["hillas_kurtosis"] = np.float32(np.nan)
 
-                parameter_row['concentration_cog'] = np.float32(np.nan)
-                parameter_row['concentration_core'] = np.float32(np.nan)
-                parameter_row['concentration_pixel'] = np.float32(np.nan)
+                parameter_row["concentration_cog"] = np.float32(np.nan)
+                parameter_row["concentration_core"] = np.float32(np.nan)
+                parameter_row["concentration_pixel"] = np.float32(np.nan)
 
-                parameter_row['timing_slope'] = np.float32(np.nan)
-                parameter_row['timing_slope_err'] = np.float32(np.nan)
-                parameter_row['timing_intercept'] = np.float32(np.nan)
-                parameter_row['timing_intercept_err'] = np.float32(np.nan)
-                parameter_row['timing_deviation'] = np.float32(np.nan)
+                parameter_row["timing_slope"] = np.float32(np.nan)
+                parameter_row["timing_slope_err"] = np.float32(np.nan)
+                parameter_row["timing_intercept"] = np.float32(np.nan)
+                parameter_row["timing_intercept_err"] = np.float32(np.nan)
+                parameter_row["timing_deviation"] = np.float32(np.nan)
 
-                parameter_row['morphology_num_pixels'] = -1
-                parameter_row['morphology_num_islands'] = -1
-                parameter_row['morphology_num_small_islands'] = -1
-                parameter_row['morphology_num_medium_islands'] = -1
-                parameter_row['morphology_num_large_islands'] = -1
+                parameter_row["morphology_num_pixels"] = -1
+                parameter_row["morphology_num_islands"] = -1
+                parameter_row["morphology_num_small_islands"] = -1
+                parameter_row["morphology_num_medium_islands"] = -1
+                parameter_row["morphology_num_large_islands"] = -1
 
                 parameter_row.append()
                 parameter_table.flush()
 
-    def prepare_file(self, input_filename, subarray, mcheader, cleaning_algorithm_metadata):
+    def prepare_file(
+        self, input_filename, subarray, mcheader, cleaning_algorithm_metadata
+    ):
         """Dump file-level data to file and setup file structure.
         Creates Event and image tables. Sets self.subarray for later fast lookup.
         Parameters
@@ -806,41 +1061,54 @@ class CTAMLDataDumper(DL1DataDumper):
             if "/Images" not in self.file:
                 self._create_image_tables(subarray)
             if "/Parameters0" not in self.file:
-                for index_parameters_table in range(0, len(self.cleaning_settings)+1):
-                    self._create_parameter_tables(subarray, index_parameters_table, cleaning_algorithm_metadata)
+                for index_parameters_table in range(0, len(self.cleaning_settings) + 1):
+                    self._create_parameter_tables(
+                        subarray, index_parameters_table, cleaning_algorithm_metadata
+                    )
 
             if self.subarray:
                 for tel_type in self.subarray:
-                    if sorted(subarray.get_tel_ids_for_type(tel_type)) != self.subarray[tel_type]:
-                        raise ValueError("Tel ids in new input file {} do not match the"""
-                                         " description in the current output file.".format(input_filename))
+                    if (
+                        sorted(subarray.get_tel_ids_for_type(tel_type))
+                        != self.subarray[tel_type]
+                    ):
+                        raise ValueError(
+                            "Tel ids in new input file {} do not match the"
+                            ""
+                            " description in the current output file.".format(
+                                input_filename
+                            )
+                        )
             else:
-                self.subarray = {tel_type: sorted(subarray.get_tel_ids_for_type(tel_type))
-                                 for tel_type in subarray.telescope_types}
-                self.cam_geometry = {tel_type: tel_type.camera.geometry
-                                 for tel_type in subarray.telescope_types}
+                self.subarray = {
+                    tel_type: sorted(subarray.get_tel_ids_for_type(tel_type))
+                    for tel_type in subarray.telescope_types
+                }
+                self.cam_geometry = {
+                    tel_type: tel_type.camera.geometry
+                    for tel_type in subarray.telescope_types
+                }
 
             for tel_type in self.subarray:
                 if tel_type not in self.image_indices:
                     self.image_indices[tel_type] = 1
 
         except IOError:
-            logger.error("Failed to write header info from file "
-                         "{}".format(
-                             input_filename))
+            logger.error(
+                "Failed to write header info from file " "{}".format(input_filename)
+            )
             raise IOError
 
     def _create_array_table(self):
         logger.info("Creating array info table...")
-        array_table = self.file.create_table(self.file.root,
-                                             'Array_Information',
-                                             table_defs.ArrayTableRow,
-                                             ("Table of array/subarray "
-                                              "information"),
-                                             filters=self.filters,
-                                             expectedrows=(
-                                                 self.expected_tels)
-                                             )
+        array_table = self.file.create_table(
+            self.file.root,
+            "Array_Information",
+            table_defs.ArrayTableRow,
+            ("Table of array/subarray " "information"),
+            filters=self.filters,
+            expectedrows=(self.expected_tels),
+        )
         return array_table
 
     def _create_tel_table(self, subarray, max_px):
@@ -848,17 +1116,17 @@ class CTAMLDataDumper(DL1DataDumper):
         tel_table_desc = table_defs.TelTableRow
 
         # Add a column field for the pixel position map
-        tel_table_desc.columns['pixel_positions'] = tables.Float32Col(
-            shape=(max_px, 2))
+        tel_table_desc.columns["pixel_positions"] = tables.Float32Col(shape=(max_px, 2))
 
         # Create telescope information table
         tel_table = self.file.create_table(
             self.file.root,
-            'Telescope_Type_Information',
+            "Telescope_Type_Information",
             tel_table_desc,
             "Table of telescope type information",
             filters=self.filters,
-            expectedrows=self.expected_tel_types)
+            expectedrows=self.expected_tel_types,
+        )
 
         return tel_table
 
@@ -870,7 +1138,7 @@ class CTAMLDataDumper(DL1DataDumper):
         if self.index_columns:
             logger.info("Adding indexed columns...")
             for location, col_name in self.index_columns:
-                if location == 'tel':
+                if location == "tel":
                     table_names = ["/" + i for i in self.tel_tables]
                 else:
                     table_names = [location]
@@ -878,21 +1146,29 @@ class CTAMLDataDumper(DL1DataDumper):
                 for table_name in table_names:
                     if ("/Images/{}".format(table_name)) in self.file:
                         table_name = "/Images/{}".format(table_name)
-                    for index_parameters_table in range(0, len(self.cleaning_settings)+1):
-                        if ("/Parameters"+str(index_parameters_table)+"/{}".format(table_name)) in self.file:
-                            table_name = "/Parameters"+str(index_parameters_table)+"/{}".format(table_name)
+                    for index_parameters_table in range(
+                        0, len(self.cleaning_settings) + 1
+                    ):
+                        if (
+                            "/Parameters"
+                            + str(index_parameters_table)
+                            + "/{}".format(table_name)
+                        ) in self.file:
+                            table_name = (
+                                "/Parameters"
+                                + str(index_parameters_table)
+                                + "/{}".format(table_name)
+                            )
                     try:
-                        table = self.file.get_node(table_name,
-                                                   classname='Table')
+                        table = self.file.get_node(table_name, classname="Table")
                         table.cols._f_col(col_name).create_index()
-                        logger.info("Added index on {}:{}".format(
-                            table_name,
-                            col_name))
+                        logger.info("Added index on {}:{}".format(table_name, col_name))
                     except Exception:
                         logger.warning(
                             "Failed to create index on {} : {}".format(
-                                table_name,
-                                col_name))
+                                table_name, col_name
+                            )
+                        )
                         pass
 
 
@@ -901,20 +1177,22 @@ class DL1DataWriter:
     Provides some options for controlling the output file sizes.
     """
 
-    def __init__(self,
-                 event_source_class=None,
-                 event_source_settings=None,
-                 selected_telescope_ids=None,
-                 data_dumper_class=CTAMLDataDumper,
-                 data_dumper_settings=None,
-                 preselection_cut_function=None,
-                 write_mode='parallel',
-                 output_file_size=10737418240,
-                 events_per_file=None,
-                 save_mc_events=False,
-                 cleaning_settings=None,
-                 gain_selector_settings=None,
-                 image_extractor_settings=None):
+    def __init__(
+        self,
+        event_source_class=None,
+        event_source_settings=None,
+        selected_telescope_ids=None,
+        data_dumper_class=CTAMLDataDumper,
+        data_dumper_settings=None,
+        preselection_cut_function=None,
+        write_mode="parallel",
+        output_file_size=10737418240,
+        events_per_file=None,
+        save_mc_events=False,
+        cleaning_settings=None,
+        gain_selector_settings=None,
+        image_extractor_settings=None,
+    ):
         """Initialize a DL1DataWriter instance.
         Provides some options for controlling the output file sizes.
         Parameters
@@ -962,19 +1240,19 @@ class DL1DataWriter:
             Settings for the ImageExtractor for the calibration class.
         """
         self.event_source_class = event_source_class
-        self.event_source_settings = (event_source_settings
-                                      if event_source_settings else {})
+        self.event_source_settings = (
+            event_source_settings if event_source_settings else {}
+        )
 
         self.selected_telescope_ids = selected_telescope_ids
 
         self.data_dumper_class = data_dumper_class
-        self.data_dumper_settings = (data_dumper_settings
-                                     if data_dumper_settings else {})
-        self.data_dumper_settings['save_mc_events'] = save_mc_events
+        self.data_dumper_settings = data_dumper_settings if data_dumper_settings else {}
+        self.data_dumper_settings["save_mc_events"] = save_mc_events
 
         self.preselection_cut_function = preselection_cut_function
 
-        if write_mode in ['serial', 'parallel']:
+        if write_mode in ["serial", "parallel"]:
             self.write_mode = write_mode
 
         self.output_file_size = output_file_size
@@ -983,26 +1261,38 @@ class DL1DataWriter:
         self.save_mc_events = save_mc_events
 
         if gain_selector_settings is None:
-            gain_selector_settings = {'algorithm': 'ThresholdGainSelector', 'args': {'threshold': 3500}}
+            gain_selector_settings = {
+                "algorithm": "ThresholdGainSelector",
+                "args": {"threshold": 3500},
+            }
         self.gain_selector_settings = gain_selector_settings
 
         if image_extractor_settings is None:
-            image_extractor_settings = {'algorithm': 'LocalPeakWindowSum', 'args': {'window_shift': 4, 'window_width': 8}}
+            image_extractor_settings = {
+                "algorithm": "LocalPeakWindowSum",
+                "args": {"window_shift": 4, "window_width": 8},
+            }
         self.image_extractor_settings = image_extractor_settings
 
         if cleaning_settings is None:
-            cleaning_settings = {'algorithm': 'tailcuts_clean', 'args': {'picture_thresh': 7, 'boundary_thresh': 5}}
+            cleaning_settings = {
+                "algorithm": "tailcuts_clean",
+                "args": {"picture_thresh": 7, "boundary_thresh": 5},
+            }
         self.cleaning_settings = cleaning_settings
 
         if self.output_file_size:
-            logger.info("Max output file size set at {} bytes. Note that "
-                        "this may increase the number of output "
-                        "files.".format(self.output_file_size))
+            logger.info(
+                "Max output file size set at {} bytes. Note that "
+                "this may increase the number of output "
+                "files.".format(self.output_file_size)
+            )
         if self.events_per_file:
-            logger.info("Max number of output events per file set at {}. Note "
-                        "that this may increase the number of output "
-                        "files.".format(self.events_per_file))
-
+            logger.info(
+                "Max number of output events per file set at {}. Note "
+                "that this may increase the number of output "
+                "files.".format(self.events_per_file)
+            )
 
     def process_data(self, run_list):
         """Process data from a list of runs.
@@ -1018,16 +1308,17 @@ class DL1DataWriter:
              are to be loaded. 'target' points to an output filename (str)
              to which the data from the input files should be written.
         """
-        if self.write_mode == 'parallel':
+        if self.write_mode == "parallel":
             num_processes = len(run_list)
             logger.info("{} parallel processes requested.".format(num_processes))
 
             logger.info("Creating processes...")
             jobs = []
             for i in range(0, num_processes):
-                process = multiprocessing.Process(target=self._process_data,
-                                                  args=(run_list[i]['inputs'],
-                                                        run_list[i]['target']))
+                process = multiprocessing.Process(
+                    target=self._process_data,
+                    args=(run_list[i]["inputs"], run_list[i]["target"]),
+                )
                 jobs.append(process)
 
             logger.info("Starting processes...")
@@ -1043,12 +1334,12 @@ class DL1DataWriter:
                 logger.error("Caught keyboard interrupt, killing all processes...")
                 for j in jobs:
                     j.terminate()
-        elif self.write_mode == 'serial':
+        elif self.write_mode == "serial":
             logger.info("Serial processing requested.")
 
             for run in run_list:
-                logger.info("Starting run for target: {}...".format(run['target']))
-                self._process_data(run['inputs'], run['target'])
+                logger.info("Starting run for target: {}...".format(run["target"]))
+                self._process_data(run["inputs"], run["target"])
 
         logger.info("Done!")
 
@@ -1068,18 +1359,16 @@ class DL1DataWriter:
         """
         # Append a trailing digit to get next filename in sequence
         dirname = os.path.dirname(output_filename)
-        output_filename, *extensions = os.path.basename(
-            output_filename).split('.')
-        if re.search(r'_[0-9]+$', output_filename):
+        output_filename, *extensions = os.path.basename(output_filename).split(".")
+        if re.search(r"_[0-9]+$", output_filename):
             output_filename = re.sub(
-                r'_[0-9]+$', "_" + str(output_file_count),
-                output_filename)
+                r"_[0-9]+$", "_" + str(output_file_count), output_filename
+            )
         else:
-            output_filename = (
-                output_filename + "_" + str(output_file_count))
+            output_filename = output_filename + "_" + str(output_file_count)
 
         for ext in extensions:
-            output_filename = output_filename + '.' + ext
+            output_filename = output_filename + "." + ext
 
         output_filename = os.path.join(dirname, output_filename)
 
@@ -1097,8 +1386,8 @@ class DL1DataWriter:
         output_file_count = 1
 
         data_dumper = self.data_dumper_class(
-            output_filename,
-            **self.data_dumper_settings)
+            output_filename, **self.data_dumper_settings
+        )
         filetype = "root"
         try:
             uproot.open(glob.glob(file_list[0])[0])
@@ -1109,12 +1398,14 @@ class DL1DataWriter:
         for filename in file_list:
             if self.event_source_class:
                 event_source = self.event_source_class(
-                    filename,
-                    **self.event_source_settings)
+                    filename, **self.event_source_settings
+                )
             elif filetype == "root":
                 event_source = dl_eventsources.DLMAGICEventSource(input_url=filename)
             elif filetype == "simtel":
-                event_source = io.eventsource.EventSource.from_url(filename, back_seekable = True)
+                event_source = io.eventsource.EventSource.from_url(
+                    filename, back_seekable=True
+                )
 
             # Write all file-level data if not present
             # Or compare to existing data if already in file
@@ -1122,14 +1413,28 @@ class DL1DataWriter:
 
             subarray = event_source.subarray
             if filetype == "simtel":
-                image_extractor = getattr(ctapipe.image.extractor, self.image_extractor_settings['algorithm'])(subarray=subarray,config=Config(self.image_extractor_settings['args']))
-                calibrator = calib.camera.calibrator.CameraCalibrator(subarray=subarray, image_extractor=image_extractor)
+                image_extractor = getattr(
+                    ctapipe.image.extractor, self.image_extractor_settings["algorithm"]
+                )(
+                    subarray=subarray,
+                    config=Config(self.image_extractor_settings["args"]),
+                )
+                calibrator = calib.camera.calibrator.CameraCalibrator(
+                    subarray=subarray, image_extractor=image_extractor
+                )
             if self.selected_telescope_ids:
-                subarray = subarray.select_subarray("subarray_for_selected_telids",self.selected_telescope_ids)
+                subarray = subarray.select_subarray(
+                    "subarray_for_selected_telids", self.selected_telescope_ids
+                )
             mcheader = example_event.mcheader
-            data_dumper.prepare_file(filename, subarray, mcheader, self.cleaning_settings)
+            data_dumper.prepare_file(
+                filename, subarray, mcheader, self.cleaning_settings
+            )
 
-            gain_selector = getattr(ctapipe.calib.camera.gainselection, self.gain_selector_settings['algorithm'])(config=Config(self.gain_selector_settings['args']))
+            gain_selector = getattr(
+                ctapipe.calib.camera.gainselection,
+                self.gain_selector_settings["algorithm"],
+            )(config=Config(self.gain_selector_settings["args"]))
 
             # Write all events sequentially
             for event in event_source:
@@ -1138,42 +1443,62 @@ class DL1DataWriter:
                 if filetype == "simtel":
                     for tel_id in tels_id:
                         if tel_id not in self.selected_telescope_ids:
-                            event.r1.tel[tel_id].selected_gain_channel = gain_selector(event.r0.tel[tel_id].waveform)
+                            event.r1.tel[tel_id].selected_gain_channel = gain_selector(
+                                event.r0.tel[tel_id].waveform
+                            )
                     calibrator(event)
 
                 for tel_id in tels_id:
-                    if tel_id not in self.selected_telescope_ids or not (math.isnan(event.dl1.tel[tel_id].parameters.hillas.intensity)):
+                    if tel_id not in self.selected_telescope_ids or not (
+                        math.isnan(event.dl1.tel[tel_id].parameters.hillas.intensity)
+                    ):
                         continue
 
-                    cleaning_method = getattr(cleaning, self.cleaning_settings['algorithm'])
-                    cleanmask = cleaning_method(subarray.tel[tel_id].camera.geometry,
-                                                    event.dl1.tel[tel_id].image,
-                                                    **self.cleaning_settings['args'])
+                    cleaning_method = getattr(
+                        cleaning, self.cleaning_settings["algorithm"]
+                    )
+                    cleanmask = cleaning_method(
+                        subarray.tel[tel_id].camera.geometry,
+                        event.dl1.tel[tel_id].image,
+                        **self.cleaning_settings["args"]
+                    )
                     event.dl1.tel[tel_id].image_mask = cleanmask
 
                     if any(cleanmask):
-                        leakage_values = leakage(subarray.tel[tel_id].camera.geometry,
-                                                 event.dl1.tel[tel_id].image,
-                                                 cleanmask)
-                        hillas_parameters_values = hillas_parameters(subarray.tel[tel_id].camera.geometry[cleanmask],
-                                                                     event.dl1.tel[tel_id].image[cleanmask])
-                        concentration_values = concentration(subarray.tel[tel_id].camera.geometry,
-                                                             event.dl1.tel[tel_id].image,
-                                                             hillas_parameters_values)
+                        leakage_values = leakage(
+                            subarray.tel[tel_id].camera.geometry,
+                            event.dl1.tel[tel_id].image,
+                            cleanmask,
+                        )
+                        hillas_parameters_values = hillas_parameters(
+                            subarray.tel[tel_id].camera.geometry[cleanmask],
+                            event.dl1.tel[tel_id].image[cleanmask],
+                        )
+                        concentration_values = concentration(
+                            subarray.tel[tel_id].camera.geometry,
+                            event.dl1.tel[tel_id].image,
+                            hillas_parameters_values,
+                        )
                         try:
-                            timing_values = timing_parameters(subarray.tel[tel_id].camera.geometry,
-                                                              event.dl1.tel[tel_id].image,
-                                                              event.dl1.tel[tel_id].peak_time,
-                                                              hillas_parameters_values,
-                                                              cleanmask)
+                            timing_values = timing_parameters(
+                                subarray.tel[tel_id].camera.geometry,
+                                event.dl1.tel[tel_id].image,
+                                event.dl1.tel[tel_id].peak_time,
+                                hillas_parameters_values,
+                                cleanmask,
+                            )
                         except:
                             timing_values = containers.TimingParametersContainer()
 
-                        morphology_values = morphology_parameters(subarray.tel[tel_id].camera.geometry, cleanmask)
+                        morphology_values = morphology_parameters(
+                            subarray.tel[tel_id].camera.geometry, cleanmask
+                        )
 
                     else:
                         leakage_values = containers.LeakageContainer()
-                        hillas_parameters_values = containers.HillasParametersContainer()
+                        hillas_parameters_values = (
+                            containers.HillasParametersContainer()
+                        )
                         concentration_values = containers.ConcentrationContainer()
                         timing_values = containers.TimingParametersContainer()
                         morphology_values = containers.MorphologyContainer()
@@ -1181,79 +1506,96 @@ class DL1DataWriter:
                     # Write parameter containers to the DataContainer
                     event.dl1.tel[tel_id].parameters.leakage = leakage_values
                     event.dl1.tel[tel_id].parameters.hillas = hillas_parameters_values
-                    event.dl1.tel[tel_id].parameters.concentration = concentration_values
+                    event.dl1.tel[
+                        tel_id
+                    ].parameters.concentration = concentration_values
                     event.dl1.tel[tel_id].parameters.timing = timing_values
                     event.dl1.tel[tel_id].parameters.morphology = morphology_values
 
-                if (self.preselection_cut_function is not None and not
-                        self.preselection_cut_function(event)):
+                if (
+                    self.preselection_cut_function is not None
+                    and not self.preselection_cut_function(event)
+                ):
                     continue
                 try:
                     data_dumper.dump_event(event)
                 except IOError:
-                    logger.error("Failed to write event from file "
-                                 "{}, skipping...".format(
-                                     filename))
+                    logger.error(
+                        "Failed to write event from file "
+                        "{}, skipping...".format(filename)
+                    )
                     break
 
-                max_events_reached = ((self.events_per_file is not None) and (
-                        data_dumper.event_index - 1 >= self.events_per_file))
+                max_events_reached = (self.events_per_file is not None) and (
+                    data_dumper.event_index - 1 >= self.events_per_file
+                )
 
-                max_size_reached = ((self.output_file_size is not None) and (
-                        os.path.getsize(
-                            data_dumper.output_filename) > self.output_file_size))
+                max_size_reached = (self.output_file_size is not None) and (
+                    os.path.getsize(data_dumper.output_filename) > self.output_file_size
+                )
 
                 if max_events_reached or max_size_reached:
                     # Reset event count and increment file count
                     output_file_count += 1
 
                     output_filename = self._get_next_filename(
-                        output_filename,
-                        output_file_count)
+                        output_filename, output_file_count
+                    )
 
                     # Create a new Data Dumper pointing at a new file
                     # and write file-level data
                     # Will flush + finalize + close file owned by
                     # previous data dumper
                     data_dumper = self.data_dumper_class(
-                        output_filename, **self.data_dumper_settings)
+                        output_filename, **self.data_dumper_settings
+                    )
 
                     # Write all file-level data if not present
                     # Or compare to existing data if already in file
-                    data_dumper.prepare_file(filename, subarray, mcheader, self.cleaning_settings)
+                    data_dumper.prepare_file(
+                        filename, subarray, mcheader, self.cleaning_settings
+                    )
 
             if self.save_mc_events:
                 for mc_event in event_source.file_.iter_mc_events():
 
                     try:
-                        data_dumper.dump_mc_event(mc_event, event_source.file_.header['run'])
+                        data_dumper.dump_mc_event(
+                            mc_event, event_source.file_.header["run"]
+                        )
                     except IOError:
-                        logger.error("Failed to write event from file "
-                                     "{}, skipping...".format(
-                            filename))
+                        logger.error(
+                            "Failed to write event from file "
+                            "{}, skipping...".format(filename)
+                        )
                         break
 
                     # Check whether to create another file
-                    max_events_reached = ((self.events_per_file is not None) and (
-                            data_dumper.event_index - 1 >= self.events_per_file))
+                    max_events_reached = (self.events_per_file is not None) and (
+                        data_dumper.event_index - 1 >= self.events_per_file
+                    )
 
-                    max_size_reached = ((self.output_file_size is not None) and (
-                            os.path.getsize(
-                                data_dumper.output_filename) > self.output_file_size))
+                    max_size_reached = (self.output_file_size is not None) and (
+                        os.path.getsize(data_dumper.output_filename)
+                        > self.output_file_size
+                    )
 
                     if max_events_reached or max_size_reached:
                         # Reset event count and increment file count
                         output_file_count += 1
 
                         output_filename = self._get_next_filename(
-                            output_filename,
-                            output_file_count)
+                            output_filename, output_file_count
+                        )
 
                         # Create a new Data Dumper pointing at a new file
                         # and write file-level data
                         data_dumper = self.data_dumper_class(
-                            output_filename, **self.data_dumper_settings)
+                            output_filename, **self.data_dumper_settings
+                        )
 
                         # Write all file-level data if not present
                         # Or compare to existing data if already in file
-                        data_dumper.prepare_file(filename, subarray, mcheader, self.cleaning_settings)
+                        data_dumper.prepare_file(
+                            filename, subarray, mcheader, self.cleaning_settings
+                        )
