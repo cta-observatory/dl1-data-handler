@@ -1,7 +1,3 @@
-.. role:: raw-html-m2r(raw)
-   :format: html
-
-
 DL1 Data Handler
 ================
 
@@ -16,12 +12,22 @@ DL1 Data Handler
    :alt: build status
 
 
+.. image:: https://anaconda.org/ctlearn-project/dl1_data_handler/badges/installer/conda.svg
+   :target: https://anaconda.org/ctlearn-project/dl1_data_handler/
+   :alt: Anaconda-Server Badge
+
+
+.. image:: https://img.shields.io/pypi/v/dl1-data-handler
+    :target: https://pypi.org/project/dl1-data-handler/
+    :alt: Latest Release
+
+
 .. image:: https://coveralls.io/repos/github/cta-observatory/dl1-data-handler/badge.svg?branch=master
    :target: https://coveralls.io/github/cta-observatory/dl1-data-handler?branch=master
    :alt: Coverage Status
 
 
-A package of utilities for writing (deprecated), reading, and applying image processing to :raw-html-m2r:`<a href="https://www.cta-observatory.org/" title="CTA collaboration Homepage">Cherenkov Telescope Array (CTA)</a>` DL1 data (calibrated images) in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data.
+A package of utilities for writing (deprecated), reading, and applying image processing to `Cherenkov Telescope Array (CTA) <https://www.cta-observatory.org/>`_\ DL1 data (calibrated images) in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data.
 
 Currently supports data in the CTA pyhessio sim_telarray format, with the possibility of supporting other IACT data formats in the future. Built using ctapipe and PyTables.
 
@@ -49,7 +55,7 @@ necessary package channels, and install dl1-data-handler specified version and i
 
 .. code-block:: bash
 
-   DL1DH_VER=0.10.1
+   DL1DH_VER=0.10.2
    wget https://raw.githubusercontent.com/cta-observatory/dl1-data-handler/v$DL1DH_VER/environment.yml
    conda env create -n [ENVIRONMENT_NAME] -f environment.yml
    conda activate [ENVIRONMENT_NAME]
@@ -57,12 +63,12 @@ necessary package channels, and install dl1-data-handler specified version and i
 
 This should automatically install all dependencies (NOTE: this may take some time, as by default MKL is included as a dependency of NumPy and it is very large).
 
-If you want to import any functionality from dl1-data-handler into your own Python scripts, then you are all set. However, if you wish to make use of any of the scripts in dl1-data-handler/scripts (like write_data.py), you should also clone the repository locally and checkout the corresponding tag (i.e. for version v0.10.1): 
+If you want to import any functionality from dl1-data-handler into your own Python scripts, then you are all set. However, if you wish to make use of any of the scripts in dl1-data-handler/scripts (like write_data.py), you should also clone the repository locally and checkout the corresponding tag (i.e. for version v0.10.2): 
 
 .. code-block:: bash
 
    git clone https://github.com/cta-observatory/dl1-data-handler.git
-   git checkout v0.10.1
+   git checkout v0.10.2
 
 dl1-data-handler should already have been installed in your environment by Conda, so no further installation steps (i.e. with setuptools or pip) are necessary and you should be able to run scripts/write_data.py directly.
 
@@ -189,7 +195,8 @@ Links
 -----
 
 
-* :raw-html-m2r:`<a href="https://www.cta-observatory.org/" title="CTA collaboration Homepage">Cherenkov Telescope Array (CTA)</a>` - Homepage of the CTA collaboration
-* :raw-html-m2r:`<a href="https://github.com/ctlearn-project/ctlearn" title="CTLearn Repository">CTLearn</a>` and :raw-html-m2r:`<a href="https://gitlab.lapp.in2p3.fr/GammaLearn/GammaLearn" title="GammaLearn Repository">GammaLearn</a>` - Repository of code for studies on applying deep learning to IACT analysis tasks. Maintained by groups at Columbia University, Universidad Complutense de Madrid, Barnard College (CTLearn) and LAPP (GammaLearn).
-* :raw-html-m2r:`<a href="https://cta-observatory.github.io/ctapipe/" title="ctapipe Official Documentation Page">ctapipe</a>` - Official documentation for the ctapipe analysis package (in development)
-* :raw-html-m2r:`<a href="http://vitables.org/" title="ViTables Homepage">ViTables</a>` - Homepage for ViTables application for Pytables HDF5 file visualization
+* `Cherenkov Telescope Array (CTA) <https://www.cta-observatory.org/>`_\ - Homepage of the CTA collaboration 
+* `CTLearn <https://github.com/ctlearn-project/ctlearn/>`_\ and `GammaLearn <https://gitlab.lapp.in2p3.fr/GammaLearn/GammaLearn>`_\ - Repository of code for studies on applying deep learning to IACT analysis tasks. Maintained by groups at Columbia University, Universidad Complutense de Madrid, Barnard College (CTLearn) and LAPP (GammaLearn).
+* `ctapipe <https://cta-observatory.github.io/ctapipe/>`_\ - Official documentation for the ctapipe analysis package (in development)
+* `ViTables <http://vitables.org/>`_\ - Homepage for ViTables application for Pytables HDF5 file visualization
+
