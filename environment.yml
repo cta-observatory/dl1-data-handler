@@ -12,7 +12,5 @@ dependencies:
     - pyyaml
     - pip:
         - ctapipe==0.12.0
-        - pyirf
-        - ctaplot
         - pydot
 

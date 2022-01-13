@@ -24,7 +24,6 @@ setup(
         "ctapipe==0.12.0",
         "jupyter",
         "pytest-cov",
-        "pyirf",
         "tables",
     ],
     entry_points={

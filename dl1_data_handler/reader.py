@@ -16,7 +16,6 @@ from astropy.table import (
     join,  # let us merge tables horizontally
     vstack,  # and vertically
 )
-from pyirf.simulations import SimulatedEventsInfo
 
 __all__ = ["DL1DataReader", "DL1DataReaderSTAGE1", "DL1DataReaderDL1DH"]
 
@@ -818,17 +817,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     len(self.image_channels),  # number of channels
                 )
 
-        if self.event_info:
-            # Created pyIRF SimulatedEventsInfo
-            self.pyIRFSimulatedEventsInfo = SimulatedEventsInfo(
-                n_showers=int(self.simulation_info["num_showers"]),
-                energy_min=u.Quantity(self.simulation_info["energy_range_min"], u.TeV),
-                energy_max=u.Quantity(self.simulation_info["energy_range_max"], u.TeV),
-                max_impact=u.Quantity(self.simulation_info["max_scatter_range"], u.m),
-                spectral_index=self.simulation_info["spectral_index"],
-                viewcone=u.Quantity(self.simulation_info["max_viewcone_radius"], u.deg),
-            )
-
         if self.pointing_mode == "fix_subarray":
             subarray_pointing = self.files[
                 first_file
@@ -1529,17 +1517,6 @@ class DL1DataReaderDL1DH(DL1DataReader):
         if shuffle:
             random.seed(seed)
             random.shuffle(self.example_identifiers)
-
-        if self.event_info:
-            # Created pyIRF SimulatedEventsInfo
-            self.pyIRFSimulatedEventsInfo = SimulatedEventsInfo(
-                n_showers=int(self.simulation_info["num_showers"]),
-                energy_min=u.Quantity(self.simulation_info["energy_range_min"], u.GeV),
-                energy_max=u.Quantity(self.simulation_info["energy_range_max"], u.GeV),
-                max_impact=u.Quantity(self.simulation_info["max_scatter_range"], u.cm),
-                spectral_index=self.simulation_info["spectral_index"],
-                viewcone=u.Quantity(self.simulation_info["max_viewcone_radius"], u.deg),
-            )
 
         if self.pointing_mode == "fix_subarray":
             run_array_direction = self.files[first_file].root._v_attrs[
