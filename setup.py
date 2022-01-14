@@ -23,15 +23,15 @@ setup(
         "astropy>=4.0.5,<5",
         "ctapipe==0.12.0",
         "jupyter",
+        "pandas",
         "pytest-cov",
-        "pyirf",
         "tables",
     ],
     entry_points={
         "console_scripts": [
             "dl1dh-generate_runlist=dl1_data_handler.generate_runlist:main",
             "dl1dh-write_data=dl1_data_handler.write_data:main",
-        ],
+        ]
     },
     dependency_links=[],
     zip_safe=True,
