@@ -450,6 +450,20 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 example_identifiers = []
                 if self.mode == "mono":
 
+                    simshower_table = read_table(
+                        f, "/simulation/event/subarray/shower"
+                    )
+
+                    true_shower_primary_id = simshower_table[
+                        "true_shower_primary_id"
+                    ][0]
+
+                    simshower_table.add_column(
+                        np.arange(len(simshower_table)),
+                        name="sim_index",
+                        index=0,
+                    )
+
                     if self.split_datasets_by == "tel_id":
                         # Construct the table containing all events.
                         # First, the telescope tables are joined with the shower simulation
@@ -462,17 +476,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             tel_table.add_column(
                                 np.arange(len(tel_table)), name="img_index", index=0
                             )
-                            simshower_table = read_table(
-                                f, "/simulation/event/subarray/shower"
-                            )
-                            true_shower_primary_id = simshower_table[
-                                "true_shower_primary_id"
-                            ][0]
-                            simshower_table.add_column(
-                                np.arange(len(simshower_table)),
-                                name="sim_index",
-                                index=0,
-                            )
+
                             tel_table = join(
                                 left=tel_table,
                                 right=simshower_table,
@@ -493,17 +497,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         for tel_id in selected_telescopes[self.tel_type]:
                             tel_table = tel_type_table[tel_type_table["tel_id"] == tel_id]
 
-                            simshower_table = read_table(
-                                f, "/simulation/event/subarray/shower"
-                            )
-                            true_shower_primary_id = simshower_table[
-                                "true_shower_primary_id"
-                            ][0]
-                            simshower_table.add_column(
-                                np.arange(len(simshower_table)),
-                                name="sim_index",
-                                index=0,
-                            )
                             tel_table = join(
                                 left=tel_table,
                                 right=simshower_table,
