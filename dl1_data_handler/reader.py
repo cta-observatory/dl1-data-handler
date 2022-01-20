@@ -446,6 +446,13 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 if "Subarray" not in multiplicity_selection:
                     multiplicity_selection["Subarray"] = subarray_multiplicity
 
+                # Construct the shower simulation table
+                simshower_table = read_table(f, "/simulation/event/subarray/shower")
+                simshower_table.add_column(
+                    np.arange(len(simshower_table)), name="sim_index", index=0
+                )
+                true_shower_primary_id = simshower_table["true_shower_primary_id"][0]
+
                 # Construct the example identifiers for 'mono' or 'stereo' mode.
                 example_identifiers = []
                 if self.mode == "mono":
@@ -462,17 +469,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             tel_table.add_column(
                                 np.arange(len(tel_table)), name="img_index", index=0
                             )
-                            simshower_table = read_table(
-                                f, "/simulation/event/subarray/shower"
-                            )
-                            true_shower_primary_id = simshower_table[
-                                "true_shower_primary_id"
-                            ][0]
-                            simshower_table.add_column(
-                                np.arange(len(simshower_table)),
-                                name="sim_index",
-                                index=0,
-                            )
+
                             tel_table = join(
                                 left=tel_table,
                                 right=simshower_table,
@@ -489,20 +486,19 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         tel_type_table.add_column(
                             np.arange(len(tel_type_table)), name="img_index", index=0
                         )
-                        simshower_table = read_table(
-                            f, "/simulation/event/subarray/shower"
-                        )
-                        true_shower_primary_id = simshower_table[
-                            "true_shower_primary_id"
-                        ][0]
-                        simshower_table.add_column(
-                            np.arange(len(simshower_table)), name="sim_index", index=0
-                        )
-                        allevents = join(
-                            left=tel_type_table,
-                            right=simshower_table,
-                            keys=["obs_id", "event_id"],
-                        )
+                        tel_tables = []
+                        for tel_id in selected_telescopes[self.tel_type]:
+                            tel_table = tel_type_table[
+                                tel_type_table["tel_id"] == tel_id
+                            ]
+
+                            tel_table = join(
+                                left=tel_table,
+                                right=simshower_table,
+                                keys=["obs_id", "event_id"],
+                            )
+                            tel_tables.append(tel_table)
+                        allevents = vstack(tel_tables)
 
                     # MC event selection based on the shower simulation table
                     # and image and parameter selection based on the parameter tables
@@ -549,16 +545,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
                 elif self.mode == "stereo":
 
-                    # Construct the table containing all events.
                     # The shower simulation table is joined with the subarray trigger table.
-                    simshower_table = read_table(f, "/simulation/event/subarray/shower")
-                    true_shower_primary_id = simshower_table["true_shower_primary_id"][
-                        0
-                    ]
-
-                    simshower_table.add_column(
-                        np.arange(len(simshower_table)), name="sim_index", index=0
-                    )
                     trigger_table = read_table(f, "/dl1/event/subarray/trigger")
                     allevents = join(
                         left=trigger_table,
