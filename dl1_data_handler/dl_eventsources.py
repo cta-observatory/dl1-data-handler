@@ -30,7 +30,7 @@ import numpy as np
 from scipy.stats import norm
 import re
 
-X_MAX_UNIT = u.g / (u.cm ** 2)
+X_MAX_UNIT = u.g / (u.cm**2)
 
 
 class DLMAGICEventSource(EventSource):
@@ -65,6 +65,7 @@ class DLMAGICEventSource(EventSource):
         self.magic_to_cta_shower_primary_id = {
             1: 0,  # gamma
             14: 101,  # MAGIC proton
+            3: 1,  # MAGIC electron
         }
         # MAGIC telescope positions in m wrt. to the center of CTA simulations
         self.magic_tel_positions = {
@@ -119,7 +120,7 @@ class DLMAGICEventSource(EventSource):
                 self.meta = uproot_file["RunHeaders"]
 
         # figure out if MC or Data run
-        self.mc = b"MMcCorsikaRunHeader." in self.meta.keys()
+        self.mc = "MMcCorsikaRunHeader." in self.meta.keys()
 
         # get the run number directly from the root file
         if self.mc:
@@ -128,14 +129,12 @@ class DLMAGICEventSource(EventSource):
                     "MMcCorsikaRunHeader.fRunNumber"
                 ].array()[0]
             )
-            # f"This run {self.run_number} IS a simulation")
         else:
             self.run_number = int(
                 uproot_file["RunHeaders"]["MRawRunHeader_1."][
                     "MRawRunHeader_1.fRunNumber"
                 ].array()[0]
             )
-            # print(f"This run #{self.run_number} is REAL data!")
 
         self._header = self._parse_header()
 
@@ -163,7 +162,7 @@ class DLMAGICEventSource(EventSource):
         tuple[str]
 
         """
-        return ("R0", "R1", "DL0")
+        return "DL1"
 
     @property
     def subarray(self):
@@ -337,26 +336,31 @@ class DLMAGICEventSource(EventSource):
             )
 
             num_islands_M1 = np.asarray(
-                self.superstar["MCerPhotEvt_1.fNumIslands"].array()
+                self.superstar["MImagePar_1.fNumIslands"].array()
             )
             num_islands_M2 = np.asarray(
-                self.superstar["MCerPhotEvt_2.fNumIslands"].array()
+                self.superstar["MImagePar_2.fNumIslands"].array()
             )
+            x_max = np.asarray(self.superstar["MStereoPar.fXMax"].array())
 
-            # Reading data from root file for Image table (peak time and image mask not )
-            charge_M1 = np.asarray(
-                self.superstar["MCerPhotEvt_1.fPixels.fPhot"].array()
-            )
+            # Reading data from root file for Image table (charge, peak time and image mask)
+            charge_M1 = np.asarray(self.superstar["UprootImageOrig_1"].array())
+            for i, charge in enumerate(charge_M1):
+                charge_M1[i] = np.array(charge)
             peak_time_M1 = np.asarray(self.superstar["MArrivalTime_1.fData"].array())
-            image_mask_M1 = np.asarray(self.superstar["CleanCharge_1"].array())
+            image_mask_M1 = np.asarray(self.superstar["UprootImageOrigClean_1"].array())
             for i, mask in enumerate(image_mask_M1):
                 image_mask_M1[i] = np.array(mask) != 0
+
+            charge_M2 = np.asarray(self.superstar["UprootImageOrig_2"].array())
+            for i, charge in enumerate(charge_M2):
+                charge_M2[i] = np.array(charge)
 
             charge_M2 = np.asarray(
                 self.superstar["MCerPhotEvt_2.fPixels.fPhot"].array()
             )
             peak_time_M2 = np.asarray(self.superstar["MArrivalTime_2.fData"].array())
-            image_mask_M2 = np.asarray(self.superstar["CleanCharge_2"].array())
+            image_mask_M2 = np.asarray(self.superstar["UprootImageOrigClean_2"].array())
             for i, mask in enumerate(image_mask_M2):
                 image_mask_M2[i] = np.array(mask) != 0
 
@@ -404,7 +408,7 @@ class DLMAGICEventSource(EventSource):
                         data.mc.az = Angle(
                             np.deg2rad(src_pos_cam_X[i] * 0.00337), u.rad
                         )
-                        data.mc.x_max = u.Quantity(0, X_MAX_UNIT)
+                        data.mc.x_max = u.Quantity(x_max[i], X_MAX_UNIT)
                         data.mc.h_first_int = u.Quantity(h_first_int[i], u.m)
                         data.mc.core_x = u.Quantity(core_x[i], u.m)
                         data.mc.core_y = u.Quantity(core_y[i], u.m)
@@ -458,7 +462,6 @@ class DLMAGICEventSource(EventSource):
                                 "intensity_width_2"
                             ] = leakage_intensity_2_M1[i]
 
-                            morphology_values["num_pixels"] = 1039
                             morphology_values["num_islands"] = num_islands_M1[i]
 
                     else:
@@ -500,7 +503,6 @@ class DLMAGICEventSource(EventSource):
                                 "intensity_width_2"
                             ] = leakage_intensity_2_M2[i]
 
-                            morphology_values["num_pixels"] = 1039
                             morphology_values["num_islands"] = num_islands_M2[i]
 
                     if self.superstar is not None:
@@ -547,32 +549,49 @@ class DLMAGICEventSource(EventSource):
                 date_run_cam=self.meta["{}.fDateRunCamera".format(run_header)].array()[
                     0
                 ],
-                energy_range_max=self.meta["MMcCorsikaRunHeader.fEUppLim"].array()[0],
-                energy_range_min=self.meta["MMcCorsikaRunHeader.fELowLim"].array()[0],
-                shower_theta_max=Angle(
-                    self.meta["{}.fShowerThetaMax".format(run_header)].array()[0], u.deg
+                energy_range_max=self.meta["MMcCorsikaRunHeader.fEUppLim"].array()[0]
+                / 1000.0,
+                energy_range_min=self.meta["MMcCorsikaRunHeader.fELowLim"].array()[0]
+                / 1000.0,
+                min_alt=Angle(
+                    np.deg2rad(
+                        90.0
+                        - self.meta["{}.fShowerThetaMax".format(run_header)].array()[0]
+                    ),
+                    u.rad,
                 ),
-                shower_theta_min=Angle(
-                    self.meta["{}.fShowerThetaMin".format(run_header)].array()[0], u.deg
+                max_alt=Angle(
+                    np.deg2rad(
+                        90.0
+                        - self.meta["{}.fShowerThetaMin".format(run_header)].array()[0]
+                    ),
+                    u.rad,
                 ),
-                shower_phi_max=Angle(
-                    self.meta["{}.fShowerPhiMax".format(run_header)].array()[0], u.deg
+                max_az=Angle(
+                    np.deg2rad(
+                        self.meta["{}.fShowerPhiMax".format(run_header)].array()[0]
+                    ),
+                    u.rad,
                 ),
-                shower_phi_min=Angle(
-                    self.meta["{}.fShowerPhiMin".format(run_header)].array()[0], u.deg
+                min_az=Angle(
+                    np.deg2rad(
+                        self.meta["{}.fShowerPhiMin".format(run_header)].array()[0]
+                    ),
+                    u.rad,
                 ),
                 c_wave_lower=self.meta["{}.fCWaveLower".format(run_header)].array()[0],
                 c_wave_upper=self.meta["{}.fCWaveUpper".format(run_header)].array()[0],
                 num_obs_lev=self.meta["{}.fNumObsLev".format(run_header)].array()[0],
-                height_lev=self.meta["{}.fHeightLev[10]".format(run_header)].array(),
-                slope_spec=self.meta["{}.fSlopeSpec".format(run_header)].array()[0],
-                rand_pointing_cone_semi_angle=Angle(
+                spectral_index=self.meta["{}.fSlopeSpec".format(run_header)].array()[0],
+                max_viewcone_radius=Angle(
                     self.meta[
                         "{}.fRandomPointingConeSemiAngle".format(run_header)
                     ].array()[0],
                     u.deg,
                 ),
-                impact_max=self.meta["{}.fImpactMax".format(run_header)].array()[0],
+                max_scatter_range=self.meta["{}.fImpactMax".format(run_header)].array()[
+                    0
+                ],
                 star_field_rotate=self.meta[
                     "{}.fStarFieldRotate".format(run_header)
                 ].array()[0],
@@ -607,13 +626,7 @@ class DLMAGICEventSource(EventSource):
                 num_analised_pix=self.meta[
                     "{}.fNumAnalisedPixels".format(run_header)
                 ].array()[0],
-                num_simulated_showers=self.meta[
-                    "{}.fNumSimulatedShowers".format(run_header)
-                ].array()[0],
-                num_stored_showers=self.meta[
-                    "{}.fNumStoredShowers".format(run_header)
-                ].array()[0],
-                num_events=self.meta["{}.fNumEvents".format(run_header)].array()[0],
+                num_showers=self.meta["{}.fNumEvents".format(run_header)].array()[0],
                 num_phe_from_dnsb=self.meta[
                     "{}.fNumPheFromDNSB".format(run_header)
                 ].array()[0],
@@ -705,18 +718,16 @@ class DLMAGICEventSource(EventSource):
                         0
                     ]
                 ),
-                run_start_mjd=self.meta[b"MRawRunHeader_1.fRunStart.fMjd"].array()[0],
+                run_start_mjd=self.meta["MRawRunHeader_1.fRunStart.fMjd"].array()[0],
                 run_start_ms=self.meta[
-                    b"MRawRunHeader_1.fRunStart.fTime.fMilliSec"
+                    "MRawRunHeader_1.fRunStart.fTime.fMilliSec"
                 ].array()[0],
-                run_start_ns=self.meta[b"MRawRunHeader_1.fRunStart.fNanoSec"].array()[
-                    0
-                ],
-                run_stop_mjd=self.meta[b"MRawRunHeader_1.fRunStop.fMjd"].array()[0],
+                run_start_ns=self.meta["MRawRunHeader_1.fRunStart.fNanoSec"].array()[0],
+                run_stop_mjd=self.meta["MRawRunHeader_1.fRunStop.fMjd"].array()[0],
                 run_stop_ms=self.meta[
-                    b"MRawRunHeader_1.fRunStop.fTime.fMilliSec"
+                    "MRawRunHeader_1.fRunStop.fTime.fMilliSec"
                 ].array()[0],
-                run_stop_ns=self.meta[b"MRawRunHeader_1.fRunStop.fNanoSec"].array()[0],
+                run_stop_ns=self.meta["MRawRunHeader_1.fRunStop.fNanoSec"].array()[0],
             )
 
     @staticmethod

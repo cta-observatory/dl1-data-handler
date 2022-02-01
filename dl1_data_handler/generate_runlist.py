@@ -79,7 +79,7 @@ def parse_filename(filename, filename_type):
     return (
         parse_root_filename(filename)
         if filename_type == "root"
-        else parse_root_filename(filename)
+        else parse_simtel_filename(filename)
     )
 
 
