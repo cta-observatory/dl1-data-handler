@@ -9,7 +9,7 @@ with open(path.join(here, "README.rst"), encoding="utf-8") as f:
 
 setup(
     name="dl1_data_handler",
-    version=get_version_pypi(),
+    version=get_version_pypi() + "_magic",
     author="DL1DH Team",
     author_email="d.nieto@ucm.es",
     description="dl1 HDF5 data writer + reader + processor",
@@ -21,9 +21,7 @@ setup(
     install_requires=[
         "numpy>1.16",
         "astropy>=4.0.5,<5",
-        "ctapipe==0.12.0",
-        "traitlets>=5.0",
-        "jupyter",
+        "ctapipe==0.9.1",
         "pandas",
         "pytest-cov",
         "tables",

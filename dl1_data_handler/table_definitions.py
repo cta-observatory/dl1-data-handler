@@ -30,51 +30,48 @@ class EventTableRow(IsDescription):
     obs_id : tables.UInt32Col
         Shower observation (run) id. Replaces old "run_id" in ctapipe r0
         container.
-    shower_primary_id : tables.UInt8Col
+    true_shower_primary_id : tables.UInt8Col
         Particle type id for the shower primary particle. From Monte Carlo
         simulation parameters.
-    core_x : tables.Float32Col
+    true_core_x : tables.Float32Col
         Shower core position x coordinate. From Monte Carlo simulation
         parameters.
-    core_y : tables.Float32Col
+    true_core_y : tables.Float32Col
         Shower core position y coordinate. From Monte Carlo simulation
         parameters.
-    h_first_int : tables.Float32Col
+    true_h_first_int : tables.Float32Col
         Height of shower primary particle first interaction. From Monte Carlo
         simulation parameters.
-    mc_energy : tables.Float32Col
+    true_energy : tables.Float32Col
         Energy of the shower primary particle in TeV. From Monte Carlo simulation
         parameters.
-    log_mc_energy : tables.Float32Col
+    log_true_energy : tables.Float32Col
         Energy of the shower primary particle in log(TeV). From Monte Carlo simulation
         parameters.
-    az : tables.Float32Col
+    true_az : tables.Float32Col
         Shower azimuth angle. From Monte Carlo simulation parameters.
-    alt : tables.Float32Col
+    true_alt : tables.Float32Col
         Shower altitude (zenith) angle. From Monte Carlo simulation parameters.
     array_pointing_az : tables.Float32Col
         Array pointing azimuth angle.
     array_pointing_alt : tables.Float32Col
         Array pointing altitude (zenith) angle.
-    delta_direction : tables.Float32Col(2)
-        Angular distance of the shower azimuth and the array pointing.
 
     """
 
     event_id = UInt32Col()
     obs_id = UInt32Col()
-    shower_primary_id = UInt8Col()
-    core_x = Float32Col()
-    core_y = Float32Col()
-    h_first_int = Float32Col()
-    x_max = Float32Col()
-    mc_energy = Float32Col()
-    log_mc_energy = Float32Col()
-    az = Float32Col()
-    alt = Float32Col()
+    true_shower_primary_id = UInt8Col()
+    true_core_x = Float32Col()
+    true_core_y = Float32Col()
+    true_h_first_int = Float32Col()
+    true_x_max = Float32Col()
+    true_energy = Float32Col()
+    log_true_energy = Float32Col()
+    true_az = Float32Col()
+    true_alt = Float32Col()
     array_pointing_az = Float32Col()
     array_pointing_alt = Float32Col()
-    delta_direction = Float32Col(2)
 
 
 class TelTableRow(IsDescription):
@@ -172,13 +169,13 @@ class ParametersTableRow(IsDescription):
 
     event_index = Int32Col()
 
-    leakage_intensity_1 = Float32Col()
-    leakage_intensity_2 = Float32Col()
-    leakage_pixels_1 = Float32Col()
-    leakage_pixels_2 = Float32Col()
+    leakage_intensity_width_1 = Float32Col()
+    leakage_intensity_width_2 = Float32Col()
+    leakage_pixels_width_1 = Float32Col()
+    leakage_pixels_width_2 = Float32Col()
 
     hillas_intensity = Float32Col()
-    hillas_log_intensity = Float32Col()
+    log_hillas_intensity = Float32Col()
     hillas_x = Float32Col()
     hillas_y = Float32Col()
     hillas_r = Float32Col()

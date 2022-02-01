@@ -206,10 +206,10 @@ class CoreXY(Transform):
         for i, (val, des) in enumerate(
             itertools.zip_longest(example, self.description)
         ):
-            if des["base_name"] == "core_x":
+            if des["base_name"] == "true_core_x":
                 example[i] = val / 1000
                 core_x_km = example[i]
-            elif des["base_name"] == "core_y":
+            elif des["base_name"] == "true_core_y":
                 example[i] = val / 1000
                 core_y_km = example[i]
             elif des["base_name"] == self.name:
@@ -244,7 +244,7 @@ class Xmax(Transform):
 
 
 class HfirstInt(Transform):
-    def __init__(self, name="h_first_int", unit="km"):
+    def __init__(self, name="true_h_first_int", unit="km"):
         super().__init__()
         self.name = name
         self.shape = 1
@@ -254,7 +254,7 @@ class HfirstInt(Transform):
     def describe(self, description):
         self.description = [
             {**des, "name": self.name, "dtype": self.dtype, "unit": self.unit}
-            if des["name"] == "h_first_int"
+            if des["name"] == "true_h_first_int"
             else des
             for des in description
         ]
@@ -262,7 +262,7 @@ class HfirstInt(Transform):
 
     def __call__(self, example):
         for i, (val, des) in enumerate(zip(example, self.description)):
-            if des["base_name"] == "h_first_int":
+            if des["base_name"] == "true_h_first_int":
                 example[i] = (
                     np.array([val / 1000]) if self.unit == "km" else np.array([val])
                 )
@@ -288,14 +288,14 @@ class DataForGammaLearn(Transform):
     def __init__(self):
         super().__init__()
         self.mc_infos = [
-            "mc_energy",
-            "core_x",
-            "core_y",
-            "alt",
-            "az",
-            "shower_primary_id",
-            "x_max",
-            "h_first_int",
+            "true_energy",
+            "true_core_x",
+            "true_core_y",
+            "true_alt",
+            "true_az",
+            "true_shower_primary_id",
+            "true_x_max",
+            "true_h_first_int",
         ]
         self.array_infos = ["x", "y", "z"]
 
@@ -330,7 +330,7 @@ class DataForGammaLearn(Transform):
                 if des["name"] == "class_label":
                     val = val.astype(np.float32)
                 labels.append(val)
-                if des["base_name"] == "mc_energy":
+                if des["base_name"] == "true_energy":
                     mc_energy = val
             elif des["base_name"] in self.array_infos:
                 array.append(val)
@@ -338,7 +338,7 @@ class DataForGammaLearn(Transform):
         if len(labels) > 0:
             sample["label"] = np.stack(labels)
         if mc_energy is not None:
-            sample["mc_energy"] = mc_energy
+            sample["true_energy"] = mc_energy
         if len(array) > 0:
             sample["telescope"] = np.stack(array)
         return sample
