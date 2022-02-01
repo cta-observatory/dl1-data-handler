@@ -11,7 +11,6 @@ import math
 import glob
 import numpy as np
 import tables
-import uproot
 from traitlets.config.loader import Config
 import ctapipe
 from ctapipe import io, calib
@@ -179,9 +178,10 @@ class CTAMLDataDumper(DL1DataDumper):
 
         if index_columns is None:
             self.index_columns = [
-                ("/Events", "mc_energy"),
-                ("/Events", "alt"),
-                ("/Events", "az"),
+                ("/Events", "true_energy"),
+                ("/Events", "log_true_energy"),
+                ("/Events", "true_alt"),
+                ("/Events", "true_az"),
                 ("tel", "event_index"),
             ]
         else:
@@ -463,29 +463,21 @@ class CTAMLDataDumper(DL1DataDumper):
         event_row["obs_id"] = event_container.index.obs_id
 
         if event_container.mc:
-            event_row["shower_primary_id"] = event_container.mc.shower_primary_id
-            event_row["core_x"] = event_container.mc.core_x.value
-            event_row["core_y"] = event_container.mc.core_y.value
-            event_row["h_first_int"] = event_container.mc.h_first_int.value
-            event_row["x_max"] = event_container.mc.x_max.value
-            event_row["mc_energy"] = event_container.mc.energy.value
-            event_row["log_mc_energy"] = np.log10(event_container.mc.energy.value)
-            event_row["alt"] = event_container.mc.alt.value
-            event_row["az"] = event_container.mc.az.value
+            event_row["true_shower_primary_id"] = event_container.mc.shower_primary_id
+            event_row["true_core_x"] = event_container.mc.core_x.value
+            event_row["true_core_y"] = event_container.mc.core_y.value
+            event_row["true_h_first_int"] = event_container.mc.h_first_int.value
+            event_row["true_x_max"] = event_container.mc.x_max.value
+            event_row["true_energy"] = event_container.mc.energy.value
+            event_row["log_true_energy"] = np.log10(event_container.mc.energy.value)
+            event_row["true_alt"] = event_container.mc.alt.value
+            event_row["true_az"] = event_container.mc.az.value
             event_row[
                 "array_pointing_alt"
             ] = event_container.pointing.array_altitude.value
             event_row[
                 "array_pointing_az"
             ] = event_container.pointing.array_azimuth.value
-            # North pointing correction
-            delta_alt = event_row["alt"] - event_row["array_pointing_alt"]
-            delta_az = event_row["az"] - event_row["array_pointing_az"]
-            if delta_az > np.pi:
-                delta_az -= 2 * np.pi
-            elif delta_az < -np.pi:
-                delta_az += 2 * np.pi
-            event_row["delta_direction"] = np.array([delta_alt, delta_az], np.float32)
 
         store_event = False
         for tel_type in self.subarray:
@@ -507,7 +499,7 @@ class CTAMLDataDumper(DL1DataDumper):
 
             for tel_id in self.subarray[tel_type]:
                 if tel_id in event_container.dl1.tel:
-                    image_row["charge"] = event_container.dl1.tel[tel_id].image
+                    image_row["image"] = event_container.dl1.tel[tel_id].image
                     image_row["peak_time"] = event_container.dl1.tel[tel_id].peak_time
                     image_row["event_index"] = self.event_index
 
@@ -529,32 +521,33 @@ class CTAMLDataDumper(DL1DataDumper):
                             image_row["image_mask0"] = event_container.dl1.tel[
                                 tel_id
                             ].image_mask
-                            image_row["inv_image_mask0"] = np.invert(
-                                event_container.dl1.tel[tel_id].image_mask
-                            )
 
                             parameter_row["event_index"] = self.event_index
                             parameter_row[
-                                "leakage_intensity_1"
+                                "leakage_intensity_width_1"
                             ] = event_container.dl1.tel[
                                 tel_id
                             ].parameters.leakage.intensity_width_1
                             parameter_row[
-                                "leakage_intensity_2"
+                                "leakage_intensity_width_2"
                             ] = event_container.dl1.tel[
                                 tel_id
                             ].parameters.leakage.intensity_width_2
-                            parameter_row["leakage_pixels_1"] = event_container.dl1.tel[
+                            parameter_row[
+                                "leakage_pixels_width_1"
+                            ] = event_container.dl1.tel[
                                 tel_id
                             ].parameters.leakage.pixels_width_1
-                            parameter_row["leakage_pixels_2"] = event_container.dl1.tel[
+                            parameter_row[
+                                "leakage_pixels_width_2"
+                            ] = event_container.dl1.tel[
                                 tel_id
                             ].parameters.leakage.pixels_width_2
 
                             parameter_row["hillas_intensity"] = event_container.dl1.tel[
                                 tel_id
                             ].parameters.hillas.intensity
-                            parameter_row["hillas_log_intensity"] = np.log10(
+                            parameter_row["log_hillas_intensity"] = np.log10(
                                 event_container.dl1.tel[
                                     tel_id
                                 ].parameters.hillas.intensity
@@ -667,9 +660,6 @@ class CTAMLDataDumper(DL1DataDumper):
                             image_row[
                                 "image_mask" + str(index_parameters_table)
                             ] = cleanmask
-                            image_row[
-                                "inv_image_mask" + str(index_parameters_table)
-                            ] = np.invert(cleanmask)
 
                             leakage_values = containers.LeakageContainer()
                             hillas_parameters_values = (
@@ -714,16 +704,16 @@ class CTAMLDataDumper(DL1DataDumper):
                                 )
 
                             # leakage
-                            parameter_row["leakage_intensity_1"] = leakage_values[
+                            parameter_row["leakage_intensity_width_1"] = leakage_values[
                                 "intensity_width_1"
                             ]
-                            parameter_row["leakage_intensity_2"] = leakage_values[
+                            parameter_row["leakage_intensity_width_2"] = leakage_values[
                                 "intensity_width_2"
                             ]
-                            parameter_row["leakage_pixels_1"] = leakage_values[
+                            parameter_row["leakage_pixels_width_1"] = leakage_values[
                                 "pixels_width_1"
                             ]
-                            parameter_row["leakage_pixels_2"] = leakage_values[
+                            parameter_row["leakage_pixels_width_2"] = leakage_values[
                                 "pixels_width_2"
                             ]
 
@@ -731,7 +721,7 @@ class CTAMLDataDumper(DL1DataDumper):
                             parameter_row[
                                 "hillas_intensity"
                             ] = hillas_parameters_values["intensity"]
-                            parameter_row["hillas_log_intensity"] = np.log10(
+                            parameter_row["log_hillas_intensity"] = np.log10(
                                 hillas_parameters_values["intensity"]
                             )
                             parameter_row["hillas_x"] = hillas_parameters_values[
@@ -834,22 +824,23 @@ class CTAMLDataDumper(DL1DataDumper):
 
         event_row["event_id"] = eventio_mc_event["event_id"]
         event_row["obs_id"] = obs_id
-        event_row["shower_primary_id"] = eventio_mc_event["mc_shower"]["primary_id"]
-        event_row["core_x"] = eventio_mc_event["mc_event"]["xcore"]
-        event_row["core_y"] = eventio_mc_event["mc_event"]["ycore"]
-        event_row["h_first_int"] = eventio_mc_event["mc_shower"]["h_first_int"]
-        event_row["x_max"] = eventio_mc_event["mc_shower"]["xmax"]
-        event_row["mc_energy"] = eventio_mc_event["mc_shower"]["energy"]
-        event_row["log_mc_energy"] = eventio_mc_event["mc_shower"]["log_mc_energy"]
-        event_row["alt"] = eventio_mc_event["mc_shower"]["altitude"]
-        event_row["az"] = eventio_mc_event["mc_shower"]["azimuth"]
+        event_row["true_shower_primary_id"] = eventio_mc_event["mc_shower"][
+            "primary_id"
+        ]
+        event_row["true_core_x"] = eventio_mc_event["mc_event"]["xcore"]
+        event_row["true_core_y"] = eventio_mc_event["mc_event"]["ycore"]
+        event_row["true_h_first_int"] = eventio_mc_event["mc_shower"]["h_first_int"]
+        event_row["true_x_max"] = eventio_mc_event["mc_shower"]["xmax"]
+        event_row["true_energy"] = eventio_mc_event["mc_shower"]["energy"]
+        event_row["log_true_energy"] = eventio_mc_event["mc_shower"]["log_mc_energy"]
+        event_row["true_alt"] = eventio_mc_event["mc_shower"]["altitude"]
+        event_row["true_az"] = eventio_mc_event["mc_shower"]["azimuth"]
         event_row["array_pointing_alt"] = eventio_mc_event["mc_shower"][
             "array_pointing_alt"
         ]
         event_row["array_pointing_az"] = eventio_mc_event["mc_shower"][
             "array_pointing_az"
         ]
-        event_row["delta_direction"] = event_row["delta_direction"]
 
         event_row.append()
 
@@ -897,16 +888,13 @@ class CTAMLDataDumper(DL1DataDumper):
 
                 columns_dict = {
                     "event_index": tables.Int32Col(),
-                    "charge": tables.Float32Col(shape=image_shape),
+                    "image": tables.Float32Col(shape=image_shape),
                     "peak_time": tables.Float32Col(shape=image_shape),
                 }
 
                 for index_parameters_table in range(0, len(self.cleaning_settings) + 1):
                     columns_dict[
                         "image_mask" + str(index_parameters_table)
-                    ] = tables.BoolCol(shape=image_shape)
-                    columns_dict[
-                        "inv_image_mask" + str(index_parameters_table)
                     ] = tables.BoolCol(shape=image_shape)
 
                 description = type("description", (tables.IsDescription,), columns_dict)
@@ -931,14 +919,11 @@ class CTAMLDataDumper(DL1DataDumper):
                 # Place blank image at index 0 of all image tables
                 image_row = image_table.row
 
-                image_row["charge"] = np.zeros(image_shape, dtype=np.float32)
+                image_row["image"] = np.zeros(image_shape, dtype=np.float32)
                 image_row["event_index"] = -1
                 image_row["peak_time"] = np.zeros(image_shape, dtype=np.float32)
                 for index_parameters_table in range(0, len(self.cleaning_settings) + 1):
                     image_row["image_mask" + str(index_parameters_table)] = np.zeros(
-                        image_shape, dtype=np.bool_
-                    )
-                    image_row["inv_image_mask" + str(index_parameters_table)] = np.ones(
                         image_shape, dtype=np.bool_
                     )
                 image_row.append()
@@ -1000,13 +985,13 @@ class CTAMLDataDumper(DL1DataDumper):
 
                 parameter_row["event_index"] = -1
 
-                parameter_row["leakage_intensity_1"] = np.float32(np.nan)
-                parameter_row["leakage_intensity_2"] = np.float32(np.nan)
-                parameter_row["leakage_pixels_1"] = np.float32(np.nan)
-                parameter_row["leakage_pixels_2"] = np.float32(np.nan)
+                parameter_row["leakage_intensity_width_1"] = np.float32(np.nan)
+                parameter_row["leakage_intensity_width_2"] = np.float32(np.nan)
+                parameter_row["leakage_pixels_width_1"] = np.float32(np.nan)
+                parameter_row["leakage_pixels_width_2"] = np.float32(np.nan)
 
                 parameter_row["hillas_intensity"] = np.float32(np.nan)
-                parameter_row["hillas_log_intensity"] = np.float32(np.nan)
+                parameter_row["log_hillas_intensity"] = np.float32(np.nan)
                 parameter_row["hillas_x"] = np.float32(np.nan)
                 parameter_row["hillas_y"] = np.float32(np.nan)
                 parameter_row["hillas_r"] = np.float32(np.nan)
@@ -1388,11 +1373,12 @@ class DL1DataWriter:
         data_dumper = self.data_dumper_class(
             output_filename, **self.data_dumper_settings
         )
-        filetype = "root"
-        try:
-            uproot.open(glob.glob(file_list[0])[0])
-        except ValueError:
-            # uproot raises ValueError if the file is not a ROOT file
+
+        if file_list[0].endswith("root"):
+            import uproot
+
+            filetype = "root"
+        else:
             filetype = "simtel"
 
         for filename in file_list:
