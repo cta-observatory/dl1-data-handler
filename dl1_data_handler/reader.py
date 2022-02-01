@@ -230,6 +230,76 @@ class DL1DataReader:
             )
         return
 
+    def _construct_simulated_info(self, file, simulation_info, file_type="stage1"):
+        """
+        Construct the simulated_info from the DL1 hdf5 file for the pyIRF SimulatedEventsInfo table & GammaBoard.
+        Parameters
+        ----------
+            file (hdf5 file): file containing the simulation information
+            file_type (string): type of file (Valid option: 'stage1' or 'dl1dh')
+            simulation_info (dict): dictionary of pyIRF simulation info
+
+        Returns
+        -------
+        simulation_info (dict): updated dictionary of pyIRF simulation info
+
+        """
+
+        if file_type == "stage1":
+            simulation_table = file.root.configuration.simulation
+            runs = simulation_table._f_get_child("run")
+            shower_reuse = max(np.array(runs.cols._f_col("shower_reuse")))
+            num_showers = sum(np.array(runs.cols._f_col("num_showers"))) * shower_reuse
+            if "service" in file.root.simulation:
+                service_table = file.root.simulation.service
+                shower_distributions = service_table._f_get_child("shower_distribution")
+                num_showers = np.sum(
+                    np.array(shower_distributions.cols._f_col("histogram"))
+                )
+            energy_range_min = min(np.array(runs.cols._f_col("energy_range_min")))
+            energy_range_max = max(np.array(runs.cols._f_col("energy_range_max")))
+            max_scatter_range = max(np.array(runs.cols._f_col("max_scatter_range")))
+            spectral_index = np.array(runs.cols._f_col("spectral_index"))[0]
+            max_viewcone_radius = max(np.array(runs.cols._f_col("max_viewcone_radius")))
+            min_alt = min(np.array(runs.cols._f_col("min_alt")))
+            max_alt = max(np.array(runs.cols._f_col("max_alt")))
+        elif file_type == "dl1dh":
+            num_showers = file.root._v_attrs["num_showers"]
+            energy_range_min = file.root._v_attrs["energy_range_min"]
+            energy_range_max = file.root._v_attrs["energy_range_max"]
+            max_scatter_range = file.root._v_attrs["max_scatter_range"]
+            spectral_index = file.root._v_attrs["spectral_index"]
+            max_viewcone_radius = file.root._v_attrs["max_viewcone_radius"]
+            min_alt = file.root._v_attrs["min_alt"]
+            max_alt = file.root._v_attrs["max_alt"]
+
+        if simulation_info:
+            simulation_info["num_showers"] += num_showers
+            if simulation_info["energy_range_min"] > energy_range_min:
+                simulation_info["energy_range_min"] = energy_range_min
+            if simulation_info["energy_range_max"] < energy_range_max:
+                simulation_info["energy_range_max"] = energy_range_max
+            if simulation_info["max_scatter_range"] < max_scatter_range:
+                simulation_info["max_scatter_range"] = max_scatter_range
+            if simulation_info["max_viewcone_radius"] < max_viewcone_radius:
+                simulation_info["max_viewcone_radius"] = max_viewcone_radius
+            if simulation_info["min_alt"] > min_alt:
+                simulation_info["min_alt"] = min_alt
+            if simulation_info["max_alt"] < max_alt:
+                simulation_info["max_alt"] = max_alt
+        else:
+            simulation_info = {}
+            simulation_info["num_showers"] = num_showers
+            simulation_info["energy_range_min"] = energy_range_min
+            simulation_info["energy_range_max"] = energy_range_max
+            simulation_info["max_scatter_range"] = max_scatter_range
+            simulation_info["spectral_index"] = spectral_index
+            simulation_info["max_viewcone_radius"] = max_viewcone_radius
+            simulation_info["min_alt"] = min_alt
+            simulation_info["max_alt"] = max_alt
+
+        return simulation_info
+
     # Get a single telescope image from a particular event, uniquely
     # identified by the filename, tel_type, and image table index.
     # First extract a raw 1D vector and transform it into a 2D image using a
@@ -250,20 +320,21 @@ class DL1DataReader:
             with lock:
                 record = child[image_index]
                 for i, channel in enumerate(self.image_channels):
-                    if channel == "image_mask":
+                    if "clean" in channel or "mask" in channel:
+                        cleaning_mask = "image_mask"
                         if parameter_table >= 0:
-                            vector[:, i] = (
-                                record["charge"]
-                                * record[channel + str(parameter_table)]
-                            )
-                        else:
-                            vector[:, i] = record["image"] * record[channel]
+                            cleaning_mask += str(parameter_table)
+                        if "image" in channel:
+                            vector[:, i] = record["image"] * record[cleaning_mask]
+                        if "time" in channel:
+                            vector[:, i] = record["peak_time"] * record[cleaning_mask]
                     else:
                         vector[:, i] = record[channel]
+
                     # Apply the transform to recover orginal floating point values if the file were compressed
-                    if channel in ["image", "image_mask"] and self.image_scale:
+                    if "image" in channel and self.image_scale:
                         vector[:, i] /= self.image_scale
-                    if channel == "peak_time" and self.peak_time_scale:
+                    if "time" in channel and self.image_scale:
                         vector[:, i] /= self.peak_time_scale
 
         # If 'indexed_conv' is selected, we only need the unmapped vector.
@@ -296,7 +367,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         selected_telescope_types=None,
         selected_telescope_ids=None,
         multiplicity_selection=None,
-        event_selection=None,
+        parameter_selection=None,
         shuffle=False,
         seed=None,
         image_channels=None,
@@ -420,8 +491,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
                 # Read simulation information from each observation needed for pyIRF
                 if self.event_info:
-                    self.simulation_info = self._construct_simulated_info(
-                        f, self.simulation_info
+                    self.simulation_info = super()._construct_simulated_info(
+                        f, self.simulation_info, file_type="stage1"
                     )
                 # Teslecope selection
                 (
@@ -502,8 +573,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
                     # MC event selection based on the shower simulation table
                     # and image and parameter selection based on the parameter tables
-                    if event_selection:
-                        for filter in event_selection:
+                    if parameter_selection:
+                        for filter in parameter_selection:
                             if "min_value" in filter:
                                 allevents = allevents[
                                     allevents[filter["col_name"]] >= filter["min_value"]
@@ -554,8 +625,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     )
 
                     # MC event selection based on the shower simulation table.
-                    if event_selection:
-                        for filter in event_selection:
+                    if parameter_selection:
+                        for filter in parameter_selection:
                             if "min_value" in filter:
                                 allevents = allevents[
                                     allevents[filter["col_name"]] >= filter["min_value"]
@@ -921,64 +992,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 selected_telescopes[tel_type] = available_tel_ids
 
         return telescopes, selected_telescopes, camera2index
-
-    def _construct_simulated_info(self, file, simulation_info):
-        """
-        Construct the simulated_info from the DL1 hdf5 file for the pyIRF SimulatedEventsInfo table & GammaBoard.
-        Parameters
-        ----------
-            hdf5 (file): file containing the simulation information
-            simulation_info (dict): dictionary of pyIRF simulation info
-
-        Returns
-        -------
-        simulation_info (dict): updated dictionary of pyIRF simulation info
-
-        """
-
-        simulation_table = file.root.configuration.simulation
-        runs = simulation_table._f_get_child("run")
-        shower_reuse = max(np.array(runs.cols._f_col("shower_reuse")))
-        num_showers = sum(np.array(runs.cols._f_col("num_showers"))) * shower_reuse
-        if "service" in file.root.simulation:
-            service_table = file.root.simulation.service
-            shower_distributions = service_table._f_get_child("shower_distribution")
-            num_showers = np.sum(
-                np.array(shower_distributions.cols._f_col("histogram"))
-            )
-        energy_range_min = min(np.array(runs.cols._f_col("energy_range_min")))
-        energy_range_max = max(np.array(runs.cols._f_col("energy_range_max")))
-        max_scatter_range = max(np.array(runs.cols._f_col("max_scatter_range")))
-        spectral_index = np.array(runs.cols._f_col("spectral_index"))[0]
-        max_viewcone_radius = max(np.array(runs.cols._f_col("max_viewcone_radius")))
-        min_alt = min(np.array(runs.cols._f_col("min_alt")))
-        max_alt = max(np.array(runs.cols._f_col("max_alt")))
-        if simulation_info:
-            simulation_info["num_showers"] += num_showers
-            if simulation_info["energy_range_min"] > energy_range_min:
-                simulation_info["energy_range_min"] = energy_range_min
-            if simulation_info["energy_range_max"] < energy_range_max:
-                simulation_info["energy_range_max"] = energy_range_max
-            if simulation_info["max_scatter_range"] < max_scatter_range:
-                simulation_info["max_scatter_range"] = max_scatter_range
-            if simulation_info["max_viewcone_radius"] < max_viewcone_radius:
-                simulation_info["max_viewcone_radius"] = max_viewcone_radius
-            if simulation_info["min_alt"] > min_alt:
-                simulation_info["min_alt"] = min_alt
-            if simulation_info["max_alt"] < max_alt:
-                simulation_info["max_alt"] = max_alt
-        else:
-            simulation_info = {}
-            simulation_info["num_showers"] = num_showers
-            simulation_info["energy_range_min"] = energy_range_min
-            simulation_info["energy_range_max"] = energy_range_max
-            simulation_info["max_scatter_range"] = max_scatter_range
-            simulation_info["spectral_index"] = spectral_index
-            simulation_info["max_viewcone_radius"] = max_viewcone_radius
-            simulation_info["min_alt"] = min_alt
-            simulation_info["max_alt"] = max_alt
-
-        return simulation_info
 
     def _construct_pixel_positions(self, telescope_type_information):
         """
@@ -1390,8 +1403,8 @@ class DL1DataReaderDL1DH(DL1DataReader):
             for file_idx, (filename, f) in enumerate(self.files.items()):
 
                 if self.event_info:
-                    self.simulation_info = self._construct_simulated_info(
-                        f.root._v_attrs, self.simulation_info
+                    self.simulation_info = super()._construct_simulated_info(
+                        f, self.simulation_info, file_type="dl1dh"
                     )
 
                 # Teslecope selection
@@ -1446,7 +1459,7 @@ class DL1DataReaderDL1DH(DL1DataReader):
 
                         # TODO handle all selected channels
                         mask[mask] &= self._select_image(
-                            f.root["Images"][self.tel_type][img_ids[mask]]["charge"],
+                            f.root["Images"][self.tel_type][img_ids[mask]]["image"],
                             image_selection,
                         )
                         for image_index, nrow in zip(
@@ -1457,9 +1470,9 @@ class DL1DataReaderDL1DH(DL1DataReader):
                             )
 
                 # Track number of events for each particle type
-                true_shower_primary_id = f.root.Events.cols._f_col("shower_primary_id")[
-                    0
-                ]
+                true_shower_primary_id = f.root.Events.cols._f_col(
+                    "true_shower_primary_id"
+                )[0]
                 self.simulated_particles["total"] += len(example_identifiers)
                 if true_shower_primary_id in self.simulated_particles:
                     self.simulated_particles[true_shower_primary_id] += len(
@@ -1628,55 +1641,6 @@ class DL1DataReaderDL1DH(DL1DataReader):
                 selected_telescopes[tel_type] = available_tel_ids
 
         return telescopes, selected_telescopes, cut_condition
-
-    def _construct_simulated_info(self, file_v_attrs, simulation_info):
-        """
-        Construct the simulated_info from the DL1 hdf5 file for the pyIRF SimulatedEventsInfo table & GammaBoard.
-        Parameters
-        ----------
-            file_v_attrs (tables.Tables): attributes of the file containing the simulation information
-            simulation_info (dict): dictionary of pyIRF simulation info
-
-        Returns
-        -------
-        simulation_info (dict): updated dictionary of pyIRF simulation info
-
-        """
-
-        num_showers = file_v_attrs["num_simulated_showers"]
-        energy_range_min = file_v_attrs["energy_range_min"]
-        energy_range_max = file_v_attrs["energy_range_max"]
-        max_scatter_range = file_v_attrs["impact_max"]
-        spectral_index = file_v_attrs["slope_spec"]
-        max_viewcone_radius = file_v_attrs["rand_pointing_cone_semi_angle"]
-        min_alt = 90 - file_v_attrs["shower_theta_max"]
-        max_alt = 90 - file_v_attrs["shower_theta_min"]
-        if simulation_info:
-            simulation_info["num_showers"] += num_showers
-            if simulation_info["energy_range_min"] > energy_range_min:
-                simulation_info["energy_range_min"] = energy_range_min
-            if simulation_info["energy_range_max"] < energy_range_max:
-                simulation_info["energy_range_max"] = energy_range_max
-            if simulation_info["max_scatter_range"] < max_scatter_range:
-                simulation_info["max_scatter_range"] = max_scatter_range
-            if simulation_info["max_viewcone_radius"] < max_viewcone_radius:
-                simulation_info["max_viewcone_radius"] = max_viewcone_radius
-            if simulation_info["min_alt"] > min_alt:
-                simulation_info["min_alt"] = min_alt
-            if simulation_info["max_alt"] < max_alt:
-                simulation_info["max_alt"] = max_alt
-        else:
-            simulation_info = {}
-            simulation_info["num_showers"] = num_showers
-            simulation_info["energy_range_min"] = energy_range_min
-            simulation_info["energy_range_max"] = energy_range_max
-            simulation_info["max_scatter_range"] = max_scatter_range
-            simulation_info["spectral_index"] = spectral_index
-            simulation_info["max_viewcone_radius"] = max_viewcone_radius
-            simulation_info["min_alt"] = min_alt
-            simulation_info["max_alt"] = max_alt
-
-        return simulation_info
 
     def _construct_pixel_positions(self, telescope_type_information):
         """
