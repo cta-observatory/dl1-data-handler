@@ -94,8 +94,9 @@ def main():
                      of the MAGIC-MARS superstar files, respectively."
         )
     )
+    parser.add_argument("--input_dir", "-i", help="input directory", default="./")
     parser.add_argument(
-        "file_dir", help=("path to directory containing all simtel files")
+        "--pattern", "-p", help="pattern to mask unwanted files", default="*"
     )
     parser.add_argument(
         "--num_inputs_per_run",
@@ -120,13 +121,9 @@ def main():
     runlist = []
     dl_runlist = []
 
-    abs_file_dir = os.path.abspath(args.file_dir)
-    filenames = glob.glob(os.path.join(abs_file_dir, "*.simtel.gz"))
-    filename_type = "simtel"
-    if filenames == []:
-        filenames = glob.glob(os.path.join(abs_file_dir, "*.root"))
-        filename_type = "root"
-
+    abs_file_dir = os.path.abspath(args.input_dir)
+    filenames = glob.glob(os.path.join(abs_file_dir, args.pattern))
+    filename_type = filenames[0].split(".")[-1]
     filename_groups = {}
 
     output_dir = (

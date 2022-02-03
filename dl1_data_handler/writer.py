@@ -11,6 +11,7 @@ import math
 import glob
 import numpy as np
 import tables
+import uproot
 from traitlets.config.loader import Config
 import ctapipe
 from ctapipe import io, calib
@@ -179,9 +180,8 @@ class CTAMLDataDumper(DL1DataDumper):
         if index_columns is None:
             self.index_columns = [
                 ("/Events", "true_energy"),
-                ("/Events", "log_true_energy"),
-                ("/Events", "true_alt"),
-                ("/Events", "true_az"),
+                ("/Events", "src_pos_cam_y"),
+                ("/Events", "src_pos_cam_x"),
                 ("tel", "event_index"),
             ]
         else:
@@ -193,6 +193,7 @@ class CTAMLDataDumper(DL1DataDumper):
         self.event_index = 0
         self.image_indices = {}
 
+        self.mc = True
         self.save_mc_events = save_mc_events
 
         self.cleaning_settings = cleaning_settings if cleaning_settings else {}
@@ -461,23 +462,23 @@ class CTAMLDataDumper(DL1DataDumper):
         event_row = self.file.root.Events.row
         event_row["event_id"] = event_container.index.event_id
         event_row["obs_id"] = event_container.index.obs_id
+        event_row["true_shower_primary_id"] = event_container.mc.shower_primary_id
+        event_row["src_pos_cam_y"] = event_container.mc.alt.value
+        event_row["src_pos_cam_x"] = event_container.mc.az.value
+        event_row["array_pointing_alt"] = event_container.pointing.array_altitude.value
+        event_row["array_pointing_az"] = event_container.pointing.array_azimuth.value
 
-        if event_container.mc:
-            event_row["true_shower_primary_id"] = event_container.mc.shower_primary_id
+        if self.mc:
             event_row["true_core_x"] = event_container.mc.core_x.value
             event_row["true_core_y"] = event_container.mc.core_y.value
             event_row["true_h_first_int"] = event_container.mc.h_first_int.value
             event_row["true_x_max"] = event_container.mc.x_max.value
             event_row["true_energy"] = event_container.mc.energy.value
             event_row["log_true_energy"] = np.log10(event_container.mc.energy.value)
-            event_row["true_alt"] = event_container.mc.alt.value
-            event_row["true_az"] = event_container.mc.az.value
-            event_row[
-                "array_pointing_alt"
-            ] = event_container.pointing.array_altitude.value
-            event_row[
-                "array_pointing_az"
-            ] = event_container.pointing.array_azimuth.value
+        else:
+            event_row["mjd"] = event_container.mc.core_x.value
+            event_row["milli_sec"] = event_container.mc.core_y.value
+            event_row["nano_sec"] = event_container.mc.energy.value
 
         store_event = False
         for tel_type in self.subarray:
@@ -533,16 +534,6 @@ class CTAMLDataDumper(DL1DataDumper):
                             ] = event_container.dl1.tel[
                                 tel_id
                             ].parameters.leakage.intensity_width_2
-                            parameter_row[
-                                "leakage_pixels_width_1"
-                            ] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.leakage.pixels_width_1
-                            parameter_row[
-                                "leakage_pixels_width_2"
-                            ] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.leakage.pixels_width_2
 
                             parameter_row["hillas_intensity"] = event_container.dl1.tel[
                                 tel_id
@@ -576,69 +567,140 @@ class CTAMLDataDumper(DL1DataDumper):
                             parameter_row["hillas_skewness"] = event_container.dl1.tel[
                                 tel_id
                             ].parameters.hillas.skewness
-                            parameter_row["hillas_kurtosis"] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.hillas.kurtosis
 
-                            parameter_row[
-                                "concentration_cog"
-                            ] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.concentration.cog
-                            parameter_row[
-                                "concentration_core"
-                            ] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.concentration.core
-                            parameter_row[
-                                "concentration_pixel"
-                            ] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.concentration.pixel
-
-                            parameter_row["timing_slope"] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.timing.slope.value
-                            parameter_row["timing_slope_err"] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.timing.slope_err.value
-                            parameter_row["timing_intercept"] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.timing.intercept
-                            parameter_row[
-                                "timing_intercept_err"
-                            ] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.timing.intercept_err
-                            parameter_row["timing_deviation"] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.timing.deviation
-
-                            parameter_row[
-                                "morphology_num_pixels"
-                            ] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.morphology.num_pixels
                             parameter_row[
                                 "morphology_num_islands"
                             ] = event_container.dl1.tel[
                                 tel_id
                             ].parameters.morphology.num_islands
-                            parameter_row[
-                                "morphology_num_small_islands"
-                            ] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.morphology.num_small_islands
-                            parameter_row[
-                                "morphology_num_medium_islands"
-                            ] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.morphology.num_medium_islands
-                            parameter_row[
-                                "morphology_num_large_islands"
-                            ] = event_container.dl1.tel[
-                                tel_id
-                            ].parameters.morphology.num_large_islands
+
+                            if str(tel_type) == "LST_MAGIC_MAGICCam":
+                                parameter_row["maxheight"] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.concentration.cog
+                                parameter_row["log_maxheight"] = np.log10(
+                                    event_container.dl1.tel[
+                                        tel_id
+                                    ].parameters.concentration.cog
+                                )
+                                parameter_row["impact"] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.concentration.core
+                                parameter_row["log_impact"] = np.log10(
+                                    event_container.dl1.tel[
+                                        tel_id
+                                    ].parameters.concentration.core
+                                )
+
+                                parameter_row[
+                                    "cherenkovdensity"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.timing.intercept
+
+                                parameter_row[
+                                    "log_hillasintensity_over_cherenkovdensity"
+                                ] = np.log10(
+                                    parameter_row["hillas_intensity"]
+                                    / parameter_row["cherenkovdensity"]
+                                )
+
+                                parameter_row[
+                                    "cherenkovradius"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.timing.intercept_err
+
+                                parameter_row["impact_over_cherenkovradius"] = (
+                                    parameter_row["impact"]
+                                    / parameter_row["cherenkovradius"]
+                                )
+
+                                parameter_row["p1grad"] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.timing.deviation
+
+                                parameter_row["sqrt_p1grad_p1grad"] = np.sqrt(
+                                    parameter_row["p1grad"] * parameter_row["p1grad"]
+                                )
+
+                            else:
+
+                                parameter_row[
+                                    "leakage_pixels_width_1"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.leakage.pixels_width_1
+                                parameter_row[
+                                    "leakage_pixels_width_2"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.leakage.pixels_width_2
+                                parameter_row[
+                                    "hillas_kurtosis"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.hillas.kurtosis
+                                parameter_row[
+                                    "concentration_cog"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.concentration.cog
+                                parameter_row[
+                                    "concentration_core"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.concentration.core
+                                parameter_row[
+                                    "concentration_pixel"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.concentration.pixel
+
+                                parameter_row["timing_slope"] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.timing.slope.value
+                                parameter_row[
+                                    "timing_slope_err"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.timing.slope_err.value
+                                parameter_row[
+                                    "timing_intercept"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.timing.intercept
+                                parameter_row[
+                                    "timing_intercept_err"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.timing.intercept_err
+                                parameter_row[
+                                    "timing_deviation"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.timing.deviation
+
+                                parameter_row[
+                                    "morphology_num_pixels"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.morphology.num_pixels
+                                parameter_row[
+                                    "morphology_num_small_islands"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.morphology.num_small_islands
+                                parameter_row[
+                                    "morphology_num_medium_islands"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.morphology.num_medium_islands
+                                parameter_row[
+                                    "morphology_num_large_islands"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.morphology.num_large_islands
 
                         else:
 
@@ -833,8 +895,8 @@ class CTAMLDataDumper(DL1DataDumper):
         event_row["true_x_max"] = eventio_mc_event["mc_shower"]["xmax"]
         event_row["true_energy"] = eventio_mc_event["mc_shower"]["energy"]
         event_row["log_true_energy"] = eventio_mc_event["mc_shower"]["log_mc_energy"]
-        event_row["true_alt"] = eventio_mc_event["mc_shower"]["altitude"]
-        event_row["true_az"] = eventio_mc_event["mc_shower"]["azimuth"]
+        event_row["src_pos_cam_y"] = eventio_mc_event["mc_shower"]["altitude"]
+        event_row["src_pos_cam_x"] = eventio_mc_event["mc_shower"]["azimuth"]
         event_row["array_pointing_alt"] = eventio_mc_event["mc_shower"][
             "array_pointing_alt"
         ]
@@ -846,7 +908,10 @@ class CTAMLDataDumper(DL1DataDumper):
 
     def _create_event_table(self, subarray):
         # Create event table
-        event_table_desc = table_defs.EventTableRow
+        if self.mc:
+            event_table_desc = table_defs.MCEventTableRow
+        else:
+            event_table_desc = table_defs.DataEventTableRow
 
         if self.save_mc_events:
             mc_event_table = self.file.create_table(
@@ -952,10 +1017,15 @@ class CTAMLDataDumper(DL1DataDumper):
                     expected_rows = self.DEFAULT_IMGS_PER_EVENT * self.expected_events
 
                 if index_parameters_table == 0:
+                    if tel_name == "LST_MAGIC_MAGICCam":
+                        parameter_table_def = table_defs.MAGICParametersTableRow
+                    else:
+                        parameter_table_def = (table_defs.ParametersTableRow,)
+
                     parameter_table = self.file.create_table(
                         parameter_table_number,
                         tel_name,
-                        table_defs.ParametersTableRow,
+                        parameter_table_def,
                         "Parameter table of {} parameters, algorithm: {}, args: {}".format(
                             tel_name,
                             cleaning_main_algorithm_metadata["algorithm"],
@@ -987,8 +1057,6 @@ class CTAMLDataDumper(DL1DataDumper):
 
                 parameter_row["leakage_intensity_width_1"] = np.float32(np.nan)
                 parameter_row["leakage_intensity_width_2"] = np.float32(np.nan)
-                parameter_row["leakage_pixels_width_1"] = np.float32(np.nan)
-                parameter_row["leakage_pixels_width_2"] = np.float32(np.nan)
 
                 parameter_row["hillas_intensity"] = np.float32(np.nan)
                 parameter_row["log_hillas_intensity"] = np.float32(np.nan)
@@ -1000,23 +1068,45 @@ class CTAMLDataDumper(DL1DataDumper):
                 parameter_row["hillas_width"] = np.float32(np.nan)
                 parameter_row["hillas_psi"] = np.float32(np.nan)
                 parameter_row["hillas_skewness"] = np.float32(np.nan)
-                parameter_row["hillas_kurtosis"] = np.float32(np.nan)
 
-                parameter_row["concentration_cog"] = np.float32(np.nan)
-                parameter_row["concentration_core"] = np.float32(np.nan)
-                parameter_row["concentration_pixel"] = np.float32(np.nan)
-
-                parameter_row["timing_slope"] = np.float32(np.nan)
-                parameter_row["timing_slope_err"] = np.float32(np.nan)
-                parameter_row["timing_intercept"] = np.float32(np.nan)
-                parameter_row["timing_intercept_err"] = np.float32(np.nan)
-                parameter_row["timing_deviation"] = np.float32(np.nan)
-
-                parameter_row["morphology_num_pixels"] = -1
                 parameter_row["morphology_num_islands"] = -1
-                parameter_row["morphology_num_small_islands"] = -1
-                parameter_row["morphology_num_medium_islands"] = -1
-                parameter_row["morphology_num_large_islands"] = -1
+
+                if index_parameters_table == 0 and tel_name == "LST_MAGIC_MAGICCam":
+
+                    parameter_row["maxheight"] = np.float32(np.nan)
+                    parameter_row["log_maxheight"] = np.float32(np.nan)
+                    parameter_row["impact"] = np.float32(np.nan)
+                    parameter_row["log_impact"] = np.float32(np.nan)
+                    parameter_row["cherenkovdensity"] = np.float32(np.nan)
+                    parameter_row[
+                        "log_hillasintensity_over_cherenkovdensity"
+                    ] = np.float32(np.nan)
+                    parameter_row["cherenkovradius"] = np.float32(np.nan)
+                    parameter_row["impact_over_cherenkovradius"] = np.float32(np.nan)
+
+                    parameter_row["p1grad"] = np.float32(np.nan)
+                    parameter_row["sqrt_p1grad_p1grad"] = np.float32(np.nan)
+
+                else:
+                    parameter_row["leakage_pixels_width_1"] = np.float32(np.nan)
+                    parameter_row["leakage_pixels_width_2"] = np.float32(np.nan)
+
+                    parameter_row["hillas_kurtosis"] = np.float32(np.nan)
+
+                    parameter_row["concentration_cog"] = np.float32(np.nan)
+                    parameter_row["concentration_core"] = np.float32(np.nan)
+                    parameter_row["concentration_pixel"] = np.float32(np.nan)
+
+                    parameter_row["timing_slope"] = np.float32(np.nan)
+                    parameter_row["timing_slope_err"] = np.float32(np.nan)
+                    parameter_row["timing_intercept"] = np.float32(np.nan)
+                    parameter_row["timing_intercept_err"] = np.float32(np.nan)
+                    parameter_row["timing_deviation"] = np.float32(np.nan)
+
+                    parameter_row["morphology_num_pixels"] = -1
+                    parameter_row["morphology_num_small_islands"] = -1
+                    parameter_row["morphology_num_medium_islands"] = -1
+                    parameter_row["morphology_num_large_islands"] = -1
 
                 parameter_row.append()
                 parameter_table.flush()
@@ -1373,12 +1463,11 @@ class DL1DataWriter:
         data_dumper = self.data_dumper_class(
             output_filename, **self.data_dumper_settings
         )
-
-        if file_list[0].endswith("root"):
-            import uproot
-
-            filetype = "root"
-        else:
+        filetype = "root"
+        try:
+            uproot.open(glob.glob(file_list[0])[0])
+        except ValueError:
+            # uproot raises ValueError if the file is not a ROOT file
             filetype = "simtel"
 
         for filename in file_list:
@@ -1392,6 +1481,9 @@ class DL1DataWriter:
                 event_source = io.eventsource.EventSource.from_url(
                     filename, back_seekable=True
                 )
+
+            # Tell the dumper if the event_source contains MCs or real data
+            data_dumper.mc = event_source.mc
 
             # Write all file-level data if not present
             # Or compare to existing data if already in file

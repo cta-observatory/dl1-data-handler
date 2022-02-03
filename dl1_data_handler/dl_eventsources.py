@@ -259,15 +259,19 @@ class DLMAGICEventSource(EventSource):
             h_first_int = np.asarray(self.calib_M1["MMcEvt.fZFirstInteraction"].array())
 
             # Reading data from root file for Image table
-            charge_M1 = np.asarray(self.calib_M1["MCerPhotEvt.fPixels.fPhot"].array())
+            charge_M1 = np.asarray(self.calib_M1["UprootImageOrig"].array())
+            for i, charge in enumerate(charge_M1):
+                charge_M1[i] = np.array(charge)
             peak_time_M1 = np.asarray(self.calib_M1["MArrivalTime.fData"].array())
-            image_mask_M1 = np.asarray(self.calib_M1["CleanCharge"].array())
+            image_mask_M1 = np.asarray(self.calib_M1["UprootImageOrigClean"].array())
             for i, mask in enumerate(image_mask_M1):
                 image_mask_M1[i] = np.array(mask) != 0
 
-            charge_M2 = np.asarray(self.calib_M2["MCerPhotEvt.fPixels.fPhot"].array())
+            charge_M2 = np.asarray(self.calib_M2["UprootImageOrig"].array())
+            for i, charge in enumerate(charge_M2):
+                charge_M2[i] = np.array(charge)
             peak_time_M2 = np.asarray(self.calib_M2["MArrivalTime.fData"].array())
-            image_mask_M2 = np.asarray(self.calib_M2["CleanCharge"].array())
+            image_mask_M2 = np.asarray(self.calib_M2["UprootImageOrigClean"].array())
             for i, mask in enumerate(image_mask_M2):
                 image_mask_M2[i] = np.array(mask) != 0
 
@@ -288,6 +292,24 @@ class DLMAGICEventSource(EventSource):
                 h_first_int = np.asarray(
                     self.superstar["MMcEvt_1.fZFirstInteraction"].array()
                 )
+            else:
+                core_x = np.asarray(self.superstar["MTime_1.fMjd"].array())
+                core_y = np.asarray(self.superstar["MTime_1.fTime.fMilliSec"].array())
+                # core_y = (
+                #    np.asarray(self.superstar["MTime_1.fTime.fMilliSec"].array())
+                #    / 1000.0
+                #    / 3600.0
+                #    / 24.0
+                # )
+                mc_energy = np.asarray(self.superstar["MTime_1.fNanoSec"].array())
+                # mc_energy = (
+                #    np.asarray(self.superstar["MTime_1.fNanoSec"].array())
+                #    / 1e9
+                #    / 3600.0
+                #    / 24.0
+                # )
+                src_pos_cam_Y = np.asarray(self.superstar["MSrcPosCam_1.fY"].array())
+                src_pos_cam_X = np.asarray(self.superstar["MSrcPosCam_1.fX"].array())
 
             eventid_M1 = np.asarray(
                 self.superstar["MRawEvtHeader_1.fStereoEvtNumber"].array()
@@ -341,9 +363,37 @@ class DLMAGICEventSource(EventSource):
             num_islands_M2 = np.asarray(
                 self.superstar["MImagePar_2.fNumIslands"].array()
             )
+
             x_max = np.asarray(self.superstar["MStereoPar.fXMax"].array())
 
-            # Reading data from root file for Image table (charge, peak time and image mask)
+            stereo_cherenkovdensity = np.asarray(
+                self.superstar["MStereoPar.fCherenkovDensity"].array()
+            )
+
+            stereo_cherenkovradius = np.asarray(
+                self.superstar["MStereoPar.fCherenkovRadius"].array()
+            )
+
+            stereo_maxheight = np.asarray(
+                self.superstar["MStereoPar.fMaxHeight"].array()
+            )
+
+            stereo_impact_M1 = np.asarray(
+                self.superstar["MStereoPar.fM1Impact"].array()
+            )
+
+            stereo_impact_M2 = np.asarray(
+                self.superstar["MStereoPar.fM2Impact"].array()
+            )
+
+            hillastimefit_p1grad_M1 = np.asarray(
+                self.superstar["MHillasTimeFit_1.fP1Grad"].array()
+            )
+            hillastimefit_p1grad_M2 = np.asarray(
+                self.superstar["MHillasTimeFit_2.fP1Grad"].array()
+            )
+
+            # Reading data from root file for Image table (peak time and image mask not )
             charge_M1 = np.asarray(self.superstar["UprootImageOrig_1"].array())
             for i, charge in enumerate(charge_M1):
                 charge_M1[i] = np.array(charge)
@@ -355,10 +405,6 @@ class DLMAGICEventSource(EventSource):
             charge_M2 = np.asarray(self.superstar["UprootImageOrig_2"].array())
             for i, charge in enumerate(charge_M2):
                 charge_M2[i] = np.array(charge)
-
-            charge_M2 = np.asarray(
-                self.superstar["MCerPhotEvt_2.fPixels.fPhot"].array()
-            )
             peak_time_M2 = np.asarray(self.superstar["MArrivalTime_2.fData"].array())
             image_mask_M2 = np.asarray(self.superstar["UprootImageOrigClean_2"].array())
             for i, mask in enumerate(image_mask_M2):
@@ -399,6 +445,12 @@ class DLMAGICEventSource(EventSource):
                     data.pointing.tel[tel_id].altitude = u.Quantity(
                         np.deg2rad(90.0 - pointing_altitude[i]), u.rad
                     )
+
+                    data.mc.alt = Angle(np.deg2rad(src_pos_cam_Y[i] * 0.00337), u.rad)
+                    data.mc.az = Angle(np.deg2rad(src_pos_cam_X[i] * 0.00337), u.rad)
+                    data.mc.core_x = u.Quantity(np.float(core_x[i]), u.m)
+                    data.mc.core_y = u.Quantity(core_y[i], u.m)
+                    data.mc.energy = u.Quantity(mc_energy[i], u.TeV)
 
                     # Adding MC data
                     if self.is_simulation:
@@ -464,6 +516,13 @@ class DLMAGICEventSource(EventSource):
 
                             morphology_values["num_islands"] = num_islands_M1[i]
 
+                            timing_values["intercept"] = stereo_cherenkovdensity[i]
+                            timing_values["intercept_err"] = stereo_cherenkovradius[i]
+                            timing_values["deviation"] = hillastimefit_p1grad_M1[i]
+
+                            concentration_values["cog"] = stereo_maxheight[i]
+                            concentration_values["core"] = stereo_impact_M1[i]
+
                     else:
                         data.dl1.tel[tel_id].image = charge_M2[i][:1039]
                         data.dl1.tel[tel_id].peak_time = peak_time_M2[i][:1039]
@@ -504,6 +563,13 @@ class DLMAGICEventSource(EventSource):
                             ] = leakage_intensity_2_M2[i]
 
                             morphology_values["num_islands"] = num_islands_M2[i]
+
+                            timing_values["intercept"] = stereo_cherenkovdensity[i]
+                            timing_values["intercept_err"] = stereo_cherenkovradius[i]
+                            timing_values["deviation"] = hillastimefit_p1grad_M2[i]
+
+                            concentration_values["cog"] = stereo_maxheight[i]
+                            concentration_values["core"] = stereo_impact_M2[i]
 
                     if self.superstar is not None:
                         data.dl1.tel[tel_id].parameters.leakage = leakage_values
@@ -591,7 +657,7 @@ class DLMAGICEventSource(EventSource):
                 ),
                 max_scatter_range=self.meta["{}.fImpactMax".format(run_header)].array()[
                     0
-                ],
+                ]/ 100.0,
                 star_field_rotate=self.meta[
                     "{}.fStarFieldRotate".format(run_header)
                 ].array()[0],

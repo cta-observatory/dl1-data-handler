@@ -16,8 +16,8 @@ from tables import (
 )
 
 
-class EventTableRow(IsDescription):
-    """Describe row format for event table.
+class MCEventTableRow(IsDescription):
+    """Describe row format for MC event table.
 
     Contains event-level information, mostly from Monte Carlo simulation
     parameters. NOTE: Additional columns are added dynamically to some tables,
@@ -48,10 +48,10 @@ class EventTableRow(IsDescription):
     log_true_energy : tables.Float32Col
         Energy of the shower primary particle in log(TeV). From Monte Carlo simulation
         parameters.
-    true_az : tables.Float32Col
-        Shower azimuth angle. From Monte Carlo simulation parameters.
-    true_alt : tables.Float32Col
-        Shower altitude (zenith) angle. From Monte Carlo simulation parameters.
+    src_pos_cam_y : tables.Float32Col
+        Source position in the camera. From Monte Carlo simulation parameters.
+    src_pos_cam_x : tables.Float32Col
+        Source position in the camera. From Monte Carlo simulation parameters.
     array_pointing_az : tables.Float32Col
         Array pointing azimuth angle.
     array_pointing_alt : tables.Float32Col
@@ -68,8 +68,57 @@ class EventTableRow(IsDescription):
     true_x_max = Float32Col()
     true_energy = Float32Col()
     log_true_energy = Float32Col()
-    true_az = Float32Col()
-    true_alt = Float32Col()
+    src_pos_cam_y = Float32Col()
+    src_pos_cam_x = Float32Col()
+    array_pointing_az = Float32Col()
+    array_pointing_alt = Float32Col()
+
+
+class DataEventTableRow(IsDescription):
+    """Describe row format for real data event table.
+
+    Contains event-level information, mostly from Monte Carlo simulation
+    parameters. NOTE: Additional columns are added dynamically to some tables,
+    see the github wiki page for the full table/data format descriptions.
+
+    Attributes
+    ----------
+    event_id : tables.UInt32Col
+        Shower event id.
+    obs_id : tables.UInt32Col
+        Shower observation (run) id. Replaces old "run_id" in ctapipe r0
+        container.
+    true_shower_primary_id : tables.UInt8Col
+        Particle type id for the shower primary particle. From Monte Carlo
+        simulation parameters.
+    mjd : tables.UInt32Col
+        Shower core position x coordinate. From Monte Carlo simulation
+        parameters.
+    milli_sec : tables.Float32Col
+        Shower core position y coordinate. From Monte Carlo simulation
+        parameters.
+    nano_sec : tables.Float32Col
+        Energy of the shower primary particle in TeV. From Monte Carlo simulation
+        parameters.
+    src_pos_cam_y : tables.Float32Col
+        Source position in the camera. From Monte Carlo simulation parameters.
+    src_pos_cam_x : tables.Float32Col
+        Source position in the camera. From Monte Carlo simulation parameters.
+    array_pointing_az : tables.Float32Col
+        Array pointing azimuth angle.
+    array_pointing_alt : tables.Float32Col
+        Array pointing altitude (zenith) angle.
+
+    """
+
+    event_id = UInt32Col()
+    obs_id = UInt32Col()
+    true_shower_primary_id = UInt8Col()
+    mjd = UInt32Col()
+    milli_sec = UInt32Col()
+    nano_sec = UInt32Col()
+    src_pos_cam_y = Float32Col()
+    src_pos_cam_x = Float32Col()
     array_pointing_az = Float32Col()
     array_pointing_alt = Float32Col()
 
@@ -165,6 +214,12 @@ class ParametersTableRow(IsDescription):
     log_hillas_intensity : tables.Float32Col
         logaritmic hillas intensity
 
+    log_stereo_impact : tables.Float32Col
+        logaritmic stereo impact
+
+    log_stereo_maxheight : tables.Float32Col
+        logaritmic stereo maxheight
+
     """
 
     event_index = Int32Col()
@@ -201,3 +256,72 @@ class ParametersTableRow(IsDescription):
     morphology_num_small_islands = Int32Col()
     morphology_num_medium_islands = Int32Col()
     morphology_num_large_islands = Int32Col()
+
+
+class MAGICParametersTableRow(IsDescription):
+    """Describe row format for MAGIC parameter table.
+
+    Contains parameters values for each image of each event of each telescope in the array.
+    Parameters are calculated after image cleaning (i.e. with for example tailcut_clean method)
+    There are Hillas, Leakage, Concentration, Timing and Morphology parameters.
+
+    Attributes
+    ----------
+    event_index : tables.Int32Col
+        Event id of file (from -1 to N )
+
+    leakage_* : tables.Float32Col
+        see at https://cta-observatory.github.io/ctapipe/api/ctapipe.containers.LeakageContainer.html?highlight=leakagecontainer#ctapipe.containers.LeakageCon>
+
+    hillas_* : tables.Float32Col
+        see at https://cta-observatory.github.io/ctapipe/api/ctapipe.containers.HillasParametersContainer.html#ctapipe.containers.HillasParametersContainer
+
+    concentration_* :
+        see at https://cta-observatory.github.io/ctapipe/api/ctapipe.containers.ConcentrationContainer.html#ctapipe.containers.ConcentrationContainer
+
+    timing_* :
+        see at https://cta-observatory.github.io/ctapipe/api/ctapipe.containers.TimingParametersContainer.html#ctapipe.containers.TimingParametersContainer
+
+    morphology_* :
+        see at https://cta-observatory.github.io/ctapipe/api/ctapipe.containers.MorphologyContainer.html#ctapipe.containers.MorphologyContainer
+
+    log_hillas_intensity : tables.Float32Col
+        logaritmic hillas intensity
+
+    log_stereo_impact : tables.Float32Col
+        logaritmic stereo impact
+
+    log_stereo_maxheight : tables.Float32Col
+        logaritmic stereo maxheight
+
+    """
+
+    event_index = Int32Col()
+
+    leakage_intensity_width_1 = Float32Col()
+    leakage_intensity_width_2 = Float32Col()
+
+    hillas_intensity = Float32Col()
+    log_hillas_intensity = Float32Col()
+    hillas_x = Float32Col()
+    hillas_y = Float32Col()
+    hillas_r = Float32Col()
+    hillas_phi = Float32Col()
+    hillas_width = Float32Col()
+    hillas_length = Float32Col()
+    hillas_psi = Float32Col()
+    hillas_skewness = Float32Col()
+
+    morphology_num_islands = Int32Col()
+
+    impact = Float32Col()
+    log_impact = Float32Col()
+    maxheight = Float32Col()
+    log_maxheight = Float32Col()
+    cherenkovdensity = Float32Col()
+    log_hillasintensity_over_cherenkovdensity = Float32Col()
+    cherenkovradius = Float32Col()
+    impact_over_cherenkovradius = Float32Col()
+
+    p1grad = Float32Col()
+    sqrt_p1grad_p1grad = Float32Col()

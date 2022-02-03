@@ -53,8 +53,8 @@ Data Dumper:
     # The tables should be specified as '/{table_name}' or 'tel' to select all telescope tables in the file (all share the same column names)
     # The column name should be specified as it appears in the table.
     index_columns:
-        - ['/Events', 'true_energy']
-        - ['/Events', 'log_true_energy']
+        #- ['/Events', 'true_energy']
+        #- ['/Events', 'log_true_energy']
         - ['/Events', 'src_pos_cam_y']
         - ['/Events', 'src_pos_cam_x']
         - ['tel', 'event_index']
