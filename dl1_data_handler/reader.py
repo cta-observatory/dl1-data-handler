@@ -367,6 +367,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         selected_telescope_types=None,
         selected_telescope_ids=None,
         multiplicity_selection=None,
+        event_selection=None,
         parameter_selection=None,
         shuffle=False,
         seed=None,
@@ -413,7 +414,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         self.telescopes = {}
         if selected_telescope_ids is None:
-            selected_telescope_ids = {}
+            selected_telescope_ids = []
 
         if multiplicity_selection is None:
             multiplicity_selection = {}
@@ -506,16 +507,17 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 )
 
                 # Multiplicity selection
-                subarray_multiplicity = 0
-                for tel_type in selected_telescopes:
-                    if tel_type not in multiplicity_selection:
-                        multiplicity_selection[tel_type] = 1
-                    else:
-                        subarray_multiplicity += multiplicity_selection[tel_type]
-                if subarray_multiplicity == 0:
-                    subarray_multiplicity = 1
                 if "Subarray" not in multiplicity_selection:
-                    multiplicity_selection["Subarray"] = subarray_multiplicity
+                    multiplicity_selection["Subarray"] = 1
+                    for tel_type in selected_telescopes:
+                        if tel_type in multiplicity_selection:
+                            multiplicity_selection["Subarray"] = multiplicity_selection[tel_type]
+                if len(selected_telescopes) > 1:
+                    for tel_type in selected_telescopes:
+                        if tel_type not in multiplicity_selection:
+                            multiplicity_selection[tel_type] = 0
+                else:
+                    multiplicity_selection[list(selected_telescopes.keys())[0]] = multiplicity_selection["Subarray"]
 
                 # Construct the shower simulation table
                 simshower_table = read_table(f, "/simulation/event/subarray/shower")
@@ -572,7 +574,18 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         allevents = vstack(tel_tables)
 
                     # MC event selection based on the shower simulation table
-                    # and image and parameter selection based on the parameter tables
+                    if event_selection:
+                        for filter in event_selection:
+                            if "min_value" in filter:
+                                allevents = allevents[
+                                    allevents[filter["col_name"]] >= filter["min_value"]
+                                ]
+                            if "max_value" in filter:
+                                allevents = allevents[
+                                    allevents[filter["col_name"]] < filter["max_value"]
+                                ]
+
+                    # Image and parameter selection based on the parameter tables
                     if parameter_selection:
                         for filter in parameter_selection:
                             if "min_value" in filter:
@@ -625,8 +638,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     )
 
                     # MC event selection based on the shower simulation table.
-                    if parameter_selection:
-                        for filter in parameter_selection:
+                    if event_selection:
+                        for filter in event_selection:
                             if "min_value" in filter:
                                 allevents = allevents[
                                     allevents[filter["col_name"]] >= filter["min_value"]
@@ -696,10 +709,12 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         selected_events_trigger = allowed_tels_with_trigger[
                             selected_events
                         ]
+
                         # Get the position of each images of telescopes of this telescope type that triggered
                         img_idx = -np.ones(
                             (len(selected_events), len(tel_ids)), np.int32
                         )
+
                         if self.split_datasets_by == "tel_id":
                             for tel_id in tel_ids:
                                 # Get the trigger information of this telescope
@@ -715,6 +730,18 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 tel_table.add_column(
                                     np.arange(len(tel_table)), name="img_index", index=0
                                 )
+                                # MC event selection based on the parameter tables.
+                                if parameter_selection:
+                                    for filter in parameter_selection:
+                                        if "min_value" in filter:
+                                            tel_table = tel_table[
+                                                tel_table[filter["col_name"]] >= filter["min_value"]
+                                            ]
+                                        if "max_value" in filter:
+                                            tel_table = tel_table[
+                                                tel_table[filter["col_name"]] < filter["max_value"]
+                                            ]
+
                                 merged_table = join(
                                     left=tel_table,
                                     right=allevents[selected_events],
@@ -726,7 +753,14 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 )
                                 for trig, img in zip(tel_trigger_info, tel_img_index):
                                     img_idx[trig][np.where(tel_ids == tel_id)] = img
+
+                            # Apply the multiplicity cut after the parameter cuts for a particular telescope type
+                            if parameter_selection and multiplicity_selection[tel_type] > 0 and len(selected_telescopes) == 1:
+                                aftercuts_multiplicty_mask = np.count_nonzero(img_idx+1, axis=1) >= multiplicity_selection[tel_type]
+                                img_idx = img_idx[aftercuts_multiplicty_mask]
+                                sim_indices = sim_indices[aftercuts_multiplicty_mask]
                             image_indices[tel_type] = img_idx
+
                         elif self.split_datasets_by == "tel_type":
                             # The telescope table is joined with the selected and merged table.
                             tel_type_table = read_table(
@@ -737,11 +771,24 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 name="img_index",
                                 index=0,
                             )
+                            # MC event selection based on the parameter tables.
+                            if parameter_selection:
+                                for filter in parameter_selection:
+                                    if "min_value" in filter:
+                                        tel_type_table = tel_type_table[
+                                            tel_type_table[filter["col_name"]] >= filter["min_value"]
+                                        ]
+                                    if "max_value" in filter:
+                                        tel_type_table = tel_type_table[
+                                            tel_type_table[filter["col_name"]] < filter["max_value"]
+                                        ]
+
                             merged_table = join(
                                 left=tel_type_table,
                                 right=allevents[selected_events],
                                 keys=["obs_id", "event_id"],
                             )
+
                             for tel_id in tel_ids:
                                 merged_table_per_tel_id = merged_table[
                                     merged_table["tel_id"] == int(tel_id)
@@ -757,7 +804,23 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 )
                                 for trig, img in zip(tel_trigger_info, tel_img_index):
                                     img_idx[trig][np.where(tel_ids == tel_id)] = img
+
+                            # Apply the multiplicity cut after the parameter cuts for a particular telescope type
+                            if parameter_selection and multiplicity_selection[tel_type] > 0 and len(selected_telescopes) == 1:
+                                aftercuts_multiplicty_mask = np.count_nonzero(img_idx+1, axis=1) >= multiplicity_selection[tel_type]
+                                img_idx = img_idx[aftercuts_multiplicty_mask]
+                                sim_indices = sim_indices[aftercuts_multiplicty_mask]
                             image_indices[tel_type] = img_idx
+
+                    # Apply the multiplicity cut after the parameter cuts for the subarray
+                    if len(selected_telescopes) > 1:
+                        subarray_triggers = np.zeros(len(sim_indices))
+                        for tel_type in selected_telescopes:
+                            subarray_triggers += np.count_nonzero(image_indices[tel_type]+1, axis=1)
+                        aftercuts_multiplicty_mask = subarray_triggers >= multiplicity_selection['Subarray']
+                        sim_indices = sim_indices[aftercuts_multiplicty_mask]
+                        for tel_type in selected_telescopes:
+                            image_indices[tel_type] = image_indices[tel_type][aftercuts_multiplicty_mask]
 
                     # TODO: Fix pointing over time (see ctapipe issue 1484 & 1562)
                     if self.pointing_mode == "subarray":
@@ -978,16 +1041,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         for tel_type in selected_telescope_types:
             available_tel_ids = telescopes[tel_type]
             # Keep only the selected tel ids for the tel type
-            if tel_type in selected_telescope_ids:
-                # Check all requested telescopes are available to select
-                requested_tel_ids = selected_telescope_ids[tel_type]
-                invalid_tel_ids = set(requested_tel_ids) - set(available_tel_ids)
-                if invalid_tel_ids:
-                    raise ValueError(
-                        "Tel ids {} are not a valid selection"
-                        "for tel type '{}'".format(invalid_tel_ids, tel_type)
-                    )
-                selected_telescopes[tel_type] = requested_tel_ids
+            if selected_telescope_ids:
+                selected_telescopes[tel_type] = np.intersect1d(
+                    available_tel_ids, selected_telescope_ids
+                )
             else:
                 selected_telescopes[tel_type] = available_tel_ids
 
@@ -1354,7 +1411,7 @@ class DL1DataReaderDL1DH(DL1DataReader):
         self.example_identifiers = None
         self.telescopes = {}
         if selected_telescope_ids is None:
-            selected_telescope_ids = {}
+            selected_telescope_ids = []
 
         if event_selection is None:
             event_selection = {}
@@ -1429,6 +1486,8 @@ class DL1DataReaderDL1DH(DL1DataReader):
                 # Image & parameter selection
                 # Make list of identifiers of all examples passing event selection
                 if self.mode == "stereo":
+
+
                     example_identifiers = [(file_idx, nrow) for nrow in selected_nrows]
                 elif self.mode == "mono":
                     example_identifiers = []
@@ -1627,16 +1686,10 @@ class DL1DataReaderDL1DH(DL1DataReader):
         for tel_type in selected_tel_types:
             available_tel_ids = telescopes[tel_type]
             # Keep only the selected tel ids for the tel type
-            if tel_type in selected_telescope_ids:
-                # Check all requested telescopes are available to select
-                requested_tel_ids = selected_telescope_ids[tel_type]
-                invalid_tel_ids = set(requested_tel_ids) - set(available_tel_ids)
-                if invalid_tel_ids:
-                    raise ValueError(
-                        "Tel ids {} are not a valid selection"
-                        "for tel type '{}'".format(invalid_tel_ids, tel_type)
-                    )
-                selected_telescopes[tel_type] = requested_tel_ids
+            if selected_telescope_ids:
+                selected_telescopes[tel_type] = np.intersect1d(
+                    available_tel_ids, selected_telescope_ids
+                )
             else:
                 selected_telescopes[tel_type] = available_tel_ids
 
