@@ -755,7 +755,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                     img_idx[trig][np.where(tel_ids == tel_id)] = img
 
                             # Apply the multiplicity cut after the parameter cuts for a particular telescope type
-                            if parameter_selection and multiplicity_selection[tel_type] > 0 and len(selected_telescopes) == 1:
+                            if parameter_selection and multiplicity_selection[tel_type] > 0:
                                 aftercuts_multiplicty_mask = np.count_nonzero(img_idx+1, axis=1) >= multiplicity_selection[tel_type]
                                 img_idx = img_idx[aftercuts_multiplicty_mask]
                                 sim_indices = sim_indices[aftercuts_multiplicty_mask]
@@ -806,14 +806,14 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                     img_idx[trig][np.where(tel_ids == tel_id)] = img
 
                             # Apply the multiplicity cut after the parameter cuts for a particular telescope type
-                            if parameter_selection and multiplicity_selection[tel_type] > 0 and len(selected_telescopes) == 1:
+                            if parameter_selection and multiplicity_selection[tel_type] > 0:
                                 aftercuts_multiplicty_mask = np.count_nonzero(img_idx+1, axis=1) >= multiplicity_selection[tel_type]
                                 img_idx = img_idx[aftercuts_multiplicty_mask]
                                 sim_indices = sim_indices[aftercuts_multiplicty_mask]
                             image_indices[tel_type] = img_idx
 
                     # Apply the multiplicity cut after the parameter cuts for the subarray
-                    if len(selected_telescopes) > 1:
+                    if parameter_selection and multiplicity_selection['Subarray'] > 1:
                         subarray_triggers = np.zeros(len(sim_indices))
                         for tel_type in selected_telescopes:
                             subarray_triggers += np.count_nonzero(image_indices[tel_type]+1, axis=1)
