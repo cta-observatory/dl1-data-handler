@@ -5,7 +5,7 @@ channels:
     - conda-forge
     - cta-observatory
 dependencies:
-    - python>=3.7
+    - python>=3.8
     - astropy<5,>=4.0.5
     - numpy
     - uproot
