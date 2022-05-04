@@ -1,11 +1,11 @@
 package:
   name: dl1_data_handler
-  version: "0.10.5"
+  version: "0.10.6"
 
 source:
   #path: ./
   git_url: https://github.com/cta-observatory/dl1-data-handler.git
-  git_rev: v0.10.5
+  git_rev: v0.10.6
 
 build:
   noarch: generic
