@@ -16,21 +16,21 @@ requirements:
     - python ==3.8
     - numpy >=1.15.0
     - jupyter
-    - ctapipe ==0.12.0
+    - ctapipe ==0.14.0
     - pytables >=3.4.4 
     - pandas
   host:
     - python ==3.8
     - numpy >=1.15.0
     - jupyter
-    - ctapipe ==0.12.0
+    - ctapipe ==0.14.0
     - pytables >=3.4.4
     - pandas
   run:
     - python ==3.8
     - numpy >=1.15.0
     - jupyter
-    - ctapipe ==0.12.0
+    - ctapipe ==0.14.0
     - pytables >=3.4.4
     - pandas
   test:

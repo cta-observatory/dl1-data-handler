@@ -20,8 +20,8 @@ setup(
     packages=["dl1_data_handler"],
     install_requires=[
         "numpy>1.16",
-        "astropy>=4.0.5,<5",
-        "ctapipe==0.12.0",
+        "astropy",
+        "ctapipe==0.14.0",
         "traitlets>=5.0",
         "jupyter",
         "pandas",

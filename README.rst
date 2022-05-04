@@ -80,7 +80,7 @@ The main dependencies are:
 
 * PyTables >= 3.4.4
 * NumPy >= 1.15.0
-* ctapipe == 0.12.0
+* ctapipe == 0.14.0
 
 Also see setup.py.
 
