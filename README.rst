@@ -89,6 +89,15 @@ Usage
 
 [Deprecated] DL1DataWriter
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+The DL1DataWriter is not supported by the default installation. Please follow the custom installation instructions:
+
+.. code-block:: bash
+
+   git clone https://github.com/cta-observatory/dl1-data-handler.git
+   git checkout magic # for MAGIC data
+   conda env create -n [ENVIRONMENT_NAME] -f environment-magic.yml
+   conda activate [ENVIRONMENT_NAME]
+   python setup_magic.py install
 
 From the Command Line:
 ~~~~~~~~~~~~~~~~~~~~~~
