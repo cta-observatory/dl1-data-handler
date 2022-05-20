@@ -274,7 +274,7 @@ class DL1DataReader:
             max_alt = file.root._v_attrs["max_alt"]
 
         if simulation_info:
-            simulation_info["num_showers"] += num_showers
+            simulation_info["num_showers"] += float(num_showers)
             if simulation_info["energy_range_min"] > energy_range_min:
                 simulation_info["energy_range_min"] = energy_range_min
             if simulation_info["energy_range_max"] < energy_range_max:
@@ -289,7 +289,7 @@ class DL1DataReader:
                 simulation_info["max_alt"] = max_alt
         else:
             simulation_info = {}
-            simulation_info["num_showers"] = num_showers
+            simulation_info["num_showers"] = float(num_showers)
             simulation_info["energy_range_min"] = energy_range_min
             simulation_info["energy_range_max"] = energy_range_max
             simulation_info["max_scatter_range"] = max_scatter_range
@@ -1225,7 +1225,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     parameter_list = []
                     for parameter in self.parameter_list:
                         parameter_list.append(
-                            prmtr_child[index][parameter] if index != 0 else np.nan
+                            prmtr_child[trigger_info[i]][parameter] if trigger_info[i] != 0 else np.nan
                         )
                     parameters_lists.append(np.array(parameter_list, dtype=np.float32))
 
@@ -1915,7 +1915,7 @@ class DL1DataReaderDL1DH(DL1DataReader):
                 parameter_list = []
                 for parameter in self.parameter_list:
                     parameter_val = (
-                        prmtr_child[index][parameter]
+                        prmtr_child[trigger_info[i]][parameter]
                         if trigger_info[i] != 0
                         else np.nan
                     )
