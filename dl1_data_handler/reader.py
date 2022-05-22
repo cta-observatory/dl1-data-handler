@@ -1491,7 +1491,7 @@ class DL1DataReaderDL1DH(DL1DataReader):
 
             for file_idx, (filename, f) in enumerate(self.files.items()):
 
-                if self.event_info:
+                if "corsika_version" in self._v_attrs:
                     self.simulation_info = super()._construct_simulated_info(
                         f, self.simulation_info, file_type="dl1dh"
                     )
