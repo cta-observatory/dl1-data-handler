@@ -52,6 +52,9 @@ class DL1DataReader:
             with lock:
                 self.files[filename] = tables.open_file(filename, mode="r")
 
+        # Save the user attributes for the first file
+        self._v_attrs = self.files[list(self.files)[0]].root._v_attrs
+
         # Set data loading mode
         # Mono: single images of one telescope type
         # Stereo: events including multiple telescope types
