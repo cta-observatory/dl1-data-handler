@@ -12,7 +12,7 @@ dependencies:
     - ctapipe==0.9.1
     - ctapipe-extra
     - pip
-    - pyyaml
+    - pyyaml==5.4.1
     - pandas
     - pip:
         - pydot
