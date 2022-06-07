@@ -657,7 +657,8 @@ class DLMAGICEventSource(EventSource):
                 ),
                 max_scatter_range=self.meta["{}.fImpactMax".format(run_header)].array()[
                     0
-                ]/ 100.0,
+                ]
+                / 100.0,
                 star_field_rotate=self.meta[
                     "{}.fStarFieldRotate".format(run_header)
                 ].array()[0],
@@ -761,12 +762,18 @@ class DLMAGICEventSource(EventSource):
                 ].array()[0],
                 run_number=self.meta["{}.fRunNumber".format(run_header)].array()[0],
                 subrun_index=self.meta["{}.fSubRunIndex".format(run_header)].array()[0],
-                source_dec=self.meta["{}.fSourceDEC".format(run_header)].array()[0],
-                source_ra=self.meta["{}.fSourceRA".format(run_header)].array()[0],
+                source_dec=self.meta["{}.fSourceDEC".format(run_header)].array()[0]
+                / 3600.0,
+                source_ra=self.meta["{}.fSourceRA".format(run_header)].array()[0]
+                / 3600.0
+                * 15.0,
                 telescope_dec=self.meta["{}.fTelescopeDEC".format(run_header)].array()[
                     0
-                ],
-                telescope_ra=self.meta["{}.fTelescopeRA".format(run_header)].array()[0],
+                ]
+                / 3600.0,
+                telescope_ra=self.meta["{}.fTelescopeRA".format(run_header)].array()[0]
+                / 3600.0
+                * 15.0,
                 observation_mode=self._decode_ascii_array(
                     self.meta["{}.fObservationMode[60]".format(run_header)].array()[0]
                 ),
