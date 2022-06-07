@@ -55,7 +55,7 @@ necessary package channels, and install dl1-data-handler specified version and i
 
 .. code-block:: bash
 
-   DL1DH_VER=0.10.4
+   DL1DH_VER=0.10.6
    wget https://raw.githubusercontent.com/cta-observatory/dl1-data-handler/v$DL1DH_VER/environment.yml
    conda env create -n [ENVIRONMENT_NAME] -f environment.yml
    conda activate [ENVIRONMENT_NAME]
@@ -63,12 +63,12 @@ necessary package channels, and install dl1-data-handler specified version and i
 
 This should automatically install all dependencies (NOTE: this may take some time, as by default MKL is included as a dependency of NumPy and it is very large).
 
-If you want to import any functionality from dl1-data-handler into your own Python scripts, then you are all set. However, if you wish to make use of any of the scripts in dl1-data-handler/scripts (like write_data.py), you should also clone the repository locally and checkout the corresponding tag (i.e. for version v0.10.4): 
+If you want to import any functionality from dl1-data-handler into your own Python scripts, then you are all set. However, if you wish to make use of any of the scripts in dl1-data-handler/scripts (like write_data.py), you should also clone the repository locally and checkout the corresponding tag (i.e. for version v0.10.6): 
 
 .. code-block:: bash
 
    git clone https://github.com/cta-observatory/dl1-data-handler.git
-   git checkout v0.10.4
+   git checkout v0.10.6
 
 dl1-data-handler should already have been installed in your environment by Conda, so no further installation steps (i.e. with setuptools or pip) are necessary and you should be able to run scripts/write_data.py directly.
 
@@ -80,7 +80,7 @@ The main dependencies are:
 
 * PyTables >= 3.4.4
 * NumPy >= 1.15.0
-* ctapipe == 0.12.0
+* ctapipe == 0.14.0
 
 Also see setup.py.
 
@@ -89,6 +89,15 @@ Usage
 
 [Deprecated] DL1DataWriter
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+The DL1DataWriter is not supported by the default installation. Please follow the custom installation instructions:
+
+.. code-block:: bash
+
+   git clone https://github.com/cta-observatory/dl1-data-handler.git
+   git checkout magic # for MAGIC data
+   conda env create -n [ENVIRONMENT_NAME] -f environment-magic.yml
+   conda activate [ENVIRONMENT_NAME]
+   python setup_magic.py install
 
 From the Command Line:
 ~~~~~~~~~~~~~~~~~~~~~~

@@ -5,11 +5,11 @@ channels:
     - conda-forge
     - cta-observatory
 dependencies:
-    - python>=3.7
-    - astropy<5,>=4.0.5
+    - python>=3.8
+    - astropy
     - numpy
     - pip
-    - ctapipe==0.12.0
+    - ctapipe==0.14.0
     - traitlets>=5.0
     - pyyaml
     - pandas
