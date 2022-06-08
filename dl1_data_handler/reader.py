@@ -1046,7 +1046,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             tel_type = row["tel_description"].decode()
             if tel_type not in telescopes:
                 telescopes[tel_type] = []
-            if self.data_model_version != "v1.0.0":
+            if not self.data_model_version.startswith("v1"):
                 camera_index = row["camera_index"]
                 if self._get_camera_type(tel_type) not in camera2index:
                     camera2index[self._get_camera_type(tel_type)] = camera_index
@@ -1101,7 +1101,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         pixel_positions = {}
         num_pixels = {}
         for camera in cameras:
-            if self.data_model_version != "v1.0.0":
+            if not self.data_model_version.startswith("v1"):
                 cam_geom = telescope_type_information.camera._f_get_child(
                     "geometry_{}".format(self.camera2index[camera])
                 )
