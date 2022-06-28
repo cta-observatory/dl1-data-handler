@@ -264,6 +264,7 @@ class DL1DataReader:
             energy_range_max = max(np.array(runs.cols._f_col("energy_range_max")))
             max_scatter_range = max(np.array(runs.cols._f_col("max_scatter_range")))
             spectral_index = np.array(runs.cols._f_col("spectral_index"))[0]
+            min_viewcone_radius = max(np.array(runs.cols._f_col("min_viewcone_radius")))
             max_viewcone_radius = max(np.array(runs.cols._f_col("max_viewcone_radius")))
             min_alt = min(np.array(runs.cols._f_col("min_alt")))
             max_alt = max(np.array(runs.cols._f_col("max_alt")))
@@ -273,6 +274,7 @@ class DL1DataReader:
             energy_range_max = file.root._v_attrs["energy_range_max"]
             max_scatter_range = file.root._v_attrs["max_scatter_range"]
             spectral_index = file.root._v_attrs["spectral_index"]
+            min_viewcone_radius = file.root._v_attrs["min_viewcone_radius"]
             max_viewcone_radius = file.root._v_attrs["max_viewcone_radius"]
             min_alt = file.root._v_attrs["min_alt"]
             max_alt = file.root._v_attrs["max_alt"]
@@ -285,6 +287,8 @@ class DL1DataReader:
                 simulation_info["energy_range_max"] = energy_range_max
             if simulation_info["max_scatter_range"] < max_scatter_range:
                 simulation_info["max_scatter_range"] = max_scatter_range
+            if simulation_info["min_viewcone_radius"] > min_viewcone_radius:
+                simulation_info["min_viewcone_radius"] = min_viewcone_radius
             if simulation_info["max_viewcone_radius"] < max_viewcone_radius:
                 simulation_info["max_viewcone_radius"] = max_viewcone_radius
             if simulation_info["min_alt"] > min_alt:
@@ -298,6 +302,7 @@ class DL1DataReader:
             simulation_info["energy_range_max"] = energy_range_max
             simulation_info["max_scatter_range"] = max_scatter_range
             simulation_info["spectral_index"] = spectral_index
+            simulation_info["min_viewcone_radius"] = min_viewcone_radius
             simulation_info["max_viewcone_radius"] = max_viewcone_radius
             simulation_info["min_alt"] = min_alt
             simulation_info["max_alt"] = max_alt
