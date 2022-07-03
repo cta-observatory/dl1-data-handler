@@ -111,7 +111,7 @@ class DL1DataReader:
                         "name": "parameters",
                         "tel_type": self.tel_type,
                         "base_name": "parameters",
-                        "shape": (len(self.parameter_list),),
+                        "shape": ((1,) + (len(self.parameter_list),)),
                         "dtype": np.dtype(np.float32),
                     }
                 )
@@ -940,6 +940,11 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 else:
                     self.example_identifiers.extend(example_identifiers)
 
+            # Shuffle the examples
+            if shuffle:
+                random.seed(seed)
+                random.shuffle(self.example_identifiers)
+
             # Dump example_identifiers and simulation_info to a pandas hdf5 file
             if not isinstance(example_identifiers_file, dict):
                 pd.DataFrame(data=self.example_identifiers).to_hdf(
@@ -956,11 +961,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         example_identifiers_file, key="simulated_particles", mode="a"
                     )
                 example_identifiers_file.close()
-
-        # Shuffle the examples
-        if shuffle:
-            random.seed(seed)
-            random.shuffle(self.example_identifiers)
 
         # ImageMapper (1D charges -> 2D images)
         if self.image_channels is not None:
@@ -1737,6 +1737,11 @@ class DL1DataReaderDL1DH(DL1DataReader):
                 else:
                     self.example_identifiers.extend(example_identifiers)
 
+            # Shuffle the examples
+            if shuffle:
+                random.seed(seed)
+                random.shuffle(self.example_identifiers)
+
             # Dump example_identifiers and simulation_info to a pandas hdf5 file
             if not isinstance(example_identifiers_file, dict):
                 pd.DataFrame(data=self.example_identifiers).to_hdf(
@@ -1752,11 +1757,6 @@ class DL1DataReaderDL1DH(DL1DataReader):
                     ).to_hdf(
                         example_identifiers_file, key="simulated_particles", mode="a"
                     )
-
-        # Shuffle the examples
-        if shuffle:
-            random.seed(seed)
-            random.shuffle(self.example_identifiers)
 
         if self.pointing_mode == "fix_subarray":
             run_array_direction = self.files[first_file].root._v_attrs[
