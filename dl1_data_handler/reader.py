@@ -55,6 +55,14 @@ class DL1DataReader:
         # Save the user attributes for the first file
         self._v_attrs = self.files[list(self.files)[0]].root._v_attrs
 
+        # Translate from CORSIKA shower primary ID to the particle name
+        self.shower_primary_id_to_name = {
+            0: "gamma",
+            101: "proton",
+            1: "electron",
+            255: "hadron",
+        }
+
         # Set data loading mode
         # Mono: single images of one telescope type
         # Stereo: events including multiple telescope types
@@ -484,6 +492,20 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 self.simulated_particles = pd.read_hdf(
                     example_identifiers_file, key="/simulated_particles"
                 ).to_dict("records")[0]
+            if "/class_weight" in list(example_identifiers_file.keys()):
+                self.class_weight = pd.read_hdf(
+                    example_identifiers_file, key="/class_weight"
+                ).to_dict("records")[0]
+            if "/class_names" in list(example_identifiers_file.keys()):
+                class_names = pd.read_hdf(
+                    example_identifiers_file, key="/class_names"
+                ).to_dict("records")
+                self.class_names = [name[0] for name in class_names]
+            if "/shower_primary_id_to_class" in list(example_identifiers_file.keys()):
+                self.shower_primary_id_to_class = pd.read_hdf(
+                    example_identifiers_file, key="/shower_primary_id_to_class"
+                ).to_dict("records")[0]
+            self.num_classes = len(self.simulated_particles) - 1
             (
                 self.telescopes,
                 self.selected_telescopes,
@@ -940,6 +962,32 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 else:
                     self.example_identifiers.extend(example_identifiers)
 
+            # Handling the particle ids automatically and class weights calculation
+            # Scaling by total/2 helps keep the loss to a similar magnitude.
+            # The sum of the weights of all examples stays the same.
+            self.num_classes = len(self.simulated_particles) - 1
+            self.class_weight = None
+            if self.process_type == "Simulation":
+                if len(self.simulated_particles) > 2:
+                    self.shower_primary_id_to_class = {}
+                    self.class_names = []
+                    for p, particle_id in enumerate(
+                        list(self.simulated_particles.keys())[1:]
+                    ):
+                        self.shower_primary_id_to_class[particle_id] = p
+                        self.class_names.append(
+                            (self.shower_primary_id_to_name[particle_id])
+                        )
+
+                    self.class_weight = {}
+                    for particle_id, num_particles in self.simulated_particles.items():
+                        if particle_id != "total":
+                            self.class_weight[
+                                self.shower_primary_id_to_class[particle_id]
+                            ] = (1 / num_particles) * (
+                                self.simulated_particles["total"] / 2.0
+                            )
+
             # Shuffle the examples
             if shuffle:
                 random.seed(seed)
@@ -960,6 +1008,22 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     ).to_hdf(
                         example_identifiers_file, key="simulated_particles", mode="a"
                     )
+                    if self.class_weight:
+                        pd.DataFrame(
+                            data=pd.DataFrame(self.class_weight, index=[0])
+                        ).to_hdf(example_identifiers_file, key="class_weight", mode="a")
+                        pd.DataFrame(data=pd.DataFrame(self.class_names)).to_hdf(
+                            example_identifiers_file, key="class_names", mode="a"
+                        )
+                        pd.DataFrame(
+                            data=pd.DataFrame(
+                                self.shower_primary_id_to_class, index=[0]
+                            )
+                        ).to_hdf(
+                            example_identifiers_file,
+                            key="shower_primary_id_to_class",
+                            mode="a",
+                        )
                 example_identifiers_file.close()
 
         # ImageMapper (1D charges -> 2D images)
@@ -1542,6 +1606,20 @@ class DL1DataReaderDL1DH(DL1DataReader):
                 self.simulated_particles = pd.read_hdf(
                     example_identifiers_file, key="/simulated_particles"
                 ).to_dict("records")[0]
+            if "/class_weight" in list(example_identifiers_file.keys()):
+                self.class_weight = pd.read_hdf(
+                    example_identifiers_file, key="/class_weight"
+                ).to_dict("records")[0]
+            if "/class_names" in list(example_identifiers_file.keys()):
+                class_names = pd.read_hdf(
+                    example_identifiers_file, key="/class_names"
+                ).to_dict("records")
+                self.class_names = [name[0] for name in class_names]
+            if "/shower_primary_id_to_class" in list(example_identifiers_file.keys()):
+                self.shower_primary_id_to_class = pd.read_hdf(
+                    example_identifiers_file, key="/shower_primary_id_to_class"
+                ).to_dict("records")[0]
+            self.num_classes = len(self.simulated_particles) - 1
             (
                 self.telescopes,
                 self.selected_telescopes,
@@ -1737,6 +1815,32 @@ class DL1DataReaderDL1DH(DL1DataReader):
                 else:
                     self.example_identifiers.extend(example_identifiers)
 
+            # Handling the particle ids automatically and class weights calculation
+            # Scaling by total/2 helps keep the loss to a similar magnitude.
+            # The sum of the weights of all examples stays the same.
+            self.num_classes = len(self.simulated_particles) - 1
+            self.class_weight = None
+            if self.process_type == "Simulation":
+                if len(self.simulated_particles) > 2:
+                    self.shower_primary_id_to_class = {}
+                    self.class_names = []
+                    for p, particle_id in enumerate(
+                        list(self.simulated_particles.keys())[1:]
+                    ):
+                        self.shower_primary_id_to_class[particle_id] = p
+                        self.class_names.append(
+                            (self.shower_primary_id_to_name[particle_id])
+                        )
+
+                    self.class_weight = {}
+                    for particle_id, num_particles in self.simulated_particles.items():
+                        if particle_id != "total":
+                            self.class_weight[
+                                self.shower_primary_id_to_class[particle_id]
+                            ] = (1 / num_particles) * (
+                                self.simulated_particles["total"] / 2.0
+                            )
+
             # Shuffle the examples
             if shuffle:
                 random.seed(seed)
@@ -1757,6 +1861,23 @@ class DL1DataReaderDL1DH(DL1DataReader):
                     ).to_hdf(
                         example_identifiers_file, key="simulated_particles", mode="a"
                     )
+                    if self.class_weight:
+                        pd.DataFrame(
+                            data=pd.DataFrame(self.class_weight, index=[0])
+                        ).to_hdf(example_identifiers_file, key="class_weight", mode="a")
+                        pd.DataFrame(data=pd.DataFrame(self.class_names)).to_hdf(
+                            example_identifiers_file, key="class_names", mode="a"
+                        )
+                        pd.DataFrame(
+                            data=pd.DataFrame(
+                                self.shower_primary_id_to_class, index=[0]
+                            )
+                        ).to_hdf(
+                            example_identifiers_file,
+                            key="shower_primary_id_to_class",
+                            mode="a",
+                        )
+                example_identifiers_file.close()
 
         if self.pointing_mode == "fix_subarray":
             run_array_direction = self.files[first_file].root._v_attrs[
