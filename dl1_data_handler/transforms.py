@@ -5,16 +5,23 @@ from .processor import Transform
 
 class ShowerPrimaryID(Transform):
     def __init__(
-        self, name="particletype", particle_id_col_name="true_shower_primary_id"
+        self, name="true_shower_primary_id", particle_id_col_name="true_shower_primary_id"
     ):
         super().__init__()
         self.particle_id_col_name = particle_id_col_name
         self.shower_primary_id_to_class = {
-            0: 1,  # gamma
-            101: 0,  # proton
-            1: 2,  # electron
-            255: 0,  # MAGIC real data
+            0: 1,
+            101: 0,
+            1: 2,
+            255: 3,
         }
+        self.shower_primary_id_to_name = {
+            0: "gamma",
+            101: "proton",
+            1: "electron",
+            255: "hadron",
+        }
+
         self.name = name
         self.dtype = np.dtype("int8")
 
