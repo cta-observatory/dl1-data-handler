@@ -1388,8 +1388,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         child = self.files[
                             filename
                         ].root.dl1.event.telescope.parameters._f_get_child(tel_table)
-                    parameter_list = child[index][self.parameter_list]
-                    example.append(np.array(list(parameter_list), dtype=np.float32))
+                    parameter_list = list(child[index][self.parameter_list])
+                    example.extend([np.stack(parameter_list)])
             elif self.split_datasets_by == "tel_type":
                 if self.image_channels is not None:
                     with lock:
@@ -1405,8 +1405,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         ].root.dl1.event.telescope.parameters._f_get_child(
                             self.tel_type
                         )
-                    parameter_list = child[index][self.parameter_list]
-                    example.append(np.array(list(parameter_list), dtype=np.float32))
+                    parameter_list = list(child[index][self.parameter_list])
+                    example.extend([np.stack(parameter_list)])
 
             subarray_info = [[] for column in self.subarray_info]
             tel_query = "tel_id == {}".format(tel_id)
@@ -2153,8 +2153,8 @@ class DL1DataReaderDL1DH(DL1DataReader):
                     parameters = self.files[filename].root[
                         "Parameters" + str(self.parameter_table)
                     ][self.tel_type]
-                parameter_list = parameters[index][self.parameter_list]
-                example.append(np.array(list(parameter_list), dtype=np.float32))
+                parameter_list = list(parameters[index][self.parameter_list])
+                example.extend([np.stack(parameter_list)])
 
             subarray_info = [[] for column in self.subarray_info]
             query = "id == {}".format(tel_id)
