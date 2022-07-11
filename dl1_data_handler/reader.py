@@ -55,6 +55,9 @@ class DL1DataReader:
         # Save the user attributes for the first file
         self._v_attrs = self.files[list(self.files)[0]].root._v_attrs
 
+        # Set class weights to None
+        self.class_weight = None
+
         # Translate from CORSIKA shower primary ID to the particle name
         self.shower_primary_id_to_name = {
             0: "gamma",
@@ -966,7 +969,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             # Scaling by total/2 helps keep the loss to a similar magnitude.
             # The sum of the weights of all examples stays the same.
             self.num_classes = len(self.simulated_particles) - 1
-            self.class_weight = None
             if self.process_type == "Simulation":
                 if len(self.simulated_particles) > 2:
                     self.shower_primary_id_to_class = {}
@@ -1819,7 +1821,6 @@ class DL1DataReaderDL1DH(DL1DataReader):
             # Scaling by total/2 helps keep the loss to a similar magnitude.
             # The sum of the weights of all examples stays the same.
             self.num_classes = len(self.simulated_particles) - 1
-            self.class_weight = None
             if self.process_type == "Simulation":
                 if len(self.simulated_particles) > 2:
                     self.shower_primary_id_to_class = {}
