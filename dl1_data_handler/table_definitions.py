@@ -311,6 +311,7 @@ class MAGICParametersTableRow(IsDescription):
     hillas_length = Float32Col()
     hillas_psi = Float32Col()
     hillas_skewness = Float32Col()
+    hillas_srcdist = Float32Col()
 
     morphology_num_islands = Int32Col()
 

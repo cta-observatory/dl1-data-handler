@@ -591,6 +591,11 @@ class CTAMLDataDumper(DL1DataDumper):
                                         tel_id
                                     ].parameters.concentration.core
                                 )
+                                parameter_row[
+                                    "hillas_srcdist"
+                                ] = event_container.dl1.tel[
+                                    tel_id
+                                ].parameters.concentration.pixel
 
                                 parameter_row[
                                     "cherenkovdensity"
@@ -1072,7 +1077,7 @@ class CTAMLDataDumper(DL1DataDumper):
                 parameter_row["morphology_num_islands"] = -1
 
                 if index_parameters_table == 0 and tel_name == "LST_MAGIC_MAGICCam":
-
+                    parameter_row["hillas_srcdist"] = np.float32(np.nan)
                     parameter_row["maxheight"] = np.float32(np.nan)
                     parameter_row["log_maxheight"] = np.float32(np.nan)
                     parameter_row["impact"] = np.float32(np.nan)

@@ -343,7 +343,8 @@ class DLMAGICEventSource(EventSource):
             hillas_skewness_M2 = np.asarray(
                 self.superstar["MHillasExt_2.fM3Long"].array()
             )
-
+            hillas_srcdist_M1 = np.asarray(self.superstar["MHillasSrc_1.fDist"].array())
+            hillas_srcdist_M2 = np.asarray(self.superstar["MHillasSrc_2.fDist"].array())
             leakage_intensity_1_M1 = np.asarray(
                 self.superstar["MNewImagePar_1.fLeakage1"].array()
             )
@@ -522,6 +523,7 @@ class DLMAGICEventSource(EventSource):
 
                             concentration_values["cog"] = stereo_maxheight[i]
                             concentration_values["core"] = stereo_impact_M1[i]
+                            concentration_values["pixel"] = hillas_srcdist_M1[i]
 
                     else:
                         data.dl1.tel[tel_id].image = charge_M2[i][:1039]
@@ -570,6 +572,7 @@ class DLMAGICEventSource(EventSource):
 
                             concentration_values["cog"] = stereo_maxheight[i]
                             concentration_values["core"] = stereo_impact_M2[i]
+                            concentration_values["pixel"] = hillas_srcdist_M2[i]
 
                     if self.superstar is not None:
                         data.dl1.tel[tel_id].parameters.leakage = leakage_values
@@ -650,9 +653,7 @@ class DLMAGICEventSource(EventSource):
                 num_obs_lev=self.meta["{}.fNumObsLev".format(run_header)].array()[0],
                 spectral_index=self.meta["{}.fSlopeSpec".format(run_header)].array()[0],
                 min_viewcone_radius = 0.0
-                max_viewcone_radius = self.meta[
-                        "{}.fRandomPointingConeSemiAngle".format(run_header)
-                    ].array()[0]
+                max_viewcone_radius = self.meta["{}.fRandomPointingConeSemiAngle".format(run_header)].array()[0]
                 # Check if MC ringwobble
                 if np.around(max_viewcone_radius, decimals=1) == 0.4:
                     min_viewcone_radius = 0.4
