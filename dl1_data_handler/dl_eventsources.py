@@ -136,6 +136,21 @@ class DLMAGICEventSource(EventSource):
                 ].array()[0]
             )
 
+        # Get min and max viewcone of the simulation
+        self.min_viewcone_radius = 0.0
+        self.max_viewcone_radius = 3.5
+        if self.mc:
+            run_header = "MMcRunHeader_1" if self.superstar else "MMcRunHeader"
+            self.max_viewcone_radius = np.around(
+                self.meta["{}.fRandomPointingConeSemiAngle".format(run_header)].array()[
+                    0
+                ],
+                decimals=1,
+            )
+            # Check if MC ringwobble
+            if self.max_viewcone_radius == 0.4:
+                self.min_viewcone_radius = 0.4
+
         self._header = self._parse_header()
 
     @property
@@ -652,17 +667,12 @@ class DLMAGICEventSource(EventSource):
                 c_wave_upper=self.meta["{}.fCWaveUpper".format(run_header)].array()[0],
                 num_obs_lev=self.meta["{}.fNumObsLev".format(run_header)].array()[0],
                 spectral_index=self.meta["{}.fSlopeSpec".format(run_header)].array()[0],
-                min_viewcone_radius = 0.0
-                max_viewcone_radius = self.meta["{}.fRandomPointingConeSemiAngle".format(run_header)].array()[0]
-                # Check if MC ringwobble
-                if np.around(max_viewcone_radius, decimals=1) == 0.4:
-                    min_viewcone_radius = 0.4
                 min_viewcone_radius=Angle(
-                    min_viewcone_radius,
+                    self.min_viewcone_radius,
                     u.deg,
                 ),
                 max_viewcone_radius=Angle(
-                    max_viewcone_radius,
+                    self.max_viewcone_radius,
                     u.deg,
                 ),
                 max_scatter_range=self.meta["{}.fImpactMax".format(run_header)].array()[
