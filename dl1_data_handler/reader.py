@@ -55,6 +55,17 @@ class DL1DataReader:
         # Save the user attributes for the first file
         self._v_attrs = self.files[list(self.files)[0]].root._v_attrs
 
+        # Set class weights to None
+        self.class_weight = None
+
+        # Translate from CORSIKA shower primary ID to the particle name
+        self.shower_primary_id_to_name = {
+            0: "gamma",
+            101: "proton",
+            1: "electron",
+            255: "hadron",
+        }
+
         # Set data loading mode
         # Mono: single images of one telescope type
         # Stereo: events including multiple telescope types
@@ -111,7 +122,7 @@ class DL1DataReader:
                         "name": "parameters",
                         "tel_type": self.tel_type,
                         "base_name": "parameters",
-                        "shape": (len(self.parameter_list),),
+                        "shape": ((1,) + (len(self.parameter_list),)),
                         "dtype": np.dtype(np.float32),
                     }
                 )
@@ -220,17 +231,18 @@ class DL1DataReader:
             )
 
         # Add event info to description
-        for col_name in self.event_info:
-            col = events_table.cols._f_col(col_name)
-            self.unprocessed_example_description.append(
-                {
-                    "name": col_name,
-                    "tel_type": None,
-                    "base_name": col_name,
-                    "shape": col.shape[1:],
-                    "dtype": col.dtype,
-                }
-            )
+        if self.process_type == "Simulation":
+            for col_name in self.event_info:
+                col = events_table.cols._f_col(col_name)
+                self.unprocessed_example_description.append(
+                    {
+                        "name": col_name,
+                        "tel_type": None,
+                        "base_name": col_name,
+                        "shape": col.shape[1:],
+                        "dtype": col.dtype,
+                    }
+                )
         return
 
     def _construct_simulated_info(self, file, simulation_info, file_type="stage1"):
@@ -263,6 +275,7 @@ class DL1DataReader:
             energy_range_max = max(np.array(runs.cols._f_col("energy_range_max")))
             max_scatter_range = max(np.array(runs.cols._f_col("max_scatter_range")))
             spectral_index = np.array(runs.cols._f_col("spectral_index"))[0]
+            min_viewcone_radius = max(np.array(runs.cols._f_col("min_viewcone_radius")))
             max_viewcone_radius = max(np.array(runs.cols._f_col("max_viewcone_radius")))
             min_alt = min(np.array(runs.cols._f_col("min_alt")))
             max_alt = max(np.array(runs.cols._f_col("max_alt")))
@@ -272,6 +285,7 @@ class DL1DataReader:
             energy_range_max = file.root._v_attrs["energy_range_max"]
             max_scatter_range = file.root._v_attrs["max_scatter_range"]
             spectral_index = file.root._v_attrs["spectral_index"]
+            min_viewcone_radius = file.root._v_attrs["min_viewcone_radius"]
             max_viewcone_radius = file.root._v_attrs["max_viewcone_radius"]
             min_alt = file.root._v_attrs["min_alt"]
             max_alt = file.root._v_attrs["max_alt"]
@@ -284,6 +298,8 @@ class DL1DataReader:
                 simulation_info["energy_range_max"] = energy_range_max
             if simulation_info["max_scatter_range"] < max_scatter_range:
                 simulation_info["max_scatter_range"] = max_scatter_range
+            if simulation_info["min_viewcone_radius"] > min_viewcone_radius:
+                simulation_info["min_viewcone_radius"] = min_viewcone_radius
             if simulation_info["max_viewcone_radius"] < max_viewcone_radius:
                 simulation_info["max_viewcone_radius"] = max_viewcone_radius
             if simulation_info["min_alt"] > min_alt:
@@ -297,6 +313,7 @@ class DL1DataReader:
             simulation_info["energy_range_max"] = energy_range_max
             simulation_info["max_scatter_range"] = max_scatter_range
             simulation_info["spectral_index"] = spectral_index
+            simulation_info["min_viewcone_radius"] = min_viewcone_radius
             simulation_info["max_viewcone_radius"] = max_viewcone_radius
             simulation_info["min_alt"] = min_alt
             simulation_info["max_alt"] = max_alt
@@ -395,9 +412,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         )
 
         first_file = list(self.files)[0]
-        self.data_model_version = self.files[first_file].root._v_attrs[
-            "CTA PRODUCT DATA MODEL VERSION"
-        ]
+        self.data_model_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
+        self.process_type = self._v_attrs["CTA PROCESS TYPE"]
+        self.instrument_id = self._v_attrs["CTA INSTRUMENT ID"]
 
         # Set pointing mode
         # Fix_subarray: Fix subarray pointing (MC production)
@@ -478,6 +495,20 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 self.simulated_particles = pd.read_hdf(
                     example_identifiers_file, key="/simulated_particles"
                 ).to_dict("records")[0]
+            if "/class_weight" in list(example_identifiers_file.keys()):
+                self.class_weight = pd.read_hdf(
+                    example_identifiers_file, key="/class_weight"
+                ).to_dict("records")[0]
+            if "/class_names" in list(example_identifiers_file.keys()):
+                class_names = pd.read_hdf(
+                    example_identifiers_file, key="/class_names"
+                ).to_dict("records")
+                self.class_names = [name[0] for name in class_names]
+            if "/shower_primary_id_to_class" in list(example_identifiers_file.keys()):
+                self.shower_primary_id_to_class = pd.read_hdf(
+                    example_identifiers_file, key="/shower_primary_id_to_class"
+                ).to_dict("records")[0]
+            self.num_classes = len(self.simulated_particles) - 1
             (
                 self.telescopes,
                 self.selected_telescopes,
@@ -493,7 +524,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             for file_idx, (filename, f) in enumerate(self.files.items()):
 
                 # Read simulation information from each observation needed for pyIRF
-                if self.event_info:
+                if self.process_type == "Simulation":
                     self.simulation_info = super()._construct_simulated_info(
                         f, self.simulation_info, file_type="stage1"
                     )
@@ -526,11 +557,14 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     ] = multiplicity_selection["Subarray"]
 
                 # Construct the shower simulation table
-                simshower_table = read_table(f, "/simulation/event/subarray/shower")
-                simshower_table.add_column(
-                    np.arange(len(simshower_table)), name="sim_index", index=0
-                )
-                true_shower_primary_id = simshower_table["true_shower_primary_id"][0]
+                if self.process_type == "Simulation":
+                    simshower_table = read_table(f, "/simulation/event/subarray/shower")
+                    simshower_table.add_column(
+                        np.arange(len(simshower_table)), name="sim_index", index=0
+                    )
+                    true_shower_primary_id = simshower_table["true_shower_primary_id"][
+                        0
+                    ]
 
                 # Construct the example identifiers for 'mono' or 'stereo' mode.
                 example_identifiers = []
@@ -549,11 +583,12 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 np.arange(len(tel_table)), name="img_index", index=0
                             )
 
-                            tel_table = join(
-                                left=tel_table,
-                                right=simshower_table,
-                                keys=["obs_id", "event_id"],
-                            )
+                            if self.process_type == "Simulation":
+                                tel_table = join(
+                                    left=tel_table,
+                                    right=simshower_table,
+                                    keys=["obs_id", "event_id"],
+                                )
                             tel_tables.append(tel_table)
                         allevents = vstack(tel_tables)
                     elif self.split_datasets_by == "tel_type":
@@ -571,11 +606,12 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 tel_type_table["tel_id"] == tel_id
                             ]
 
-                            tel_table = join(
-                                left=tel_table,
-                                right=simshower_table,
-                                keys=["obs_id", "event_id"],
-                            )
+                            if self.process_type == "Simulation":
+                                tel_table = join(
+                                    left=tel_table,
+                                    right=simshower_table,
+                                    keys=["obs_id", "event_id"],
+                                )
                             tel_tables.append(tel_table)
                         allevents = vstack(tel_tables)
 
@@ -608,57 +644,76 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         array_pointing = 0
 
                     # Track number of events for each particle type
-                    self.simulated_particles["total"] += len(allevents)
-                    if true_shower_primary_id in self.simulated_particles:
-                        self.simulated_particles[true_shower_primary_id] += len(
-                            allevents
-                        )
-                    else:
-                        self.simulated_particles[true_shower_primary_id] = len(
-                            allevents
-                        )
-
-                    # Construct the example identifiers
-                    for sim_idx, img_idx, tel_id in zip(
-                        allevents["sim_index"],
-                        allevents["img_index"],
-                        allevents["tel_id"],
-                    ):
-                        if self.pointing_mode in ["subarray", "divergent"]:
-                            example_identifiers.append(
-                                (file_idx, sim_idx, img_idx, tel_id, array_pointing)
+                    if self.process_type == "Simulation":
+                        self.simulated_particles["total"] += len(allevents)
+                        if true_shower_primary_id in self.simulated_particles:
+                            self.simulated_particles[true_shower_primary_id] += len(
+                                allevents
                             )
                         else:
-                            example_identifiers.append(
-                                (file_idx, sim_idx, img_idx, tel_id)
+                            self.simulated_particles[true_shower_primary_id] = len(
+                                allevents
                             )
+
+                        # Construct the example identifiers
+                        for sim_idx, img_idx, tel_id in zip(
+                            allevents["sim_index"],
+                            allevents["img_index"],
+                            allevents["tel_id"],
+                        ):
+                            if self.pointing_mode in ["subarray", "divergent"]:
+                                example_identifiers.append(
+                                    (file_idx, sim_idx, img_idx, tel_id, array_pointing)
+                                )
+                            else:
+                                example_identifiers.append(
+                                    (file_idx, sim_idx, img_idx, tel_id)
+                                )
+                    else:
+                        # Construct the example identifiers
+                        for img_idx, tel_id in zip(
+                            allevents["img_index"],
+                            allevents["tel_id"],
+                        ):
+                            if self.pointing_mode in ["subarray", "divergent"]:
+                                example_identifiers.append(
+                                    (file_idx, img_idx, tel_id, array_pointing)
+                                )
+                            else:
+                                example_identifiers.append((file_idx, img_idx, tel_id))
 
                 elif self.mode == "stereo":
 
-                    # The shower simulation table is joined with the subarray trigger table.
-                    trigger_table = read_table(f, "/dl1/event/subarray/trigger")
-                    allevents = join(
-                        left=trigger_table,
-                        right=simshower_table,
-                        keys=["obs_id", "event_id"],
-                    )
+                    # Read the trigger table.
+                    allevents = read_table(f, "/dl1/event/subarray/trigger")
+                    if self.process_type == "Simulation":
+                        # The shower simulation table is joined with the subarray trigger table.
+                        allevents = join(
+                            left=allevents,
+                            right=simshower_table,
+                            keys=["obs_id", "event_id"],
+                        )
 
-                    # MC event selection based on the shower simulation table.
-                    if event_selection:
-                        for filter in event_selection:
-                            if "min_value" in filter:
-                                allevents = allevents[
-                                    allevents[filter["col_name"]] >= filter["min_value"]
-                                ]
-                            if "max_value" in filter:
-                                allevents = allevents[
-                                    allevents[filter["col_name"]] < filter["max_value"]
-                                ]
+                        # MC event selection based on the shower simulation table.
+                        if event_selection:
+                            for filter in event_selection:
+                                if "min_value" in filter:
+                                    allevents = allevents[
+                                        allevents[filter["col_name"]]
+                                        >= filter["min_value"]
+                                    ]
+                                if "max_value" in filter:
+                                    allevents = allevents[
+                                        allevents[filter["col_name"]]
+                                        < filter["max_value"]
+                                    ]
 
                     # Apply the multiplicity cut on the subarray.
                     # Therefore, two telescope types have to be selected at least.
+                    event_id = allevents["event_id"]
                     tels_with_trigger = np.array(allevents["tels_with_trigger"])
-                    sim_indices = np.array(allevents["sim_index"], np.int32)
+                    if self.process_type == "Simulation":
+                        sim_indices = np.array(allevents["sim_index"], np.int32)
                     if len(selected_telescopes) > 1:
                         # Get all tel ids from the subarray
                         tel_ids = np.hstack(list(selected_telescopes.values()))
@@ -680,7 +735,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         selected_events = events[
                             np.where(multiplicity >= multiplicity_selection["Subarray"])
                         ]
-                        sim_indices = sim_indices[selected_events]
+                        event_id = event_id[selected_events]
+                        if self.process_type == "Simulation":
+                            sim_indices = sim_indices[selected_events]
 
                     image_indices = {}
                     for tel_type in selected_telescopes:
@@ -711,7 +768,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                     multiplicity >= multiplicity_selection[tel_type]
                                 )
                             ]
-                            sim_indices = sim_indices[selected_events]
+                            event_id = event_id[selected_events]
+                            if self.process_type == "Simulation":
+                                sim_indices = sim_indices[selected_events]
                         selected_events_trigger = allowed_tels_with_trigger[
                             selected_events
                         ]
@@ -772,7 +831,11 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                     >= multiplicity_selection[tel_type]
                                 )
                                 img_idx = img_idx[aftercuts_multiplicty_mask]
-                                sim_indices = sim_indices[aftercuts_multiplicty_mask]
+                                event_id = event_id[aftercuts_multiplicty_mask]
+                                if self.process_type == "Simulation":
+                                    sim_indices = sim_indices[
+                                        aftercuts_multiplicty_mask
+                                    ]
                             image_indices[tel_type] = img_idx
 
                         elif self.split_datasets_by == "tel_type":
@@ -831,12 +894,16 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                     >= multiplicity_selection[tel_type]
                                 )
                                 img_idx = img_idx[aftercuts_multiplicty_mask]
-                                sim_indices = sim_indices[aftercuts_multiplicty_mask]
+                                event_id = event_id[aftercuts_multiplicty_mask]
+                                if self.process_type == "Simulation":
+                                    sim_indices = sim_indices[
+                                        aftercuts_multiplicty_mask
+                                    ]
                             image_indices[tel_type] = img_idx
 
                     # Apply the multiplicity cut after the parameter cuts for the subarray
                     if parameter_selection and multiplicity_selection["Subarray"] > 1:
-                        subarray_triggers = np.zeros(len(sim_indices))
+                        subarray_triggers = np.zeros(len(event_id))
                         for tel_type in selected_telescopes:
                             subarray_triggers += np.count_nonzero(
                                 image_indices[tel_type] + 1, axis=1
@@ -844,7 +911,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         aftercuts_multiplicty_mask = (
                             subarray_triggers >= multiplicity_selection["Subarray"]
                         )
-                        sim_indices = sim_indices[aftercuts_multiplicty_mask]
+                        if self.process_type == "Simulation":
+                            sim_indices = sim_indices[aftercuts_multiplicty_mask]
                         for tel_type in selected_telescopes:
                             image_indices[tel_type] = image_indices[tel_type][
                                 aftercuts_multiplicty_mask
@@ -857,29 +925,30 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         tel_ids = np.hstack(list(selected_telescopes.values()))
                         array_pointings = np.zeros(len(tel_ids), np.int8)
 
-                    # Track number of events for each particle type
-                    self.simulated_particles["total"] += len(sim_indices)
-                    if true_shower_primary_id in self.simulated_particles:
-                        self.simulated_particles[true_shower_primary_id] += len(
-                            sim_indices
-                        )
-                    else:
-                        self.simulated_particles[true_shower_primary_id] = len(
-                            sim_indices
-                        )
-
-                    # Construct the example identifiers
-                    # TODO: Find a better way!?
-                    for idx, sim_idx in enumerate(sim_indices):
-                        img_idx = []
-                        for tel_type in selected_telescopes:
-                            img_idx.append(image_indices[tel_type][idx])
-                        if self.pointing_mode in ["subarray", "divergent"]:
-                            example_identifiers.append(
-                                (file_idx, sim_idx, img_idx, array_pointings)
+                    if self.process_type == "Simulation":
+                        # Track number of events for each particle type
+                        self.simulated_particles["total"] += len(sim_indices)
+                        if true_shower_primary_id in self.simulated_particles:
+                            self.simulated_particles[true_shower_primary_id] += len(
+                                sim_indices
                             )
                         else:
-                            example_identifiers.append((file_idx, sim_idx, img_idx))
+                            self.simulated_particles[true_shower_primary_id] = len(
+                                sim_indices
+                            )
+
+                        # Construct the example identifiers
+                        # TODO: Find a better way!?
+                        for idx, sim_idx in enumerate(sim_indices):
+                            img_idx = []
+                            for tel_type in selected_telescopes:
+                                img_idx.append(image_indices[tel_type][idx])
+                            if self.pointing_mode in ["subarray", "divergent"]:
+                                example_identifiers.append(
+                                    (file_idx, sim_idx, img_idx, array_pointings)
+                                )
+                            else:
+                                example_identifiers.append((file_idx, sim_idx, img_idx))
 
                 # Confirm that the files are consistent and merge them
                 if not self.telescopes:
@@ -896,6 +965,36 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 else:
                     self.example_identifiers.extend(example_identifiers)
 
+            # Handling the particle ids automatically and class weights calculation
+            # Scaling by total/2 helps keep the loss to a similar magnitude.
+            # The sum of the weights of all examples stays the same.
+            self.num_classes = len(self.simulated_particles) - 1
+            if self.process_type == "Simulation":
+                if len(self.simulated_particles) > 2:
+                    self.shower_primary_id_to_class = {}
+                    self.class_names = []
+                    for p, particle_id in enumerate(
+                        list(self.simulated_particles.keys())[1:]
+                    ):
+                        self.shower_primary_id_to_class[particle_id] = p
+                        self.class_names.append(
+                            (self.shower_primary_id_to_name[particle_id])
+                        )
+
+                    self.class_weight = {}
+                    for particle_id, num_particles in self.simulated_particles.items():
+                        if particle_id != "total":
+                            self.class_weight[
+                                self.shower_primary_id_to_class[particle_id]
+                            ] = (1 / num_particles) * (
+                                self.simulated_particles["total"] / 2.0
+                            )
+
+            # Shuffle the examples
+            if shuffle:
+                random.seed(seed)
+                random.shuffle(self.example_identifiers)
+
             # Dump example_identifiers and simulation_info to a pandas hdf5 file
             if not isinstance(example_identifiers_file, dict):
                 pd.DataFrame(data=self.example_identifiers).to_hdf(
@@ -911,12 +1010,23 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     ).to_hdf(
                         example_identifiers_file, key="simulated_particles", mode="a"
                     )
+                    if self.class_weight:
+                        pd.DataFrame(
+                            data=pd.DataFrame(self.class_weight, index=[0])
+                        ).to_hdf(example_identifiers_file, key="class_weight", mode="a")
+                        pd.DataFrame(data=pd.DataFrame(self.class_names)).to_hdf(
+                            example_identifiers_file, key="class_names", mode="a"
+                        )
+                        pd.DataFrame(
+                            data=pd.DataFrame(
+                                self.shower_primary_id_to_class, index=[0]
+                            )
+                        ).to_hdf(
+                            example_identifiers_file,
+                            key="shower_primary_id_to_class",
+                            mode="a",
+                        )
                 example_identifiers_file.close()
-
-        # Shuffle the examples
-        if shuffle:
-            random.seed(seed)
-            random.shuffle(self.example_identifiers)
 
         # ImageMapper (1D charges -> 2D images)
         if self.image_channels is not None:
@@ -1000,7 +1110,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         np.float32,
                     )
 
-        if self.event_info:
+        if self.process_type == "Simulation":
             super()._construct_unprocessed_example_description(
                 self.files[first_file].root.configuration.instrument.subarray.layout,
                 self.files[first_file].root.simulation.event.subarray.shower,
@@ -1046,7 +1156,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             tel_type = row["tel_description"].decode()
             if tel_type not in telescopes:
                 telescopes[tel_type] = []
-            if self.data_model_version != "v1.0.0":
+            if not self.data_model_version.startswith("v1"):
                 camera_index = row["camera_index"]
                 if self._get_camera_type(tel_type) not in camera2index:
                     camera2index[self._get_camera_type(tel_type)] = camera_index
@@ -1101,7 +1211,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         pixel_positions = {}
         num_pixels = {}
         for camera in cameras:
-            if self.data_model_version != "v1.0.0":
+            if not self.data_model_version.startswith("v1"):
                 cam_geom = telescope_type_information.camera._f_get_child(
                     "geometry_{}".format(self.camera2index[camera])
                 )
@@ -1116,11 +1226,11 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             # For now hardcoded, since this information is not in the h5 files.
             # The official CTA DL1 format will contain this information.
             if camera in ["LSTCam", "NectarCam", "MAGICCam"]:
-                rotation_angle = (
-                    -70.9 * np.pi / 180.0
-                    if camera == "MAGICCam"
-                    else -100.893 * np.pi / 180.0
-                )
+                rotation_angle = -70.9 * np.pi / 180.0
+                if camera == "MAGICCam":
+                    rotation_angle = -100.893 * np.pi / 180.0
+                if self.process_type == "Observation" and camera == "LSTCam":
+                    rotation_angle = -70.8935 * np.pi / 180.0
                 rotation_matrix = np.matrix(
                     [
                         [np.cos(rotation_angle), -np.sin(rotation_angle)],
@@ -1134,9 +1244,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         return pixel_positions, num_pixels
 
-    def _load_tel_type_data(
-        self, filename, nrow, tel_type, trigger_info, pointing_info=None
-    ):
+    def _load_tel_type_data(self, filename, tel_type, trigger_info, pointing_info=None):
         triggers = []
         images = []
         parameters_lists = []
@@ -1228,7 +1336,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     parameter_list = []
                     for parameter in self.parameter_list:
                         parameter_list.append(
-                            prmtr_child[trigger_info[i]][parameter] if trigger_info[i] != 0 else np.nan
+                            prmtr_child[trigger_info[i]][parameter]
+                            if trigger_info[i] != 0
+                            else np.nan
                         )
                     parameters_lists.append(np.array(parameter_list, dtype=np.float32))
 
@@ -1259,7 +1369,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         # Load the data and any selected array info
         if self.mode == "mono":
             # Get a single image
-            nrow, index, tel_id = identifiers[1:4]
+            if self.process_type == "Simulation":
+                nrow, index, tel_id = identifiers[1:4]
+            else:
+                index, tel_id = identifiers[1:3]
 
             example = []
             if self.split_datasets_by == "tel_id":
@@ -1277,8 +1390,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         child = self.files[
                             filename
                         ].root.dl1.event.telescope.parameters._f_get_child(tel_table)
-                    parameter_list = child[index][self.parameter_list]
-                    example.append(np.array(list(parameter_list), dtype=np.float32))
+                    parameter_list = list(child[index][self.parameter_list])
+                    example.extend([np.stack(parameter_list)])
             elif self.split_datasets_by == "tel_type":
                 if self.image_channels is not None:
                     with lock:
@@ -1294,8 +1407,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         ].root.dl1.event.telescope.parameters._f_get_child(
                             self.tel_type
                         )
-                    parameter_list = child[index][self.parameter_list]
-                    example.append(np.array(list(parameter_list), dtype=np.float32))
+                    parameter_list = list(child[index][self.parameter_list])
+                    example.extend([np.stack(parameter_list)])
 
             subarray_info = [[] for column in self.subarray_info]
             tel_query = "tel_id == {}".format(tel_id)
@@ -1345,16 +1458,21 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         elif self.mode == "stereo":
             # Get a list of images and/or image parameters, an array of binary trigger values and telescope pointings
             # for each selected telescope type
-            nrow = identifiers[1]
-            trigger_info = identifiers[2]
             pointing_info = None
-            if self.pointing_mode == "divergent":
-                pointing_info = identifiers[3]
+            if self.process_type == "Simulation":
+                nrow = identifiers[1]
+                trigger_info = identifiers[2]
+                if self.pointing_mode == "divergent":
+                    pointing_info = identifiers[3]
+            else:
+                trigger_info = identifiers[1]
+                if self.pointing_mode == "divergent":
+                    pointing_info = identifiers[2]
 
             example = []
             for ind, tel_type in enumerate(self.selected_telescopes):
                 tel_type_example = self._load_tel_type_data(
-                    filename, nrow, tel_type, trigger_info[ind], pointing_info
+                    filename, tel_type, trigger_info[ind], pointing_info
                 )
                 example.extend(tel_type_example)
 
@@ -1375,7 +1493,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 )
 
         # Load event info
-        if self.event_info:
+        if self.process_type == "Simulation":
             with lock:
                 events = self.files[filename].root.simulation.event.subarray.shower
                 for column in self.event_info:
@@ -1422,6 +1540,19 @@ class DL1DataReaderDL1DH(DL1DataReader):
         )
 
         first_file = list(self.files)[0]
+        self.data_model_version = "dl1dh_v" + self._v_attrs["dl1_data_handler_version"]
+        self.process_type = (
+            "Simulation" if "corsika_version" in self._v_attrs else "Observation"
+        )
+        self.instrument_id = (
+            "MAGIC"
+            if self.files[first_file]
+            .root.Array_Information[0]["type"]
+            .decode()
+            .split("_")[1]
+            == "MAGIC"
+            else "CTA"
+        )
 
         # Set pointing mode
         # Fix_subarray: Fix subarray pointing (MC production)
@@ -1477,6 +1608,20 @@ class DL1DataReaderDL1DH(DL1DataReader):
                 self.simulated_particles = pd.read_hdf(
                     example_identifiers_file, key="/simulated_particles"
                 ).to_dict("records")[0]
+            if "/class_weight" in list(example_identifiers_file.keys()):
+                self.class_weight = pd.read_hdf(
+                    example_identifiers_file, key="/class_weight"
+                ).to_dict("records")[0]
+            if "/class_names" in list(example_identifiers_file.keys()):
+                class_names = pd.read_hdf(
+                    example_identifiers_file, key="/class_names"
+                ).to_dict("records")
+                self.class_names = [name[0] for name in class_names]
+            if "/shower_primary_id_to_class" in list(example_identifiers_file.keys()):
+                self.shower_primary_id_to_class = pd.read_hdf(
+                    example_identifiers_file, key="/shower_primary_id_to_class"
+                ).to_dict("records")[0]
+            self.num_classes = len(self.simulated_particles) - 1
             (
                 self.telescopes,
                 self.selected_telescopes,
@@ -1491,7 +1636,7 @@ class DL1DataReaderDL1DH(DL1DataReader):
 
             for file_idx, (filename, f) in enumerate(self.files.items()):
 
-                if "corsika_version" in self._v_attrs:
+                if self.process_type == "Simulation":
                     self.simulation_info = super()._construct_simulated_info(
                         f, self.simulation_info, file_type="dl1dh"
                     )
@@ -1672,6 +1817,36 @@ class DL1DataReaderDL1DH(DL1DataReader):
                 else:
                     self.example_identifiers.extend(example_identifiers)
 
+            # Handling the particle ids automatically and class weights calculation
+            # Scaling by total/2 helps keep the loss to a similar magnitude.
+            # The sum of the weights of all examples stays the same.
+            self.num_classes = len(self.simulated_particles) - 1
+            if self.process_type == "Simulation":
+                if len(self.simulated_particles) > 2:
+                    self.shower_primary_id_to_class = {}
+                    self.class_names = []
+                    for p, particle_id in enumerate(
+                        list(self.simulated_particles.keys())[1:]
+                    ):
+                        self.shower_primary_id_to_class[particle_id] = p
+                        self.class_names.append(
+                            (self.shower_primary_id_to_name[particle_id])
+                        )
+
+                    self.class_weight = {}
+                    for particle_id, num_particles in self.simulated_particles.items():
+                        if particle_id != "total":
+                            self.class_weight[
+                                self.shower_primary_id_to_class[particle_id]
+                            ] = (1 / num_particles) * (
+                                self.simulated_particles["total"] / 2.0
+                            )
+
+            # Shuffle the examples
+            if shuffle:
+                random.seed(seed)
+                random.shuffle(self.example_identifiers)
+
             # Dump example_identifiers and simulation_info to a pandas hdf5 file
             if not isinstance(example_identifiers_file, dict):
                 pd.DataFrame(data=self.example_identifiers).to_hdf(
@@ -1687,11 +1862,23 @@ class DL1DataReaderDL1DH(DL1DataReader):
                     ).to_hdf(
                         example_identifiers_file, key="simulated_particles", mode="a"
                     )
-
-        # Shuffle the examples
-        if shuffle:
-            random.seed(seed)
-            random.shuffle(self.example_identifiers)
+                    if self.class_weight:
+                        pd.DataFrame(
+                            data=pd.DataFrame(self.class_weight, index=[0])
+                        ).to_hdf(example_identifiers_file, key="class_weight", mode="a")
+                        pd.DataFrame(data=pd.DataFrame(self.class_names)).to_hdf(
+                            example_identifiers_file, key="class_names", mode="a"
+                        )
+                        pd.DataFrame(
+                            data=pd.DataFrame(
+                                self.shower_primary_id_to_class, index=[0]
+                            )
+                        ).to_hdf(
+                            example_identifiers_file,
+                            key="shower_primary_id_to_class",
+                            mode="a",
+                        )
+                example_identifiers_file.close()
 
         if self.pointing_mode == "fix_subarray":
             run_array_direction = self.files[first_file].root._v_attrs[
@@ -1967,8 +2154,8 @@ class DL1DataReaderDL1DH(DL1DataReader):
                     parameters = self.files[filename].root[
                         "Parameters" + str(self.parameter_table)
                     ][self.tel_type]
-                parameter_list = parameters[index][self.parameter_list]
-                example.append(np.array(list(parameter_list), dtype=np.float32))
+                parameter_list = list(parameters[index][self.parameter_list])
+                example.extend([np.stack(parameter_list)])
 
             subarray_info = [[] for column in self.subarray_info]
             query = "id == {}".format(tel_id)
