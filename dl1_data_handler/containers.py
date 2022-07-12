@@ -21,6 +21,7 @@ class MAGICMCHeaderContainer(Container):
     c_wave_upper = Field(nan, "C Wave Upper")
     num_obs_lev = Field(nan, "Number Observations Level")
     spectral_index = Field(nan, "Spectral Index")
+    min_viewcone_radius = Field(nan * u.deg, "Viewcone Radius Minimum", unit=u.deg)
     max_viewcone_radius = Field(nan * u.deg, "Viewcone Radius Maximum", unit=u.deg)
     max_scatter_range = Field(nan, "Scatter Range Maximum")
     star_field_rotate = Field(nan, "Star Field Rotate")

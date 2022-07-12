@@ -649,10 +649,19 @@ class DLMAGICEventSource(EventSource):
                 c_wave_upper=self.meta["{}.fCWaveUpper".format(run_header)].array()[0],
                 num_obs_lev=self.meta["{}.fNumObsLev".format(run_header)].array()[0],
                 spectral_index=self.meta["{}.fSlopeSpec".format(run_header)].array()[0],
-                max_viewcone_radius=Angle(
-                    self.meta[
+                min_viewcone_radius = 0.0
+                max_viewcone_radius = self.meta[
                         "{}.fRandomPointingConeSemiAngle".format(run_header)
-                    ].array()[0],
+                    ].array()[0]
+                # Check if MC ringwobble
+                if np.around(max_viewcone_radius, decimals=1) == 0.4:
+                    min_viewcone_radius = 0.4
+                min_viewcone_radius=Angle(
+                    min_viewcone_radius,
+                    u.deg,
+                ),
+                max_viewcone_radius=Angle(
+                    max_viewcone_radius,
                     u.deg,
                 ),
                 max_scatter_range=self.meta["{}.fImpactMax".format(run_header)].array()[
