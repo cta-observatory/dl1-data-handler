@@ -264,7 +264,10 @@ class DL1DataReader:
             simulation_table = file.root.configuration.simulation
             runs = simulation_table._f_get_child("run")
             shower_reuse = max(np.array(runs.cols._f_col("shower_reuse")))
-            num_showers = sum(np.array(runs.cols._f_col("num_showers"))) * shower_reuse
+            if self.data_model_version.startswith("v4"):
+                n_showers = sum(np.array(runs.cols._f_col("n_showers"))) * shower_reuse
+            else:
+                n_showers = sum(np.array(runs.cols._f_col("num_showers"))) * shower_reuse
             if "service" in file.root.simulation:
                 service_table = file.root.simulation.service
                 shower_distributions = service_table._f_get_child("shower_distribution")
@@ -280,7 +283,7 @@ class DL1DataReader:
             min_alt = min(np.array(runs.cols._f_col("min_alt")))
             max_alt = max(np.array(runs.cols._f_col("max_alt")))
         elif file_type == "dl1dh":
-            num_showers = file.root._v_attrs["num_showers"]
+            n_showers = file.root._v_attrs["num_showers"]
             energy_range_min = file.root._v_attrs["energy_range_min"]
             energy_range_max = file.root._v_attrs["energy_range_max"]
             max_scatter_range = file.root._v_attrs["max_scatter_range"]
@@ -291,7 +294,7 @@ class DL1DataReader:
             max_alt = file.root._v_attrs["max_alt"]
 
         if simulation_info:
-            simulation_info["num_showers"] += float(num_showers)
+            simulation_info["n_showers"] += float(n_showers)
             if simulation_info["energy_range_min"] > energy_range_min:
                 simulation_info["energy_range_min"] = energy_range_min
             if simulation_info["energy_range_max"] < energy_range_max:
@@ -308,7 +311,7 @@ class DL1DataReader:
                 simulation_info["max_alt"] = max_alt
         else:
             simulation_info = {}
-            simulation_info["num_showers"] = float(num_showers)
+            simulation_info["n_showers"] = float(n_showers)
             simulation_info["energy_range_min"] = energy_range_min
             simulation_info["energy_range_max"] = energy_range_max
             simulation_info["max_scatter_range"] = max_scatter_range
@@ -1202,12 +1205,17 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         """
 
-        cameras = [
-            description.decode("UTF-8").split("_")[-1]
-            for description in telescope_type_information.optics.cols._f_col(
-                "description"
-            )
-        ]
+        if not self.data_model_version.startswith("v4"):
+            cameras = [
+                description.decode("UTF-8").split("_")[-1]
+                for description in telescope_type_information.optics.cols._f_col(
+                    "description"
+                )
+            ]
+        else:
+            cameras = self.camera2index.keys()
+
+
         pixel_positions = {}
         num_pixels = {}
         for camera in cameras:
