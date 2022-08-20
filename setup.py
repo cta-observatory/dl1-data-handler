@@ -21,12 +21,12 @@ setup(
     install_requires=[
         "numpy>1.16",
         "astropy",
-        "ctapipe==0.15.0",
+        "ctapipe==0.16.0",
         "traitlets>=5.0",
         "jupyter",
         "pandas",
         "pytest-cov",
-        "tables",
+        "tables>=3.7",
     ],
     entry_points={
         "console_scripts": [
