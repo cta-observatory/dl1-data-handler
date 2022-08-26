@@ -634,13 +634,23 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     if parameter_selection:
                         for filter in parameter_selection:
                             if "min_value" in filter:
-                                allevents = allevents[
-                                    allevents[filter["col_name"]] >= filter["min_value"]
-                                ]
+                                if filter["col_name"] in allevents.colnames:
+                                    allevents = allevents[
+                                        allevents[filter["col_name"]] >= filter["min_value"]
+                                    ]
+                                else:
+                                    allevents = allevents[
+                                        allevents["camera_frame_"+filter["col_name"]] >= filter["min_value"]
+                                    ]
                             if "max_value" in filter:
-                                allevents = allevents[
-                                    allevents[filter["col_name"]] < filter["max_value"]
-                                ]
+                                if filter["col_name"] in allevents.colnames:
+                                    allevents = allevents[
+                                        allevents[filter["col_name"]] < filter["max_value"]
+                                    ]
+                                else:
+                                    allevents = allevents[
+                                        allevents["camera_frame_"+filter["col_name"]] < filter["max_value"]
+                                    ]
 
                     # TODO: Fix pointing over time (see ctapipe issue 1484 & 1562)
                     if self.pointing_mode in ["subarray", "divergent"]:
@@ -802,16 +812,27 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 if parameter_selection:
                                     for filter in parameter_selection:
                                         if "min_value" in filter:
-                                            tel_table = tel_table[
-                                                tel_table[filter["col_name"]]
-                                                >= filter["min_value"]
-                                            ]
+                                            if filter["col_name"] in tel_table.colnames:
+                                                tel_table = tel_table[
+                                                    tel_table[filter["col_name"]]
+                                                    >= filter["min_value"]
+                                                ]
+                                            else:
+                                                tel_table = tel_table[
+                                                    tel_table["camera_frame_"+filter["col_name"]]
+                                                    >= filter["min_value"]
+                                                ]
                                         if "max_value" in filter:
-                                            tel_table = tel_table[
-                                                tel_table[filter["col_name"]]
-                                                < filter["max_value"]
-                                            ]
-
+                                            if filter["col_name"] in tel_table.colnames:
+                                                tel_table = tel_table[
+                                                    tel_table[filter["col_name"]]
+                                                    < filter["max_value"]
+                                                ]
+                                            else:
+                                                tel_table = tel_table[
+                                                    tel_table["camera_frame_"+filter["col_name"]]
+                                                    < filter["max_value"]
+                                                ]
                                 merged_table = join(
                                     left=tel_table,
                                     right=allevents[selected_events],
