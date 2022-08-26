@@ -434,9 +434,17 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 )
             )
 
-        self.telescopes = {}
         if selected_telescope_ids is None:
             selected_telescope_ids = []
+        (
+            self.telescopes,
+            self.selected_telescopes,
+            self.camera2index,
+        ) = self._construct_telescopes_selection(
+            self.files[first_file].root.configuration.instrument.subarray.layout,
+            selected_telescope_types,
+            selected_telescope_ids,
+        )
 
         if multiplicity_selection is None:
             multiplicity_selection = {}
@@ -512,15 +520,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     example_identifiers_file, key="/shower_primary_id_to_class"
                 ).to_dict("records")[0]
             self.num_classes = len(self.simulated_particles) - 1
-            (
-                self.telescopes,
-                self.selected_telescopes,
-                self.camera2index,
-            ) = self._construct_telescopes_selection(
-                self.files[first_file].root.configuration.instrument.subarray.layout,
-                selected_telescope_types,
-                selected_telescope_ids,
-            )
             example_identifiers_file.close()
         else:
 
@@ -531,7 +530,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     self.simulation_info = super()._construct_simulated_info(
                         f, self.simulation_info, file_type="stage1"
                     )
-                # Teslecope selection
+                # Telescope selection
                 (
                     telescopes,
                     selected_telescopes,
@@ -982,7 +981,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         "Inconsistent telescope definition in " "{}".format(filename)
                     )
                 self.selected_telescopes = selected_telescopes
-                self.camera2index = camera2index
 
                 if self.example_identifiers is None:
                     self.example_identifiers = example_identifiers
@@ -1087,6 +1085,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             self.pixel_positions, self.num_pixels = self._construct_pixel_positions(
                 self.files[first_file].root.configuration.instrument.telescope
             )
+
             if "camera_types" not in mapping_settings:
                 mapping_settings["camera_types"] = self.pixel_positions.keys()
             self.image_mapper = ImageMapper(
@@ -1235,7 +1234,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             ]
         else:
             cameras = self.camera2index.keys()
-
 
         pixel_positions = {}
         num_pixels = {}
