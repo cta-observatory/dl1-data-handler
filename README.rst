@@ -190,14 +190,10 @@ All other scripts located in the scripts/deprecated directory are not currently 
 Examples/Tips
 -------------
 
-
-* Vitables is very helpful for viewing and debugging PyTables-style HDF5 files. Installation/download instructions can be found in the link below. NOTE: It is STRONGLY recommended that vitables be installed in a separate Anaconda environment with Python version 2.7 to avoid issues with conflicting PyQt5 versions. See this issue thread for details: `https://github.com/ContinuumIO/anaconda-issues/issues/1554 <https://github.com/ContinuumIO/anaconda-issues/issues/1554>`_
+* Vitables is very helpful for viewing and debugging PyTables-style HDF5 files. Installation/download instructions can be found in the link below.
 
 Known Issues/Troubleshooting
 ----------------------------
-
-
-* ViTables PyQt5 dependency confict (pip vs. conda): `relevent issue thread <https://github.com/ContinuumIO/anaconda-issues/issues/1554>`_
 
 Links
 -----
