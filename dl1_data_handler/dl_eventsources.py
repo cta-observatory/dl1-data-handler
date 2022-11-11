@@ -153,6 +153,11 @@ class DLMAGICEventSource(EventSource):
 
         self._header = self._parse_header()
 
+        self.empty_file = False
+        if self.is_simulation:
+            if len(self.superstar["MMcEvt_1.fPartId"].array()) == 0:
+                self.empty_file = True
+
     @property
     def is_simulation(self):
         """

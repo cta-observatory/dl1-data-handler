@@ -1482,6 +1482,10 @@ class DL1DataWriter:
                 )
             elif filetype == "root":
                 event_source = dl_eventsources.DLMAGICEventSource(input_url=filename)
+                if event_source.empty_file:
+                    data_dumper.dump_mc_header_info(mcheader_container=event_source._header, tel_desc="LST_MAGIC_MAGICCam")
+                    continue
+
             elif filetype == "simtel":
                 event_source = io.eventsource.EventSource.from_url(
                     filename, back_seekable=True
