@@ -264,7 +264,7 @@ class DL1DataReader:
             simulation_table = file.root.configuration.simulation
             runs = simulation_table._f_get_child("run")
             shower_reuse = max(np.array(runs.cols._f_col("shower_reuse")))
-            if self.data_model_version.startswith("v4"):
+            if self.data_model_mainversion >= 4:
                 n_showers = sum(np.array(runs.cols._f_col("n_showers"))) * shower_reuse
             else:
                 n_showers = sum(np.array(runs.cols._f_col("num_showers"))) * shower_reuse
@@ -416,6 +416,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         first_file = list(self.files)[0]
         self.data_model_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
+        self.data_model_mainversion = int(self.data_model_version.split(".")[0].replace("v",""))
         self.process_type = self._v_attrs["CTA PROCESS TYPE"]
         self.instrument_id = self._v_attrs["CTA INSTRUMENT ID"]
 
@@ -1179,7 +1180,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             tel_type = row["tel_description"].decode()
             if tel_type not in telescopes:
                 telescopes[tel_type] = []
-            if not self.data_model_version.startswith("v1"):
+            if self.data_model_mainversion > 1:
                 camera_index = row["camera_index"]
                 if self._get_camera_type(tel_type) not in camera2index:
                     camera2index[self._get_camera_type(tel_type)] = camera_index
@@ -1224,8 +1225,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         num_pixels (dict): dictionary of `{cameras: num_pixels}`
 
         """
-
-        if not self.data_model_version.startswith("v4"):
+        if self.data_model_mainversion < 4:
             cameras = [
                 description.decode("UTF-8").split("_")[-1]
                 for description in telescope_type_information.optics.cols._f_col(
