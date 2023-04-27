@@ -21,7 +21,7 @@ setup(
     install_requires=[
         "numpy>1.16",
         "astropy",
-        "ctapipe==0.17.0",
+        "ctapipe==0.19",
         "traitlets>=5.0",
         "jupyter",
         "pandas",

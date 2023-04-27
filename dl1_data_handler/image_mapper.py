@@ -26,6 +26,7 @@ class ImageMapper:
         # when multiple instances of ImageMapper are created
         self.image_shapes = {
             "LSTCam": (110, 110, 1),
+            "LSTSiPMCam": (234, 234, 1),
             "FlashCam": (112, 112, 1),
             "NectarCam": (110, 110, 1),
             "SCTCam": (120, 120, 1),
