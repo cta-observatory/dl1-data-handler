@@ -432,6 +432,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         shuffle=False,
         seed=None,
         waveform=None,
+        waveform_sequence_length=None,
         image_channels=None,
         mapping_settings=None,
         parameter_list=None,
@@ -497,18 +498,20 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         self.waveform = waveform
         if self.waveform is not None:
             if "raw" in self.waveform:
-                self.waveform_sequence_length = (
+                self.waveform_sequence_max_length = (
                     self.files[first_file]
                     .root.r0.event.telescope.tel_001.coldescrs["waveform"]
                     .shape[-1]
                 )
             if "calibrate" in self.waveform:
-                self.waveform_sequence_length = (
+                self.waveform_sequence_max_length = (
                     self.files[first_file]
                     .root.r1.event.telescope.tel_001.coldescrs["waveform"]
                     .shape[-1]
                 )
-
+        self.waveform_sequence_length = waveform_sequence_length
+        if self.waveform_sequence_length is None:
+            self.waveform_sequence_length = self.waveform_sequence_max_length
         # Integrated charges and peak arrival times (DL1a)
         self.image_channels = image_channels
         self.image_scale = None
@@ -1239,9 +1242,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         vector = np.zeros(
             shape=(
                 self.num_pixels[self._get_camera_type(tel_type)],
-                self.waveform_sequence_length,
+                self.waveform_sequence_max_length,
             ),
-            dtype=np.float32,
+            dtype=np.float16,
         )
         mapped_waveform = np.zeros(
             shape=(
@@ -1250,10 +1253,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 self.image_mapper.image_shapes[self._get_camera_type(self.tel_type)][1],
                 1,
             ),
-            dtype=np.float32,
+            dtype=np.float16,
         )
         # If the telescope didn't trigger, the waveform index is -1 and a blank
-        # image of all zeros with be loaded
+        # waveform of all zeros with be loaded
         if waveform_index != -1 and child:
             with lock:
                 vector = child[waveform_index]["waveform"]
@@ -1263,8 +1266,19 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             waveform = self.image_mapper.map_image(
                 vector, self._get_camera_type(tel_type)
             )
-            for i in range(self.waveform_sequence_length):
-                mapped_waveform[i] = np.expand_dims(waveform[:, :, i], axis=2)
+            if (
+                self.waveform_sequence_max_length - self.waveform_sequence_length
+            ) < 0.001:
+                waveform_start = 0
+                waveform_stop = self.waveform_sequence_max_length
+            else:
+                waveform_max = np.argmax(np.sum(waveform, axis=(0, 1)))
+                waveform_start = 1 + waveform_max - self.waveform_sequence_length / 2
+                waveform_stop = 1 + waveform_max + self.waveform_sequence_length / 2
+            for i, index in enumerate(
+                np.arange(waveform_start, waveform_stop, dtype=int)
+            ):
+                mapped_waveform[i] = np.expand_dims(waveform[:, :, index], axis=2)
         # If 'indexed_conv' is selected, we only need the unmapped vector.
         if (
             self.image_mapper.mapping_method[self._get_camera_type(tel_type)]
