@@ -43,7 +43,6 @@ lock = threading.Lock()
 
 class DL1DataReader:
     def __init__(self, file_list, mode="mono", subarray_info=None, event_info=None):
-
         # Construct dict of filename:file_handle pairs
         self.files = OrderedDict()
         # Order the file_list
@@ -104,6 +103,25 @@ class DL1DataReader:
         """
         if self.mode == "mono":
             self.unprocessed_example_description = []
+            if self.waveform is not None:
+                self.unprocessed_example_description.append(
+                    {
+                        "name": "waveform",
+                        "tel_type": self.tel_type,
+                        "base_name": "waveform",
+                        "shape": (
+                            self.waveform_sequence_length,
+                            self.image_mapper.image_shapes[
+                                self._get_camera_type(self.tel_type)
+                            ][0],
+                            self.image_mapper.image_shapes[
+                                self._get_camera_type(self.tel_type)
+                            ][1],
+                            1,
+                        ),
+                        "dtype": np.dtype(np.float32),
+                    }
+                )
             if self.image_channels is not None:
                 self.unprocessed_example_description.append(
                     {
@@ -165,7 +183,26 @@ class DL1DataReader:
                         }
                     ]
                 )
-
+                if self.waveform is not None:
+                    self.unprocessed_example_description.append(
+                        {
+                            "name": tel_type + "_waveforms",
+                            "tel_type": tel_type,
+                            "base_name": "waveforms",
+                            "shape": (
+                                num_tels,
+                                self.waveform_sequence_length,
+                                self.image_mapper.image_shapes[
+                                    self._get_camera_type(tel_type)
+                                ][0],
+                                self.image_mapper.image_shapes[
+                                    self._get_camera_type(tel_type)
+                                ][1],
+                                1,
+                            ),
+                            "dtype": np.dtype(np.float32),
+                        }
+                    )
                 if self.image_channels is not None:
                     self.unprocessed_example_description.extend(
                         [
@@ -267,7 +304,9 @@ class DL1DataReader:
             if self.data_model_mainversion >= 4:
                 n_showers = sum(np.array(runs.cols._f_col("n_showers"))) * shower_reuse
             else:
-                n_showers = sum(np.array(runs.cols._f_col("num_showers"))) * shower_reuse
+                n_showers = (
+                    sum(np.array(runs.cols._f_col("num_showers"))) * shower_reuse
+                )
             if "service" in file.root.simulation:
                 service_table = file.root.simulation.service
                 shower_distributions = service_table._f_get_child("shower_distribution")
@@ -329,7 +368,6 @@ class DL1DataReader:
     # mapping table. When 'indexed_conv' is selected this function should
     # return the unmapped vector.
     def _get_image(self, child, tel_type, image_index, parameter_table=-1):
-
         vector = np.zeros(
             shape=(
                 self.num_pixels[self._get_camera_type(tel_type)],
@@ -393,6 +431,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         parameter_selection=None,
         shuffle=False,
         seed=None,
+        waveform=None,
         image_channels=None,
         mapping_settings=None,
         parameter_list=None,
@@ -401,7 +440,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         transforms=None,
         validate_processor=False,
     ):
-
         # Import ctapipe DL1 reader
         from ctapipe.io import (
             read_table,
@@ -416,7 +454,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         first_file = list(self.files)[0]
         self.data_model_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
-        self.data_model_mainversion = int(self.data_model_version.split(".")[0].replace("v",""))
+        self.data_model_mainversion = int(
+            self.data_model_version.split(".")[0].replace("v", "")
+        )
         self.process_type = self._v_attrs["CTA PROCESS TYPE"]
         self.instrument_id = self._v_attrs["CTA INSTRUMENT ID"]
 
@@ -453,10 +493,28 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         if mapping_settings is None:
             mapping_settings = {}
 
-        self.parameter_list = parameter_list
+        # Raw (R0) or calibrated (R1) waveform
+        self.waveform = waveform
+        if self.waveform is not None:
+            if "raw" in self.waveform:
+                self.waveform_sequence_length = (
+                    self.files[first_file]
+                    .root.r0.event.telescope.tel_001.coldescrs["waveform"]
+                    .shape[-1]
+                )
+            if "calibrate" in self.waveform:
+                self.waveform_sequence_length = (
+                    self.files[first_file]
+                    .root.r1.event.telescope.tel_001.coldescrs["waveform"]
+                    .shape[-1]
+                )
+
+        # Integrated charges and peak arrival times (DL1a)
         self.image_channels = image_channels
         self.image_scale = None
         self.peak_time_scale = None
+        # Image parameters (DL1b)
+        self.parameter_list = parameter_list
 
         # Get stage1 split_datasets_by type
         self.split_datasets_by = "tel_id"
@@ -523,9 +581,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             self.num_classes = len(self.simulated_particles) - 1
             example_identifiers_file.close()
         else:
-
             for file_idx, (filename, f) in enumerate(self.files.items()):
-
                 # Read simulation information from each observation needed for pyIRF
                 if self.process_type == "Simulation":
                     self.simulation_info = super()._construct_simulated_info(
@@ -572,7 +628,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 # Construct the example identifiers for 'mono' or 'stereo' mode.
                 example_identifiers = []
                 if self.mode == "mono":
-
                     if self.split_datasets_by == "tel_id":
                         # Construct the table containing all events.
                         # First, the telescope tables are joined with the shower simulation
@@ -636,20 +691,24 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             if "min_value" in filter:
                                 if filter["col_name"] in allevents.colnames:
                                     allevents = allevents[
-                                        allevents[filter["col_name"]] >= filter["min_value"]
+                                        allevents[filter["col_name"]]
+                                        >= filter["min_value"]
                                     ]
                                 else:
                                     allevents = allevents[
-                                        allevents["camera_frame_"+filter["col_name"]] >= filter["min_value"]
+                                        allevents["camera_frame_" + filter["col_name"]]
+                                        >= filter["min_value"]
                                     ]
                             if "max_value" in filter:
                                 if filter["col_name"] in allevents.colnames:
                                     allevents = allevents[
-                                        allevents[filter["col_name"]] < filter["max_value"]
+                                        allevents[filter["col_name"]]
+                                        < filter["max_value"]
                                     ]
                                 else:
                                     allevents = allevents[
-                                        allevents["camera_frame_"+filter["col_name"]] < filter["max_value"]
+                                        allevents["camera_frame_" + filter["col_name"]]
+                                        < filter["max_value"]
                                     ]
 
                     # TODO: Fix pointing over time (see ctapipe issue 1484 & 1562)
@@ -696,7 +755,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 example_identifiers.append((file_idx, img_idx, tel_id))
 
                 elif self.mode == "stereo":
-
                     # Read the trigger table.
                     allevents = read_table(f, "/dl1/event/subarray/trigger")
                     if self.process_type == "Simulation":
@@ -819,7 +877,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                                 ]
                                             else:
                                                 tel_table = tel_table[
-                                                    tel_table["camera_frame_"+filter["col_name"]]
+                                                    tel_table[
+                                                        "camera_frame_"
+                                                        + filter["col_name"]
+                                                    ]
                                                     >= filter["min_value"]
                                                 ]
                                         if "max_value" in filter:
@@ -830,7 +891,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                                 ]
                                             else:
                                                 tel_table = tel_table[
-                                                    tel_table["camera_frame_"+filter["col_name"]]
+                                                    tel_table[
+                                                        "camera_frame_"
+                                                        + filter["col_name"]
+                                                    ]
                                                     < filter["max_value"]
                                                 ]
                                 merged_table = join(
@@ -1051,37 +1115,40 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         )
                 example_identifiers_file.close()
 
-        # ImageMapper (1D charges -> 2D images)
-        if self.image_channels is not None:
-
-            # Check the transform value used for the file compression
-            for tel_id in np.arange(1, 180):
-                tel_table = "tel_{:03d}".format(tel_id)
-                if tel_table in self.files[first_file].root.dl1.event.telescope.images:
+        # ImageMapper (1D charges -> 2D images or 3D waveforms)
+        if self.image_channels is not None or self.waveform is not None:
+            if self.image_channels is not None:
+                # Check the transform value used for the file compression
+                for tel_id in np.arange(1, 180):
+                    tel_table = "tel_{:03d}".format(tel_id)
                     if (
-                        "image_TRANSFORM_SCALE"
-                        in self.files[first_file]
-                        .root.dl1.event.telescope.images[tel_table]
-                        ._v_attrs
-                        and self.image_scale is None
+                        tel_table
+                        in self.files[first_file].root.dl1.event.telescope.images
                     ):
-                        self.image_scale = (
-                            self.files[first_file]
+                        if (
+                            "image_TRANSFORM_SCALE"
+                            in self.files[first_file]
                             .root.dl1.event.telescope.images[tel_table]
-                            ._v_attrs["image_TRANSFORM_SCALE"]
-                        )
-                    if (
-                        "peak_time_TRANSFORM_SCALE"
-                        in self.files[first_file]
-                        .root.dl1.event.telescope.images[tel_table]
-                        ._v_attrs
-                        and self.peak_time_scale is None
-                    ):
-                        self.peak_time_scale = (
-                            self.files[first_file]
+                            ._v_attrs
+                            and self.image_scale is None
+                        ):
+                            self.image_scale = (
+                                self.files[first_file]
+                                .root.dl1.event.telescope.images[tel_table]
+                                ._v_attrs["image_TRANSFORM_SCALE"]
+                            )
+                        if (
+                            "peak_time_TRANSFORM_SCALE"
+                            in self.files[first_file]
                             .root.dl1.event.telescope.images[tel_table]
-                            ._v_attrs["peak_time_TRANSFORM_SCALE"]
-                        )
+                            ._v_attrs
+                            and self.peak_time_scale is None
+                        ):
+                            self.peak_time_scale = (
+                                self.files[first_file]
+                                .root.dl1.event.telescope.images[tel_table]
+                                ._v_attrs["peak_time_TRANSFORM_SCALE"]
+                            )
 
             self.pixel_positions, self.num_pixels = self._construct_pixel_positions(
                 self.files[first_file].root.configuration.instrument.telescope
@@ -1093,12 +1160,21 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 pixel_positions=self.pixel_positions, **mapping_settings
             )
 
-            for camera_type in mapping_settings["camera_types"]:
-                self.image_mapper.image_shapes[camera_type] = (
-                    self.image_mapper.image_shapes[camera_type][0],
-                    self.image_mapper.image_shapes[camera_type][1],
-                    len(self.image_channels),  # number of channels
-                )
+            if self.waveform is not None:
+                for camera_type in mapping_settings["camera_types"]:
+                    self.image_mapper.image_shapes[camera_type] = (
+                        self.image_mapper.image_shapes[camera_type][0],
+                        self.image_mapper.image_shapes[camera_type][1],
+                        1,
+                    )
+
+            if self.image_channels is not None:
+                for camera_type in mapping_settings["camera_types"]:
+                    self.image_mapper.image_shapes[camera_type] = (
+                        self.image_mapper.image_shapes[camera_type][0],
+                        self.image_mapper.image_shapes[camera_type][1],
+                        len(self.image_channels),  # number of channels
+                    )
 
         if self.pointing_mode == "fix_subarray":
             subarray_pointing = self.files[
@@ -1153,6 +1229,49 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         # Definition of preprocessed example
         self.example_description = self.processor.output_description
+
+    # Get a single telescope waveform from a particular event, uniquely
+    # identified by the filename, tel_type, and waveform table index.
+    # First extract a raw 2D vector and transform it into a 3D waveform using a
+    # mapping table. When 'indexed_conv' is selected this function should
+    # return the unmapped vector.
+    def _get_waveform(self, child, tel_type, waveform_index):
+        vector = np.zeros(
+            shape=(
+                self.num_pixels[self._get_camera_type(tel_type)],
+                self.waveform_sequence_length,
+            ),
+            dtype=np.float32,
+        )
+        mapped_waveform = np.zeros(
+            shape=(
+                self.waveform_sequence_length,
+                self.image_mapper.image_shapes[self._get_camera_type(self.tel_type)][0],
+                self.image_mapper.image_shapes[self._get_camera_type(self.tel_type)][1],
+                1,
+            ),
+            dtype=np.float32,
+        )
+        # If the telescope didn't trigger, the waveform index is -1 and a blank
+        # image of all zeros with be loaded
+        if waveform_index != -1 and child:
+            with lock:
+                vector = child[waveform_index]["waveform"]
+                if self.waveform is not None:
+                    if "raw" in self.waveform:
+                        vector = vector[0]
+            waveform = self.image_mapper.map_image(
+                vector, self._get_camera_type(tel_type)
+            )
+            for i in range(self.waveform_sequence_length):
+                mapped_waveform[i] = np.expand_dims(waveform[:, :, i], axis=2)
+        # If 'indexed_conv' is selected, we only need the unmapped vector.
+        if (
+            self.image_mapper.mapping_method[self._get_camera_type(tel_type)]
+            == "indexed_conv"
+        ):
+            return vector
+        return mapped_waveform
 
     def _construct_telescopes_selection(
         self, subarray_table, selected_telescope_types, selected_telescope_ids
@@ -1275,12 +1394,43 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
     def _load_tel_type_data(self, filename, tel_type, trigger_info, pointing_info=None):
         triggers = []
+        waveforms = []
         images = []
         parameters_lists = []
         pointings = []
         subarray_info = [[] for column in self.subarray_info]
         if self.split_datasets_by == "tel_id":
             for i, tel_id in enumerate(self.selected_telescopes[tel_type]):
+                if self.waveform is not None:
+                    if "raw" in self.waveform:
+                        child = None
+                        with lock:
+                            tel_table = "tel_{:03d}".format(tel_id)
+                            if (
+                                tel_table
+                                in self.files[filename].root.r0.event.telescope
+                            ):
+                                child = self.files[
+                                    filename
+                                ].root.r0.event.telescope._f_get_child(tel_table)
+                        waveforms.append(
+                            self._get_waveform(child, tel_type, trigger_info[i])
+                        )
+                    if "calibrate" in self.waveform:
+                        child = None
+                        with lock:
+                            tel_table = "tel_{:03d}".format(tel_id)
+                            if (
+                                tel_table
+                                in self.files[filename].root.r1.event.telescope
+                            ):
+                                child = self.files[
+                                    filename
+                                ].root.r1.event.telescope._f_get_child(tel_table)
+                        waveforms.append(
+                            self._get_waveform(child, tel_type, trigger_info[i])
+                        )
+
                 if self.image_channels is not None:
                     child = None
                     with lock:
@@ -1344,6 +1494,17 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         pointings.append(np.array([np.nan, np.nan], np.float32))
 
         elif self.split_datasets_by == "tel_type":
+            if self.waveform is not None:
+                if "raw" in self.waveform:
+                    with lock:
+                        wvf_child = self.files[
+                            filename
+                        ].root.r0.event.telescope._f_get_child(tel_type)
+                if "calibrate" in self.waveform:
+                    with lock:
+                        wvf_child = self.files[
+                            filename
+                        ].root.r1.event.telescope._f_get_child(tel_type)
             if self.image_channels is not None:
                 with lock:
                     img_child = self.files[
@@ -1356,6 +1517,11 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     ].root.dl1.event.telescope.parameters._f_get_child(tel_type)
 
             for i, tel_id in enumerate(self.selected_telescopes[tel_type]):
+                if self.waveform is not None:
+                    waveforms.append(
+                        self._get_waveform(wvf_child, tel_type, trigger_info[i])
+                    )
+
                 if self.image_channels is not None:
                     images.append(
                         super()._get_image(img_child, tel_type, trigger_info[i])
@@ -1379,6 +1545,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             )
 
         example = [np.array(trigger_info >= 0, np.int8)]
+        if self.waveform is not None:
+            example.extend([np.stack(waveforms)])
         if self.image_channels is not None:
             example.extend([np.stack(images)])
         if self.parameter_list is not None:
@@ -1389,7 +1557,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         return example
 
     def __getitem__(self, idx):
-
         identifiers = self.example_identifiers[idx]
 
         # Get record for the event
@@ -1405,6 +1572,22 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
             example = []
             if self.split_datasets_by == "tel_id":
+                if self.waveform is not None:
+                    if "raw" in self.waveform:
+                        with lock:
+                            tel_table = "tel_{:03d}".format(tel_id)
+                            child = self.files[
+                                filename
+                            ].root.r0.event.telescope._f_get_child(tel_table)
+                        example.append(self._get_waveform(child, self.tel_type, index))
+                    if "calibrate" in self.waveform:
+                        with lock:
+                            tel_table = "tel_{:03d}".format(tel_id)
+                            child = self.files[
+                                filename
+                            ].root.r1.event.telescope._f_get_child(tel_table)
+                        example.append(self._get_waveform(child, self.tel_type, index))
+
                 if self.image_channels is not None:
                     with lock:
                         tel_table = "tel_{:03d}".format(tel_id)
@@ -1422,6 +1605,20 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     parameter_list = list(child[index][self.parameter_list])
                     example.extend([np.stack(parameter_list)])
             elif self.split_datasets_by == "tel_type":
+                if self.waveform is not None:
+                    if "raw" in self.waveform:
+                        with lock:
+                            child = self.files[
+                                filename
+                            ].root.r0.event.telescope._f_get_child(self.tel_type)
+                        example.append(self._get_waveform(child, self.tel_type, index))
+                    if "calibrate" in self.waveform:
+                        with lock:
+                            child = self.files[
+                                filename
+                            ].root.r0.event.telescope._f_get_child(self.tel_type)
+                        example.append(self._get_waveform(child, self.tel_type, index))
+
                 if self.image_channels is not None:
                     with lock:
                         child = self.files[
@@ -1560,7 +1757,6 @@ class DL1DataReaderDL1DH(DL1DataReader):
         transforms=None,
         validate_processor=False,
     ):
-
         super().__init__(
             file_list=file_list,
             mode=mode,
@@ -1662,9 +1858,7 @@ class DL1DataReaderDL1DH(DL1DataReader):
                 selection_string,
             )
         else:
-
             for file_idx, (filename, f) in enumerate(self.files.items()):
-
                 if self.process_type == "Simulation":
                     self.simulation_info = super()._construct_simulated_info(
                         f, self.simulation_info, file_type="dl1dh"
@@ -2156,7 +2350,6 @@ class DL1DataReaderDL1DH(DL1DataReader):
         return example
 
     def __getitem__(self, idx):
-
         identifiers = self.example_identifiers[idx]
 
         # Get record for the event
@@ -2193,7 +2386,6 @@ class DL1DataReaderDL1DH(DL1DataReader):
             )
             example.extend([np.stack(info) for info in subarray_info])
         elif self.mode == "stereo":
-
             # Get a list of images and/or image parameters and array of binary trigger values
             # for each selected telescope type
             nrow = identifiers[1]
