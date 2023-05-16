@@ -104,24 +104,44 @@ class DL1DataReader:
         if self.mode == "mono":
             self.unprocessed_example_description = []
             if self.waveform is not None:
-                self.unprocessed_example_description.append(
-                    {
-                        "name": "waveform",
-                        "tel_type": self.tel_type,
-                        "base_name": "waveform",
-                        "shape": (
-                            self.waveform_sequence_length,
-                            self.image_mapper.image_shapes[
-                                self._get_camera_type(self.tel_type)
-                            ][0],
-                            self.image_mapper.image_shapes[
-                                self._get_camera_type(self.tel_type)
-                            ][1],
-                            1,
-                        ),
-                        "dtype": np.dtype(np.float32),
-                    }
-                )
+                if self.waveform_format is "timechannel_first":
+                    self.unprocessed_example_description.append(
+                        {
+                            "name": "waveform",
+                            "tel_type": self.tel_type,
+                            "base_name": "waveform",
+                            "shape": (
+                                self.waveform_sequence_length,
+                                self.image_mapper.image_shapes[
+                                    self._get_camera_type(self.tel_type)
+                                ][0],
+                                self.image_mapper.image_shapes[
+                                    self._get_camera_type(self.tel_type)
+                                ][1],
+                                1,
+                            ),
+                            "dtype": np.dtype(np.float32),
+                        }
+                    )
+                elif self.waveform_format is "timechannel_last":
+                    self.unprocessed_example_description.append(
+                        {
+                            "name": "waveform",
+                            "tel_type": self.tel_type,
+                            "base_name": "waveform",
+                            "shape": (
+                                self.image_mapper.image_shapes[
+                                    self._get_camera_type(self.tel_type)
+                                ][0],
+                                self.image_mapper.image_shapes[
+                                    self._get_camera_type(self.tel_type)
+                                ][1],
+                                self.waveform_sequence_length,
+                            ),
+                            "dtype": np.dtype(np.float32),
+                        }
+                    )
+
             if self.image_channels is not None:
                 self.unprocessed_example_description.append(
                     {
@@ -184,25 +204,45 @@ class DL1DataReader:
                     ]
                 )
                 if self.waveform is not None:
-                    self.unprocessed_example_description.append(
-                        {
-                            "name": tel_type + "_waveforms",
-                            "tel_type": tel_type,
-                            "base_name": "waveforms",
-                            "shape": (
-                                num_tels,
-                                self.waveform_sequence_length,
-                                self.image_mapper.image_shapes[
-                                    self._get_camera_type(tel_type)
-                                ][0],
-                                self.image_mapper.image_shapes[
-                                    self._get_camera_type(tel_type)
-                                ][1],
-                                1,
-                            ),
-                            "dtype": np.dtype(np.float32),
-                        }
-                    )
+                    if self.waveform_format is "timechannel_first":
+                        self.unprocessed_example_description.append(
+                            {
+                                "name": tel_type + "_waveforms",
+                                "tel_type": tel_type,
+                                "base_name": "waveforms",
+                                "shape": (
+                                    num_tels,
+                                    self.waveform_sequence_length,
+                                    self.image_mapper.image_shapes[
+                                        self._get_camera_type(tel_type)
+                                    ][0],
+                                    self.image_mapper.image_shapes[
+                                        self._get_camera_type(tel_type)
+                                    ][1],
+                                    1,
+                                ),
+                                "dtype": np.dtype(np.float32),
+                            }
+                        )
+                    if self.waveform_format is "timechannel_last":
+                        self.unprocessed_example_description.append(
+                            {
+                                "name": tel_type + "_waveforms",
+                                "tel_type": tel_type,
+                                "base_name": "waveforms",
+                                "shape": (
+                                    num_tels,
+                                    self.image_mapper.image_shapes[
+                                        self._get_camera_type(tel_type)
+                                    ][0],
+                                    self.image_mapper.image_shapes[
+                                        self._get_camera_type(tel_type)
+                                    ][1],
+                                    self.waveform_sequence_length,
+                                ),
+                                "dtype": np.dtype(np.float32),
+                            }
+                        )
                 if self.image_channels is not None:
                     self.unprocessed_example_description.extend(
                         [
@@ -433,6 +473,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         seed=None,
         waveform=None,
         waveform_sequence_length=None,
+        waveform_format="timechannel_first",
         image_channels=None,
         mapping_settings=None,
         parameter_list=None,
@@ -512,6 +553,13 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         self.waveform_sequence_length = waveform_sequence_length
         if self.waveform_sequence_length is None:
             self.waveform_sequence_length = self.waveform_sequence_max_length
+        # Set returning format for waveforms
+        self.waveform_format = waveform_format
+        if self.waveform_format not in ["timechannel_first", "timechannel_last"]:
+            raise ValueError(
+                "Invalid returning format for waveforms '{}'. Valid options: "
+                "'timechannel_first', 'timechannel_last'".format(self.waveform_format)
+            )
         # Integrated charges and peak arrival times (DL1a)
         self.image_channels = image_channels
         self.image_scale = None
@@ -1164,12 +1212,20 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             )
 
             if self.waveform is not None:
-                for camera_type in mapping_settings["camera_types"]:
-                    self.image_mapper.image_shapes[camera_type] = (
-                        self.image_mapper.image_shapes[camera_type][0],
-                        self.image_mapper.image_shapes[camera_type][1],
-                        1,
-                    )
+                if self.waveform_format is "timechannel_first":
+                    for camera_type in mapping_settings["camera_types"]:
+                        self.image_mapper.image_shapes[camera_type] = (
+                            self.image_mapper.image_shapes[camera_type][0],
+                            self.image_mapper.image_shapes[camera_type][1],
+                            1,
+                        )
+                elif self.waveform_format is "timechannel_last":
+                    for camera_type in mapping_settings["camera_types"]:
+                        self.image_mapper.image_shapes[camera_type] = (
+                            self.image_mapper.image_shapes[camera_type][0],
+                            self.image_mapper.image_shapes[camera_type][1],
+                            self.waveform_sequence_length,
+                        )
 
             if self.image_channels is not None:
                 for camera_type in mapping_settings["camera_types"]:
@@ -1246,15 +1302,34 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             ),
             dtype=np.float16,
         )
-        mapped_waveform = np.zeros(
-            shape=(
-                self.waveform_sequence_length,
-                self.image_mapper.image_shapes[self._get_camera_type(self.tel_type)][0],
-                self.image_mapper.image_shapes[self._get_camera_type(self.tel_type)][1],
-                1,
-            ),
-            dtype=np.float16,
-        )
+        if self.waveform_format is "timechannel_first":
+            waveform = np.zeros(
+                shape=(
+                    self.waveform_sequence_length,
+                    self.image_mapper.image_shapes[
+                        self._get_camera_type(self.tel_type)
+                    ][0],
+                    self.image_mapper.image_shapes[
+                        self._get_camera_type(self.tel_type)
+                    ][1],
+                    1,
+                ),
+                dtype=np.float16,
+            )
+        elif self.waveform_format is "timechannel_last":
+            waveform = np.zeros(
+                shape=(
+                    self.image_mapper.image_shapes[
+                        self._get_camera_type(self.tel_type)
+                    ][0],
+                    self.image_mapper.image_shapes[
+                        self._get_camera_type(self.tel_type)
+                    ][1],
+                    self.waveform_sequence_length,
+                ),
+                dtype=np.float16,
+            )
+
         # If the telescope didn't trigger, the waveform index is -1 and a blank
         # waveform of all zeros with be loaded
         if waveform_index != -1 and child:
@@ -1263,7 +1338,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 if self.waveform is not None:
                     if "raw" in self.waveform:
                         vector = vector[0]
-            waveform = self.image_mapper.map_image(
+            mapped_waveform = self.image_mapper.map_image(
                 vector, self._get_camera_type(tel_type)
             )
             if (
@@ -1272,20 +1347,23 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 waveform_start = 0
                 waveform_stop = self.waveform_sequence_max_length
             else:
-                waveform_max = np.argmax(np.sum(waveform, axis=(0, 1)))
+                waveform_max = np.argmax(np.sum(mapped_waveform, axis=(0, 1)))
                 waveform_start = 1 + waveform_max - self.waveform_sequence_length / 2
                 waveform_stop = 1 + waveform_max + self.waveform_sequence_length / 2
-            for i, index in enumerate(
-                np.arange(waveform_start, waveform_stop, dtype=int)
-            ):
-                mapped_waveform[i] = np.expand_dims(waveform[:, :, index], axis=2)
+            if self.waveform_format is "timechannel_first":
+                for i, index in enumerate(
+                    np.arange(waveform_start, waveform_stop, dtype=int)
+                ):
+                    waveform[i] = np.expand_dims(mapped_waveform[:, :, index], axis=2)
+            elif self.waveform_format is "timechannel_first":
+                waveform = mapped_waveform[:, :, waveform_start:waveform_stop]
         # If 'indexed_conv' is selected, we only need the unmapped vector.
         if (
             self.image_mapper.mapping_method[self._get_camera_type(tel_type)]
             == "indexed_conv"
         ):
             return vector
-        return mapped_waveform
+        return waveform
 
     def _construct_telescopes_selection(
         self, subarray_table, selected_telescope_types, selected_telescope_ids
