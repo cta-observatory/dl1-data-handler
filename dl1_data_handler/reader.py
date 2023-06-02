@@ -550,16 +550,16 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     .root.r1.event.telescope.tel_001.coldescrs["waveform"]
                     .shape[-1]
                 )
-        self.waveform_sequence_length = waveform_sequence_length
-        if self.waveform_sequence_length is None:
-            self.waveform_sequence_length = self.waveform_sequence_max_length
-        # Set returning format for waveforms
-        self.waveform_format = waveform_format
-        if self.waveform_format not in ["timechannel_first", "timechannel_last"]:
-            raise ValueError(
-                "Invalid returning format for waveforms '{}'. Valid options: "
-                "'timechannel_first', 'timechannel_last'".format(self.waveform_format)
-            )
+            self.waveform_sequence_length = waveform_sequence_length
+            if self.waveform_sequence_length is None:
+                self.waveform_sequence_length = self.waveform_sequence_max_length
+            # Set returning format for waveforms
+            self.waveform_format = waveform_format
+            if self.waveform_format not in ["timechannel_first", "timechannel_last"]:
+                raise ValueError(
+                    "Invalid returning format for waveforms '{}'. Valid options: "
+                    "'timechannel_first', 'timechannel_last'".format(self.waveform_format)
+                )
         # Integrated charges and peak arrival times (DL1a)
         self.image_channels = image_channels
         self.image_scale = None
