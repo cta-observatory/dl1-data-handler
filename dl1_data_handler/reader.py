@@ -725,21 +725,18 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     # Therefore, two telescope types have to be selected at least.
                     event_id = allevents["event_id"]
                     tels_with_trigger = np.array(allevents["tels_with_trigger"])
+                    tel_id_to_trigger_idx = {tel_id: idx for idx, tel_id in enumerate(
+                        read_table(f, "/configuration/instrument/subarray/layout/")['tel_id'])}
                     if self.process_type == "Simulation":
                         sim_indices = np.array(allevents["sim_index"], np.int32)
                     if len(selected_telescopes) > 1:
                         # Get all tel ids from the subarray
-                        tel_ids = np.hstack(list(selected_telescopes.values()))
-                        # Construct a boolean array of allowed telescopes
-                        allowed_tels = np.array(
-                            [
-                                1 if tel_id in tel_ids - 1 else 0
-                                for tel_id in range(tels_with_trigger.shape[1])
-                            ],
-                            bool,
-                        )
+                        selection_mask = np.zeros_like(tels_with_trigger)
+                        tel_ids = selected_telescopes.values()
+                        for tel_id in tel_ids:
+                            selection_mask[:, tel_id_to_trigger_idx[tel_id]] = 1
                         # Construct the telescope trigger information restricted to allowed telescopes
-                        allowed_tels_with_trigger = tels_with_trigger * allowed_tels
+                        allowed_tels_with_trigger = tels_with_trigger * selection_mask
                         # Get the multiplicity and apply the subarray multiplicity cut
                         subarray_multiplicity, _ = allowed_tels_with_trigger.nonzero()
                         events, multiplicity = np.unique(
@@ -755,17 +752,12 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     image_indices = {}
                     for tel_type in selected_telescopes:
                         # Get all selected tel ids of this telescope type
-                        tel_ids = np.array(selected_telescopes[tel_type])
-                        # Construct a boolean array of allowed telescopes of this telescope type
-                        allowed_tels = np.array(
-                            [
-                                1 if tel_id in tel_ids - 1 else 0
-                                for tel_id in range(tels_with_trigger.shape[1])
-                            ],
-                            bool,
-                        )
+                        selection_mask = np.zeros_like(tels_with_trigger)
+                        tel_ids = selected_telescopes[tel_type]
+                        for tel_id in tel_ids:
+                            selection_mask[:, tel_id_to_trigger_idx[tel_id]] = 1
                         # Construct the telescope trigger information restricted to allowed telescopes of this telescope type
-                        allowed_tels_with_trigger = tels_with_trigger * allowed_tels
+                        allowed_tels_with_trigger = tels_with_trigger * selection_mask
                         # Apply the multiplicity cut on the telescope type only.
                         if len(selected_telescopes) == 1:
                             # Get the multiplicity of this telescope type and apply the multiplicity cut
@@ -797,7 +789,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             for tel_id in tel_ids:
                                 # Get the trigger information of this telescope
                                 tel_trigger_info = selected_events_trigger[
-                                    :, tel_id - 1
+                                    :, tel_id_to_trigger_idx[tel_id]
                                 ]
                                 tel_trigger_info = np.where(tel_trigger_info)[0]
                                 # The telescope table is joined with the selected and merged table.
@@ -898,7 +890,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 ]
                                 # Get the trigger information of this telescope
                                 tel_trigger_info = selected_events_trigger[
-                                    :, tel_id - 1
+                                    :, tel_id_to_trigger_idx[tel_id]
                                 ]
                                 tel_trigger_info = np.where(tel_trigger_info)[0]
                                 # Get the original position of image in the telescope table.
