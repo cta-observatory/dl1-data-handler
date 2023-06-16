@@ -268,12 +268,6 @@ class DL1DataReader:
                 n_showers = sum(np.array(runs.cols._f_col("n_showers"))) * shower_reuse
             else:
                 n_showers = sum(np.array(runs.cols._f_col("num_showers"))) * shower_reuse
-            if "service" in file.root.simulation:
-                service_table = file.root.simulation.service
-                shower_distributions = service_table._f_get_child("shower_distribution")
-                num_showers = np.sum(
-                    np.array(shower_distributions.cols._f_col("histogram"))
-                )
             energy_range_min = min(np.array(runs.cols._f_col("energy_range_min")))
             energy_range_max = max(np.array(runs.cols._f_col("energy_range_max")))
             max_scatter_range = max(np.array(runs.cols._f_col("max_scatter_range")))
