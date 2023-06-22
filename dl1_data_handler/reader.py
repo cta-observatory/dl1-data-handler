@@ -732,7 +732,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     if len(selected_telescopes) > 1:
                         # Get all tel ids from the subarray
                         selection_mask = np.zeros_like(tels_with_trigger)
-                        tel_ids = selected_telescopes.values()
+                        tel_ids = np.array(selected_telescopes.values())
                         for tel_id in tel_ids:
                             selection_mask[:, tel_id_to_trigger_idx[tel_id]] = 1
                         # Construct the telescope trigger information restricted to allowed telescopes
@@ -753,7 +753,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     for tel_type in selected_telescopes:
                         # Get all selected tel ids of this telescope type
                         selection_mask = np.zeros_like(tels_with_trigger)
-                        tel_ids = selected_telescopes[tel_type]
+                        tel_ids = np.array(selected_telescopes[tel_type])
                         for tel_id in tel_ids:
                             selection_mask[:, tel_id_to_trigger_idx[tel_id]] = 1
                         # Construct the telescope trigger information restricted to allowed telescopes of this telescope type
