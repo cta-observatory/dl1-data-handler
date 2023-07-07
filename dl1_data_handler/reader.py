@@ -344,9 +344,7 @@ class DL1DataReader:
             if self.data_model_mainversion >= 4:
                 n_showers = sum(np.array(runs.cols._f_col("n_showers"))) * shower_reuse
             else:
-                n_showers = (
-                    sum(np.array(runs.cols._f_col("num_showers"))) * shower_reuse
-                )
+                n_showers = sum(np.array(runs.cols._f_col("num_showers"))) * shower_reuse
             energy_range_min = min(np.array(runs.cols._f_col("energy_range_min")))
             energy_range_max = max(np.array(runs.cols._f_col("energy_range_max")))
             max_scatter_range = max(np.array(runs.cols._f_col("max_scatter_range")))

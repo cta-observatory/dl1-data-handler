@@ -135,7 +135,7 @@ class DeltaAltAz_fix_subarray(Transform):
                 alt -= self.tel_pointing[0]
             elif des["base_name"] == self.az_col_name:
                 az = np.radians(example[i]) if self.deg2rad else example[i]
-                if self.north_pointing_correction and az > np.pi:
+                if self.north_pointing_correction and az > 3*np.pi/2:
                     az -= 2 * np.pi
                 az -= self.tel_pointing[1]
             elif des["base_name"] == self.base_name:
