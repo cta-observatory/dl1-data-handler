@@ -467,7 +467,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         seed=None,
         waveform=None,
         waveform_sequence_length=None,
-        waveform_format="timechannel_first",
+        waveform_format="timechannel_last",
         image_channels=None,
         mapping_settings=None,
         parameter_list=None,
@@ -549,7 +549,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 self.waveform_sequence_length = self.waveform_sequence_max_length
             # Set returning format for waveforms
             self.waveform_format = waveform_format
-            if self.waveform_format not in ["timechannel_first", "timechannel_last"]:
+            if not ("first" in self.waveform_format or "last" in self.waveform_format):
                 raise ValueError(
                     "Invalid returning format for waveforms '{}'. Valid options: "
                     "'timechannel_first', 'timechannel_last'".format(self.waveform_format)
@@ -1206,14 +1206,14 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             )
 
             if self.waveform is not None:
-                if self.waveform_format is "timechannel_first":
+                if "first" in self.waveform_format:
                     for camera_type in mapping_settings["camera_types"]:
                         self.image_mapper.image_shapes[camera_type] = (
                             self.image_mapper.image_shapes[camera_type][0],
                             self.image_mapper.image_shapes[camera_type][1],
                             1,
                         )
-                elif self.waveform_format is "timechannel_last":
+                if "last" in self.waveform_format:
                     for camera_type in mapping_settings["camera_types"]:
                         self.image_mapper.image_shapes[camera_type] = (
                             self.image_mapper.image_shapes[camera_type][0],
@@ -1288,7 +1288,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
     # First extract a raw 2D vector and transform it into a 3D waveform using a
     # mapping table. When 'indexed_conv' is selected this function should
     # return the unmapped vector.
-    def _get_waveform(self, child, tel_type, waveform_index):
+    def _get_waveform(self, child, tel_type, waveform_index, img_child=None):
         vector = np.zeros(
             shape=(
                 self.num_pixels[self._get_camera_type(tel_type)],
@@ -1324,6 +1324,12 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 dtype=np.float16,
             )
 
+        # Retrieve the DL1 cleaning mask if the child of the DL1 images are provided
+        dl1_cleaning_mask = None
+        if waveform_index != -1 and img_child:
+            with lock:
+                dl1_cleaning_mask = np.array(img_child[waveform_index]["image_mask"], dtype=int)
+
         # If the telescope didn't trigger, the waveform index is -1 and a blank
         # waveform of all zeros with be loaded
         if waveform_index != -1 and child:
@@ -1332,16 +1338,25 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 if self.waveform is not None:
                     if "raw" in self.waveform:
                         vector = vector[0]
+                if dl1_cleaning_mask is not None:
+                    cleaned_vector = vector * dl1_cleaning_mask[:, None]
             mapped_waveform = self.image_mapper.map_image(
                 vector, self._get_camera_type(tel_type)
             )
+            if dl1_cleaning_mask is not None:
+                cleaned_mapped_waveform = self.image_mapper.map_image(
+                    cleaned_vector, self._get_camera_type(tel_type)
+                )
             if (
                 self.waveform_sequence_max_length - self.waveform_sequence_length
             ) < 0.001:
                 waveform_start = 0
                 waveform_stop = self.waveform_sequence_max_length
             else:
-                waveform_max = np.argmax(np.sum(mapped_waveform, axis=(0, 1)))
+                if dl1_cleaning_mask is not None:
+                    waveform_max = np.argmax(np.sum(cleaned_mapped_waveform, axis=(0, 1)))
+                else:
+                    waveform_max = np.argmax(np.sum(mapped_waveform, axis=(0, 1)))
                 waveform_start = 1 + waveform_max - self.waveform_sequence_length / 2
                 waveform_stop = 1 + waveform_max + self.waveform_sequence_length / 2
                 if waveform_stop > self.waveform_sequence_max_length:
@@ -1355,16 +1370,25 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 for i, index in enumerate(
                     np.arange(waveform_start, waveform_stop, dtype=int)
                 ):
-                    waveform[i] = np.expand_dims(mapped_waveform[:, :, index], axis=2)
+                    if "clean" in self.waveform or "mask" in self.waveform:
+                        waveform[i] = np.expand_dims(cleaned_mapped_waveform[:, :, index], axis=2)
+                    else:
+                        waveform[i] = np.expand_dims(mapped_waveform[:, :, index], axis=2)
             if "last" in self.waveform_format:
-                waveform = mapped_waveform[:, :, int(waveform_start):int(waveform_stop)]
+                if "clean" in self.waveform or "mask" in self.waveform:
+                    waveform = cleaned_mapped_waveform[:, :, int(waveform_start):int(waveform_stop)]
+                else:
+                    waveform = mapped_waveform[:, :, int(waveform_start):int(waveform_stop)]
 
         # If 'indexed_conv' is selected, we only need the unmapped vector.
         if (
             self.image_mapper.mapping_method[self._get_camera_type(tel_type)]
             == "indexed_conv"
         ):
-            return vector
+            if "clean" in self.waveform or "mask" in self.waveform:
+                return cleaned_vector
+            else:
+                return vector
         return waveform
 
     def _construct_telescopes_selection(
@@ -1507,8 +1531,14 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 child = self.files[
                                     filename
                                 ].root.r0.event.telescope._f_get_child(tel_table)
+                                img_child = None
+                                if "dl1" in self.files[filename].root:
+                                    if "images" in self.files[filename].root.dl1.event.telescope:
+                                        img_child = self.files[
+                                            filename
+                                        ].root.dl1.event.telescope.images._f_get_child(tel_table)
                         waveforms.append(
-                            self._get_waveform(child, tel_type, trigger_info[i])
+                            self._get_waveform(child, tel_type, trigger_info[i], img_child)
                         )
                     if "calibrate" in self.waveform:
                         child = None
@@ -1521,8 +1551,14 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 child = self.files[
                                     filename
                                 ].root.r1.event.telescope._f_get_child(tel_table)
+                                img_child = None
+                                if "dl1" in self.files[filename].root:
+                                    if "images" in self.files[filename].root.dl1.event.telescope:
+                                        img_child = self.files[
+                                            filename
+                                        ].root.dl1.event.telescope.images._f_get_child(tel_table)
                         waveforms.append(
-                            self._get_waveform(child, tel_type, trigger_info[i])
+                            self._get_waveform(child, tel_type, trigger_info[i], img_child)
                         )
 
                 if self.image_channels is not None:
@@ -1594,11 +1630,23 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         wvf_child = self.files[
                             filename
                         ].root.r0.event.telescope._f_get_child(tel_type)
+                        img_child = None
+                        if "dl1" in self.files[filename].root:
+                            if "images" in self.files[filename].root.dl1.event.telescope:
+                                img_child = self.files[
+                                    filename
+                                ].root.dl1.event.telescope.images._f_get_child(tel_table)
                 if "calibrate" in self.waveform:
                     with lock:
                         wvf_child = self.files[
                             filename
                         ].root.r1.event.telescope._f_get_child(tel_type)
+                        img_child = None
+                        if "dl1" in self.files[filename].root:
+                            if "images" in self.files[filename].root.dl1.event.telescope:
+                                img_child = self.files[
+                                    filename
+                                ].root.dl1.event.telescope.images._f_get_child(tel_table)
             if self.image_channels is not None:
                 with lock:
                     img_child = self.files[
@@ -1613,7 +1661,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             for i, tel_id in enumerate(self.selected_telescopes[tel_type]):
                 if self.waveform is not None:
                     waveforms.append(
-                        self._get_waveform(wvf_child, tel_type, trigger_info[i])
+                        self._get_waveform(wvf_child, tel_type, trigger_info[i], img_child)
                     )
 
                 if self.image_channels is not None:
@@ -1673,14 +1721,26 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             child = self.files[
                                 filename
                             ].root.r0.event.telescope._f_get_child(tel_table)
-                        example.append(self._get_waveform(child, self.tel_type, index))
+                            img_child = None
+                            if "dl1" in self.files[filename].root:
+                                if "images" in self.files[filename].root.dl1.event.telescope:
+                                    img_child = self.files[
+                                        filename
+                                    ].root.dl1.event.telescope.images._f_get_child(tel_table)
+                        example.append(self._get_waveform(child, self.tel_type, index, img_child))
                     if "calibrate" in self.waveform:
                         with lock:
                             tel_table = "tel_{:03d}".format(tel_id)
                             child = self.files[
                                 filename
                             ].root.r1.event.telescope._f_get_child(tel_table)
-                        example.append(self._get_waveform(child, self.tel_type, index))
+                            img_child = None
+                            if "dl1" in self.files[filename].root:
+                                if "images" in self.files[filename].root.dl1.event.telescope:
+                                    img_child = self.files[
+                                        filename
+                                    ].root.dl1.event.telescope.images._f_get_child(tel_table)
+                        example.append(self._get_waveform(child, self.tel_type, index, img_child))
 
                 if self.image_channels is not None:
                     with lock:
@@ -1705,13 +1765,25 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             child = self.files[
                                 filename
                             ].root.r0.event.telescope._f_get_child(self.tel_type)
-                        example.append(self._get_waveform(child, self.tel_type, index))
+                            img_child = None
+                            if "dl1" in self.files[filename].root:
+                                if "images" in self.files[filename].root.dl1.event.telescope:
+                                    img_child = self.files[
+                                        filename
+                                    ].root.dl1.event.telescope.images._f_get_child(tel_table)
+                        example.append(self._get_waveform(child, self.tel_type, index, img_child))
                     if "calibrate" in self.waveform:
                         with lock:
                             child = self.files[
                                 filename
                             ].root.r0.event.telescope._f_get_child(self.tel_type)
-                        example.append(self._get_waveform(child, self.tel_type, index))
+                            img_child = None
+                            if "dl1" in self.files[filename].root:
+                                if "images" in self.files[filename].root.dl1.event.telescope:
+                                    img_child = self.files[
+                                        filename
+                                    ].root.dl1.event.telescope.images._f_get_child(tel_table)
+                        example.append(self._get_waveform(child, self.tel_type, index, img_child))
 
                 if self.image_channels is not None:
                     with lock:
