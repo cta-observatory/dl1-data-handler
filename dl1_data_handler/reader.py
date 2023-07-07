@@ -104,7 +104,7 @@ class DL1DataReader:
         if self.mode == "mono":
             self.unprocessed_example_description = []
             if self.waveform is not None:
-                if self.waveform_format is "timechannel_first":
+                if "first" in self.waveform_format:
                     self.unprocessed_example_description.append(
                         {
                             "name": "waveform",
@@ -120,10 +120,10 @@ class DL1DataReader:
                                 ][1],
                                 1,
                             ),
-                            "dtype": np.dtype(np.float32),
+                            "dtype": np.dtype(np.float16),
                         }
                     )
-                elif self.waveform_format is "timechannel_last":
+                if "last" in self.waveform_format:
                     self.unprocessed_example_description.append(
                         {
                             "name": "waveform",
@@ -138,7 +138,7 @@ class DL1DataReader:
                                 ][1],
                                 self.waveform_sequence_length,
                             ),
-                            "dtype": np.dtype(np.float32),
+                            "dtype": np.dtype(np.float16),
                         }
                     )
 
@@ -204,7 +204,7 @@ class DL1DataReader:
                     ]
                 )
                 if self.waveform is not None:
-                    if self.waveform_format is "timechannel_first":
+                    if "first" in self.waveform_format:
                         self.unprocessed_example_description.append(
                             {
                                 "name": tel_type + "_waveforms",
@@ -221,10 +221,10 @@ class DL1DataReader:
                                     ][1],
                                     1,
                                 ),
-                                "dtype": np.dtype(np.float32),
+                                "dtype": np.dtype(np.float16),
                             }
                         )
-                    if self.waveform_format is "timechannel_last":
+                    if "last" in self.waveform_format:
                         self.unprocessed_example_description.append(
                             {
                                 "name": tel_type + "_waveforms",
@@ -240,7 +240,7 @@ class DL1DataReader:
                                     ][1],
                                     self.waveform_sequence_length,
                                 ),
-                                "dtype": np.dtype(np.float32),
+                                "dtype": np.dtype(np.float16),
                             }
                         )
                 if self.image_channels is not None:
@@ -346,12 +346,6 @@ class DL1DataReader:
             else:
                 n_showers = (
                     sum(np.array(runs.cols._f_col("num_showers"))) * shower_reuse
-                )
-            if "service" in file.root.simulation:
-                service_table = file.root.simulation.service
-                shower_distributions = service_table._f_get_child("shower_distribution")
-                num_showers = np.sum(
-                    np.array(shower_distributions.cols._f_col("histogram"))
                 )
             energy_range_min = min(np.array(runs.cols._f_col("energy_range_min")))
             energy_range_max = max(np.array(runs.cols._f_col("energy_range_max")))
@@ -1302,7 +1296,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             ),
             dtype=np.float16,
         )
-        if self.waveform_format is "timechannel_first":
+        if "first" in self.waveform_format:
             waveform = np.zeros(
                 shape=(
                     self.waveform_sequence_length,
@@ -1316,7 +1310,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 ),
                 dtype=np.float16,
             )
-        elif self.waveform_format is "timechannel_last":
+        if "last" in self.waveform_format:
             waveform = np.zeros(
                 shape=(
                     self.image_mapper.image_shapes[
@@ -1350,13 +1344,21 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 waveform_max = np.argmax(np.sum(mapped_waveform, axis=(0, 1)))
                 waveform_start = 1 + waveform_max - self.waveform_sequence_length / 2
                 waveform_stop = 1 + waveform_max + self.waveform_sequence_length / 2
-            if self.waveform_format is "timechannel_first":
+                if waveform_stop > self.waveform_sequence_max_length:
+                    waveform_start -= (waveform_stop - self.waveform_sequence_max_length)
+                    waveform_stop = self.waveform_sequence_max_length
+                if waveform_start < 0:
+                    waveform_stop += np.abs(waveform_start)
+                    waveform_start = 0
+
+            if "first" in self.waveform_format:
                 for i, index in enumerate(
                     np.arange(waveform_start, waveform_stop, dtype=int)
                 ):
                     waveform[i] = np.expand_dims(mapped_waveform[:, :, index], axis=2)
-            elif self.waveform_format is "timechannel_first":
-                waveform = mapped_waveform[:, :, waveform_start:waveform_stop]
+            if "last" in self.waveform_format:
+                waveform = mapped_waveform[:, :, int(waveform_start):int(waveform_stop)]
+
         # If 'indexed_conv' is selected, we only need the unmapped vector.
         if (
             self.image_mapper.mapping_method[self._get_camera_type(tel_type)]
