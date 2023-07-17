@@ -466,6 +466,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         waveform=None,
         waveform_sequence_length=None,
         waveform_format="timechannel_last",
+        waveform_r0pedsub=True,
         image_channels=None,
         mapping_settings=None,
         parameter_list=None,
@@ -536,12 +537,14 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     .root.r0.event.telescope.tel_001.coldescrs["waveform"]
                     .shape[-1]
                 )
+                self.waveform_r0pedsub = waveform_r0pedsub
             if "calibrate" in self.waveform:
                 self.waveform_sequence_max_length = (
                     self.files[first_file]
                     .root.r1.event.telescope.tel_001.coldescrs["waveform"]
                     .shape[-1]
                 )
+                self.waveform_r0pedsub = False
             self.waveform_sequence_length = waveform_sequence_length
             if self.waveform_sequence_length is None:
                 self.waveform_sequence_length = self.waveform_sequence_max_length
@@ -552,6 +555,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     "Invalid returning format for waveforms '{}'. Valid options: "
                     "'timechannel_first', 'timechannel_last'".format(self.waveform_format)
                 )
+
         # Integrated charges and peak arrival times (DL1a)
         self.image_channels = image_channels
         self.image_scale = None
@@ -1290,7 +1294,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         vector = np.zeros(
             shape=(
                 self.num_pixels[self._get_camera_type(tel_type)],
-                self.waveform_sequence_max_length,
+                self.waveform_sequence_length,
             ),
             dtype=np.float16,
         )
@@ -1333,60 +1337,70 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         if waveform_index != -1 and child:
             with lock:
                 vector = child[waveform_index]["waveform"]
-                if self.waveform is not None:
-                    if "raw" in self.waveform:
-                        vector = vector[0]
-                if dl1_cleaning_mask is not None:
-                    cleaned_vector = vector * dl1_cleaning_mask[:, None]
-            mapped_waveform = self.image_mapper.map_image(
-                vector, self._get_camera_type(tel_type)
-            )
+            if self.waveform is not None:
+                if "raw" in self.waveform:
+                    vector = vector[0]
+                waveform_max = np.argmax(np.sum(vector, axis=0))
             if dl1_cleaning_mask is not None:
-                cleaned_mapped_waveform = self.image_mapper.map_image(
-                    cleaned_vector, self._get_camera_type(tel_type)
-                )
+                waveform_max = np.argmax(np.sum(vector * dl1_cleaning_mask[:, None], axis=0))
+
+            # Retrieve the sequene around the shower maximum and calculate the pedestal
+            # level per pixel outside that sequence if R0-pedsub is selected
+            pixped_nsb, nsb_sequence_length = None, None
             if (
                 self.waveform_sequence_max_length - self.waveform_sequence_length
             ) < 0.001:
                 waveform_start = 0
-                waveform_stop = self.waveform_sequence_max_length
+                waveform_stop = nsb_sequence_length = self.waveform_sequence_max_length
+                if self.waveform_r0pedsub and pixped_nsb is None:
+                    pixped_nsb = np.sum(vector, axis=1)/nsb_sequence_length
             else:
-                if dl1_cleaning_mask is not None:
-                    waveform_max = np.argmax(np.sum(cleaned_mapped_waveform, axis=(0, 1)))
-                else:
-                    waveform_max = np.argmax(np.sum(mapped_waveform, axis=(0, 1)))
                 waveform_start = 1 + waveform_max - self.waveform_sequence_length / 2
                 waveform_stop = 1 + waveform_max + self.waveform_sequence_length / 2
+                nsb_sequence_length = self.waveform_sequence_max_length - self.waveform_sequence_length
                 if waveform_stop > self.waveform_sequence_max_length:
                     waveform_start -= (waveform_stop - self.waveform_sequence_max_length)
                     waveform_stop = self.waveform_sequence_max_length
+                    if self.waveform_r0pedsub and pixped_nsb is None:
+                        pixped_nsb = np.sum(vector[:,:int(waveform_start)], axis=1)/nsb_sequence_length
                 if waveform_start < 0:
                     waveform_stop += np.abs(waveform_start)
                     waveform_start = 0
+                    if self.waveform_r0pedsub and pixped_nsb is None:
+                        pixped_nsb = np.sum(vector[:,int(waveform_stop):], axis=1)/nsb_sequence_length
+            if self.waveform_r0pedsub and pixped_nsb is None:
+                pixped_nsb = np.sum(vector[:,0:int(waveform_start)], axis=1)
+                pixped_nsb += np.sum(vector[:,int(waveform_stop):self.waveform_sequence_max_length], axis=1)
+                pixped_nsb = pixped_nsb/nsb_sequence_length
 
+            # Subtract the pedestal per pixel if R0-pedsub selected
+            if self.waveform_r0pedsub:
+                vector = vector - pixped_nsb[:,None]
+
+            # Apply the DL1 cleaning mask if selected
+            if "clean" in self.waveform or "mask" in self.waveform:
+                vector *= dl1_cleaning_mask[:, None]
+
+            # Crop the waveform
+            vector = vector[:,int(waveform_start):int(waveform_stop)]
+
+            # Map the waveform snapshots through the ImageMapper
+            # and transform to selected returning format
+            mapped_waveform = self.image_mapper.map_image(
+                vector, self._get_camera_type(tel_type)
+            )
             if "first" in self.waveform_format:
-                for i, index in enumerate(
-                    np.arange(waveform_start, waveform_stop, dtype=int)
-                ):
-                    if "clean" in self.waveform or "mask" in self.waveform:
-                        waveform[i] = np.expand_dims(cleaned_mapped_waveform[:, :, index], axis=2)
-                    else:
-                        waveform[i] = np.expand_dims(mapped_waveform[:, :, index], axis=2)
-            if "last" in self.waveform_format:
-                if "clean" in self.waveform or "mask" in self.waveform:
-                    waveform = cleaned_mapped_waveform[:, :, int(waveform_start):int(waveform_stop)]
-                else:
-                    waveform = mapped_waveform[:, :, int(waveform_start):int(waveform_stop)]
+                for index in np.arange(0, self.waveform_sequence_length, dtype=int):
+                    waveform[index] = np.expand_dims(mapped_waveform[:, :, index], axis=2)
+            elif "last" in self.waveform_format:
+                waveform = mapped_waveform
 
         # If 'indexed_conv' is selected, we only need the unmapped vector.
         if (
             self.image_mapper.mapping_method[self._get_camera_type(tel_type)]
             == "indexed_conv"
         ):
-            if "clean" in self.waveform or "mask" in self.waveform:
-                return cleaned_vector
-            else:
-                return vector
+            return vector
         return waveform
 
     def _construct_telescopes_selection(
