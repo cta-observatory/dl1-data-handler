@@ -1344,7 +1344,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             if dl1_cleaning_mask is not None:
                 waveform_max = np.argmax(np.sum(vector * dl1_cleaning_mask[:, None], axis=0))
 
-            # Retrieve the sequene around the shower maximum and calculate the pedestal
+            # Retrieve the sequence around the shower maximum and calculate the pedestal
             # level per pixel outside that sequence if R0-pedsub is selected
             pixped_nsb, nsb_sequence_length = None, None
             if (
