@@ -7,9 +7,10 @@ channels:
 dependencies:
     - python>=3.9
     - astropy
-    - numpy
+    - numpy>=1.20
+    - scipy>=1.1
     - pip
-    - ctapipe==0.19.0
+    - ctapipe>=0.19
     - traitlets>=5.0
     - pyyaml
     - pandas
