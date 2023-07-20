@@ -20,7 +20,7 @@ setup(
     packages=["dl1_data_handler"],
     install_requires=[
         "numpy>=1.20",
-        "scipy>=1.1",
+        "scipy>=1.11",
         "astropy",
         "ctapipe>=0.19",
         "traitlets>=5.0",
