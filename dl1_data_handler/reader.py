@@ -463,11 +463,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         parameter_selection=None,
         shuffle=False,
         seed=None,
-        waveform=None,
-        waveform_sequence_length=None,
-        waveform_format="timechannel_last",
-        waveform_r0pedsub=True,
-        image_channels=None,
+        waveform_settings=None,
+        image_settings=None,
         mapping_settings=None,
         parameter_list=None,
         subarray_info=None,
@@ -529,16 +526,16 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             mapping_settings = {}
 
         # Raw (R0) or calibrated (R1) waveform
-        self.waveform = waveform
-        if self.waveform is not None:
-            if "raw" in self.waveform:
+        self.waveform_settings = waveform_settings
+        if self.waveform_settings is not None:
+            if "raw" in self.waveform_settings["waveform"]:
                 self.waveform_sequence_max_length = (
                     self.files[first_file]
                     .root.r0.event.telescope.tel_001.coldescrs["waveform"]
                     .shape[-1]
                 )
-                self.waveform_r0pedsub = waveform_r0pedsub
-            if "calibrate" in self.waveform:
+                self.waveform_r0pedsub = self.waveform_settings["waveform_r0pedsub"]
+            if "calibrate" in self.waveform_settings["waveform"]:
                 self.waveform_sequence_max_length = (
                     self.files[first_file]
                     .root.r1.event.telescope.tel_001.coldescrs["waveform"]
@@ -549,7 +546,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             if self.waveform_sequence_length is None:
                 self.waveform_sequence_length = self.waveform_sequence_max_length
             # Set returning format for waveforms
-            self.waveform_format = waveform_format
+            self.waveform_format = self.waveform_settings["waveform_format"]
             if not ("first" in self.waveform_format or "last" in self.waveform_format):
                 raise ValueError(
                     "Invalid returning format for waveforms '{}'. Valid options: "
@@ -557,7 +554,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 )
 
         # Integrated charges and peak arrival times (DL1a)
-        self.image_channels = image_channels
+        self.image_channels = None
+        if image_settings is not None:
+            self.image_channels = image_settings["image_channels"]
         self.image_scale = None
         self.peak_time_scale = None
         # Image parameters (DL1b)
@@ -1919,7 +1918,7 @@ class DL1DataReaderDL1DH(DL1DataReader):
         image_selection=None,
         shuffle=False,
         seed=None,
-        image_channels=None,
+        image_settings=None,
         mapping_settings=None,
         parameter_list=None,
         subarray_info=None,
@@ -2281,9 +2280,10 @@ class DL1DataReaderDL1DH(DL1DataReader):
                 [run_array_direction[1], run_array_direction[0]], np.float32
             )
 
-        self.parameter_list = parameter_list
-        self.image_channels = image_channels
-
+        # Integrated charges and peak arrival times (DL1a)
+        self.image_channels = None
+        if image_settings is not None:
+            self.image_channels = image_settings["image_channels"]
         # ImageMapper (1D charges -> 2D images)
         if self.image_channels is not None:
             self.pixel_positions, self.num_pixels = self._construct_pixel_positions(
@@ -2301,6 +2301,9 @@ class DL1DataReaderDL1DH(DL1DataReader):
                     self.image_mapper.image_shapes[camera_type][1],
                     len(self.image_channels),  # number of channels
                 )
+
+        # Image parameters (DL1b)
+        self.parameter_list = parameter_list
 
         super()._construct_unprocessed_example_description(
             self.files[first_file].root.Array_Information,
