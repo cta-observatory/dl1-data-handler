@@ -466,7 +466,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         waveform_settings=None,
         image_settings=None,
         mapping_settings=None,
-        parameter_list=None,
+        parameter_settings=None,
         subarray_info=None,
         event_info=None,
         transforms=None,
@@ -560,7 +560,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         self.image_scale = None
         self.peak_time_scale = None
         # Image parameters (DL1b)
-        self.parameter_list = parameter_list
+        self.parameter_list = None
+        if parameter_settings is not None:
+            self.parameter_list = parameter_settings["parameter_list"]
 
         # Get stage1 split_datasets_by type
         self.split_datasets_by = "tel_id"
@@ -1920,7 +1922,7 @@ class DL1DataReaderDL1DH(DL1DataReader):
         seed=None,
         image_settings=None,
         mapping_settings=None,
-        parameter_list=None,
+        parameter_settings=None,
         subarray_info=None,
         event_info=None,
         transforms=None,
@@ -2303,7 +2305,9 @@ class DL1DataReaderDL1DH(DL1DataReader):
                 )
 
         # Image parameters (DL1b)
-        self.parameter_list = parameter_list
+        self.parameter_list = None
+        if parameter_settings is not None:
+            self.parameter_list = parameter_settings["parameter_list"]
 
         super()._construct_unprocessed_example_description(
             self.files[first_file].root.Array_Information,
