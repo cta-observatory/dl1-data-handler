@@ -112,10 +112,10 @@ class DL1DataReader:
                             "base_name": "waveform",
                             "shape": (
                                 self.waveform_sequence_length,
-                                self.image_mapper.image_shapes[
+                                self.waveform_shapes[
                                     self._get_camera_type(self.tel_type)
                                 ][0],
-                                self.image_mapper.image_shapes[
+                                self.waveform_shapes[
                                     self._get_camera_type(self.tel_type)
                                 ][1],
                                 1,
@@ -130,10 +130,10 @@ class DL1DataReader:
                             "tel_type": self.tel_type,
                             "base_name": "waveform",
                             "shape": (
-                                self.image_mapper.image_shapes[
+                                self.waveform_shapes[
                                     self._get_camera_type(self.tel_type)
                                 ][0],
-                                self.image_mapper.image_shapes[
+                                self.waveform_shapes[
                                     self._get_camera_type(self.tel_type)
                                 ][1],
                                 self.waveform_sequence_length,
@@ -213,10 +213,10 @@ class DL1DataReader:
                                 "shape": (
                                     num_tels,
                                     self.waveform_sequence_length,
-                                    self.image_mapper.image_shapes[
+                                    self.waveform_shapes[
                                         self._get_camera_type(tel_type)
                                     ][0],
-                                    self.image_mapper.image_shapes[
+                                    self.waveform_shapes[
                                         self._get_camera_type(tel_type)
                                     ][1],
                                     1,
@@ -232,10 +232,10 @@ class DL1DataReader:
                                 "base_name": "waveforms",
                                 "shape": (
                                     num_tels,
-                                    self.image_mapper.image_shapes[
+                                    self.waveform_shapes[
                                         self._get_camera_type(tel_type)
                                     ][0],
-                                    self.image_mapper.image_shapes[
+                                    self.waveform_shapes[
                                         self._get_camera_type(tel_type)
                                     ][1],
                                     self.waveform_sequence_length,
@@ -344,7 +344,9 @@ class DL1DataReader:
             if self.data_model_mainversion >= 4:
                 n_showers = sum(np.array(runs.cols._f_col("n_showers"))) * shower_reuse
             else:
-                n_showers = sum(np.array(runs.cols._f_col("num_showers"))) * shower_reuse
+                n_showers = (
+                    sum(np.array(runs.cols._f_col("num_showers"))) * shower_reuse
+                )
             energy_range_min = min(np.array(runs.cols._f_col("energy_range_min")))
             energy_range_max = max(np.array(runs.cols._f_col("energy_range_max")))
             max_scatter_range = max(np.array(runs.cols._f_col("max_scatter_range")))
@@ -526,6 +528,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         if mapping_settings is None:
             mapping_settings = {}
 
+        # AI-based trigger system
+        self.trigger_settings = trigger_settings
+
         # Raw (R0) or calibrated (R1) waveform
         self.waveform_type = None
         if waveform_settings is not None:
@@ -544,7 +549,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     .shape[-1]
                 )
                 self.waveform_r0pedsub = False
-            self.waveform_sequence_length = waveform_settings["waveform_sequence_length"]
+            self.waveform_sequence_length = waveform_settings[
+                "waveform_sequence_length"
+            ]
             if self.waveform_sequence_length is None:
                 self.waveform_sequence_length = self.waveform_sequence_max_length
             # Set returning format for waveforms
@@ -552,7 +559,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             if not ("first" in self.waveform_format or "last" in self.waveform_format):
                 raise ValueError(
                     "Invalid returning format for waveforms '{}'. Valid options: "
-                    "'timechannel_first', 'timechannel_last'".format(self.waveform_format)
+                    "'timechannel_first', 'timechannel_last'".format(
+                        self.waveform_format
+                    )
                 )
 
         # Integrated charges and peak arrival times (DL1a)
@@ -833,8 +842,14 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     # Therefore, two telescope types have to be selected at least.
                     event_id = allevents["event_id"]
                     tels_with_trigger = np.array(allevents["tels_with_trigger"])
-                    tel_id_to_trigger_idx = {tel_id: idx for idx, tel_id in enumerate(
-                        read_table(f, "/configuration/instrument/subarray/layout/")['tel_id'])}
+                    tel_id_to_trigger_idx = {
+                        tel_id: idx
+                        for idx, tel_id in enumerate(
+                            read_table(f, "/configuration/instrument/subarray/layout/")[
+                                "tel_id"
+                            ]
+                        )
+                    }
                     if self.process_type == "Simulation":
                         sim_indices = np.array(allevents["sim_index"], np.int32)
                     if len(selected_telescopes) > 1:
@@ -1203,19 +1218,49 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             )
 
             if self.waveform_type is not None:
-                if "first" in self.waveform_format:
-                    for camera_type in mapping_settings["camera_types"]:
+                self.waveform_shapes = {}
+                self.trigger_patches_xpos, self.trigger_patches_ypos = {}, {}
+                for camera_type in mapping_settings["camera_types"]:
+                    if "first" in self.waveform_format:
                         self.image_mapper.image_shapes[camera_type] = (
                             self.image_mapper.image_shapes[camera_type][0],
                             self.image_mapper.image_shapes[camera_type][1],
                             1,
                         )
-                if "last" in self.waveform_format:
-                    for camera_type in mapping_settings["camera_types"]:
+                    if "last" in self.waveform_format:
                         self.image_mapper.image_shapes[camera_type] = (
                             self.image_mapper.image_shapes[camera_type][0],
                             self.image_mapper.image_shapes[camera_type][1],
                             self.waveform_sequence_length,
+                        )
+
+                    self.waveform_shapes[camera_type] = self.image_mapper.image_shapes[
+                        camera_type
+                    ]
+
+                    # AI-based trigger system
+                    if (
+                        self.trigger_settings is not None
+                        and "raw" in self.waveform_type
+                    ):
+                        self.waveform_shapes[camera_type] = self.trigger_settings[
+                            "trigger_patch_size"
+                        ][camera_type]
+                        self.trigger_patches_xpos[camera_type] = np.unique(
+                            [
+                                patch["x"]
+                                for patch in trigger_settings["trigger_patches"][
+                                    camera_type
+                                ]
+                            ]
+                        )
+                        self.trigger_patches_ypos[camera_type] = np.unique(
+                            [
+                                patch["y"]
+                                for patch in trigger_settings["trigger_patches"][
+                                    camera_type
+                                ]
+                            ]
                         )
 
             if self.image_channels is not None:
@@ -1293,16 +1338,13 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             ),
             dtype=np.float16,
         )
+
         if "first" in self.waveform_format:
             waveform = np.zeros(
                 shape=(
                     self.waveform_sequence_length,
-                    self.image_mapper.image_shapes[
-                        self._get_camera_type(self.tel_type)
-                    ][0],
-                    self.image_mapper.image_shapes[
-                        self._get_camera_type(self.tel_type)
-                    ][1],
+                    self.waveform_shapes[self._get_camera_type(tel_type)][0],
+                    self.waveform_shapes[self._get_camera_type(tel_type)][1],
                     1,
                 ),
                 dtype=np.float16,
@@ -1310,12 +1352,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         if "last" in self.waveform_format:
             waveform = np.zeros(
                 shape=(
-                    self.image_mapper.image_shapes[
-                        self._get_camera_type(self.tel_type)
-                    ][0],
-                    self.image_mapper.image_shapes[
-                        self._get_camera_type(self.tel_type)
-                    ][1],
+                    self.waveform_shapes[self._get_camera_type(tel_type)][0],
+                    self.waveform_shapes[self._get_camera_type(tel_type)][1],
                     self.waveform_sequence_length,
                 ),
                 dtype=np.float16,
@@ -1325,7 +1363,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         dl1_cleaning_mask = None
         if waveform_index != -1 and img_child:
             with lock:
-                dl1_cleaning_mask = np.array(img_child[waveform_index]["image_mask"], dtype=int)
+                dl1_cleaning_mask = np.array(
+                    img_child[waveform_index]["image_mask"], dtype=int
+                )
 
         # If the telescope didn't trigger, the waveform index is -1 and a blank
         # waveform of all zeros with be loaded
@@ -1337,7 +1377,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     vector = vector[0]
                 waveform_max = np.argmax(np.sum(vector, axis=0))
             if dl1_cleaning_mask is not None:
-                waveform_max = np.argmax(np.sum(vector * dl1_cleaning_mask[:, None], axis=0))
+                waveform_max = np.argmax(
+                    np.sum(vector * dl1_cleaning_mask[:, None], axis=0)
+                )
 
             # Retrieve the sequence around the shower maximum and calculate the pedestal
             # level per pixel outside that sequence if R0-pedsub is selected
@@ -1348,46 +1390,124 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 waveform_start = 0
                 waveform_stop = nsb_sequence_length = self.waveform_sequence_max_length
                 if self.waveform_r0pedsub and pixped_nsb is None:
-                    pixped_nsb = np.sum(vector, axis=1)/nsb_sequence_length
+                    pixped_nsb = np.sum(vector, axis=1) / nsb_sequence_length
             else:
                 waveform_start = 1 + waveform_max - self.waveform_sequence_length / 2
                 waveform_stop = 1 + waveform_max + self.waveform_sequence_length / 2
-                nsb_sequence_length = self.waveform_sequence_max_length - self.waveform_sequence_length
+                nsb_sequence_length = (
+                    self.waveform_sequence_max_length - self.waveform_sequence_length
+                )
                 if waveform_stop > self.waveform_sequence_max_length:
-                    waveform_start -= (waveform_stop - self.waveform_sequence_max_length)
+                    waveform_start -= waveform_stop - self.waveform_sequence_max_length
                     waveform_stop = self.waveform_sequence_max_length
                     if self.waveform_r0pedsub and pixped_nsb is None:
-                        pixped_nsb = np.sum(vector[:,:int(waveform_start)], axis=1)/nsb_sequence_length
+                        pixped_nsb = (
+                            np.sum(vector[:, : int(waveform_start)], axis=1)
+                            / nsb_sequence_length
+                        )
                 if waveform_start < 0:
                     waveform_stop += np.abs(waveform_start)
                     waveform_start = 0
                     if self.waveform_r0pedsub and pixped_nsb is None:
-                        pixped_nsb = np.sum(vector[:,int(waveform_stop):], axis=1)/nsb_sequence_length
+                        pixped_nsb = (
+                            np.sum(vector[:, int(waveform_stop) :], axis=1)
+                            / nsb_sequence_length
+                        )
             if self.waveform_r0pedsub and pixped_nsb is None:
-                pixped_nsb = np.sum(vector[:,0:int(waveform_start)], axis=1)
-                pixped_nsb += np.sum(vector[:,int(waveform_stop):self.waveform_sequence_max_length], axis=1)
-                pixped_nsb = pixped_nsb/nsb_sequence_length
+                pixped_nsb = np.sum(vector[:, 0 : int(waveform_start)], axis=1)
+                pixped_nsb += np.sum(
+                    vector[:, int(waveform_stop) : self.waveform_sequence_max_length],
+                    axis=1,
+                )
+                pixped_nsb = pixped_nsb / nsb_sequence_length
 
             # Subtract the pedestal per pixel if R0-pedsub selected
             if self.waveform_r0pedsub:
-                vector = vector - pixped_nsb[:,None]
+                vector = vector - pixped_nsb[:, None]
 
             # Apply the DL1 cleaning mask if selected
             if "clean" in self.waveform_type or "mask" in self.waveform_type:
                 vector *= dl1_cleaning_mask[:, None]
 
             # Crop the waveform
-            vector = vector[:,int(waveform_start):int(waveform_stop)]
+            vector = vector[:, int(waveform_start) : int(waveform_stop)]
 
             # Map the waveform snapshots through the ImageMapper
             # and transform to selected returning format
             mapped_waveform = self.image_mapper.map_image(
                 vector, self._get_camera_type(tel_type)
             )
+
+            if self.trigger_settings is not None and "raw" in self.waveform_type:
+                trigger_patch_center = {}
+                waveform_shape_x = self.waveform_shapes[
+                    self._get_camera_type(tel_type)
+                ][0]
+                waveform_shape_y = self.waveform_shapes[
+                    self._get_camera_type(tel_type)
+                ][1]
+
+                # Select randomly if signal or any other random trigger patch are processed
+                if np.random.randint(2, dtype=bool):
+                    print("yes")
+                    # Find hot spot
+                    merged_waveform = np.sum(mapped_waveform, axis=2)
+                    hot_spot = np.unravel_index(np.argmax(merged_waveform, axis=None), merged_waveform.shape)
+                    # Detect in which trigger patch the maximum is located
+                    trigger_patch_center["x"] = self.trigger_patches_xpos[
+                        self._get_camera_type(tel_type)
+                    ][
+                        np.argmin(
+                            np.abs(
+                                self.trigger_patches_xpos[
+                                    self._get_camera_type(tel_type)
+                                ]
+                                - hot_spot[0]
+                            )
+                        )
+                    ]
+                    trigger_patch_center["y"] = self.trigger_patches_ypos[
+                        self._get_camera_type(tel_type)
+                    ][
+                        np.argmin(
+                            np.abs(
+                                self.trigger_patches_ypos[
+                                    self._get_camera_type(tel_type)
+                                ]
+                                - hot_spot[1]
+                            )
+                        )
+                    ]
+
+                else:
+                    print("no")
+                    n_trigger_patches = np.random.randint(
+                        len(
+                            self.trigger_settings["trigger_patches"][
+                                self._get_camera_type(tel_type)
+                            ]
+                        )
+                    )
+                    trigger_patch_center = self.trigger_settings["trigger_patches"][
+                        self._get_camera_type(tel_type)
+                    ][n_trigger_patches]
+
+                mapped_waveform = mapped_waveform[
+                    int(trigger_patch_center["x"] - waveform_shape_x / 2) : int(
+                        trigger_patch_center["x"] + waveform_shape_x / 2
+                    ),
+                    int(trigger_patch_center["y"] - waveform_shape_y / 2) : int(
+                        trigger_patch_center["y"] + waveform_shape_y / 2
+                    ),
+                    :,
+                ]
+
             if "first" in self.waveform_format:
                 for index in np.arange(0, self.waveform_sequence_length, dtype=int):
-                    waveform[index] = np.expand_dims(mapped_waveform[:, :, index], axis=2)
-            elif "last" in self.waveform_format:
+                    waveform[index] = np.expand_dims(
+                        mapped_waveform[:, :, index], axis=2
+                    )
+            if "last" in self.waveform_format:
                 waveform = mapped_waveform
 
         # If 'indexed_conv' is selected, we only need the unmapped vector.
@@ -1526,8 +1646,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         subarray_info = [[] for column in self.subarray_info]
         if self.split_datasets_by == "tel_id":
             for i, tel_id in enumerate(self.selected_telescopes[tel_type]):
-                if self.waveform is not None:
-                    if "raw" in self.waveform:
+                if self.waveform_type is not None:
+                    if "raw" in self.waveform_type:
                         child = None
                         with lock:
                             tel_table = "tel_{:03d}".format(tel_id)
@@ -1540,14 +1660,21 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 ].root.r0.event.telescope._f_get_child(tel_table)
                                 img_child = None
                                 if "dl1" in self.files[filename].root:
-                                    if "images" in self.files[filename].root.dl1.event.telescope:
+                                    if (
+                                        "images"
+                                        in self.files[filename].root.dl1.event.telescope
+                                    ):
                                         img_child = self.files[
                                             filename
-                                        ].root.dl1.event.telescope.images._f_get_child(tel_table)
+                                        ].root.dl1.event.telescope.images._f_get_child(
+                                            tel_table
+                                        )
                         waveforms.append(
-                            self._get_waveform(child, tel_type, trigger_info[i], img_child)
+                            self._get_waveform(
+                                child, tel_type, trigger_info[i], img_child
+                            )
                         )
-                    if "calibrate" in self.waveform:
+                    if "calibrate" in self.waveform_type:
                         child = None
                         with lock:
                             tel_table = "tel_{:03d}".format(tel_id)
@@ -1560,12 +1687,19 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 ].root.r1.event.telescope._f_get_child(tel_table)
                                 img_child = None
                                 if "dl1" in self.files[filename].root:
-                                    if "images" in self.files[filename].root.dl1.event.telescope:
+                                    if (
+                                        "images"
+                                        in self.files[filename].root.dl1.event.telescope
+                                    ):
                                         img_child = self.files[
                                             filename
-                                        ].root.dl1.event.telescope.images._f_get_child(tel_table)
+                                        ].root.dl1.event.telescope.images._f_get_child(
+                                            tel_table
+                                        )
                         waveforms.append(
-                            self._get_waveform(child, tel_type, trigger_info[i], img_child)
+                            self._get_waveform(
+                                child, tel_type, trigger_info[i], img_child
+                            )
                         )
 
                 if self.image_channels is not None:
@@ -1631,29 +1765,39 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         pointings.append(np.array([np.nan, np.nan], np.float32))
 
         elif self.split_datasets_by == "tel_type":
-            if self.waveform is not None:
-                if "raw" in self.waveform:
+            if self.waveform_type is not None:
+                if "raw" in self.waveform_type:
                     with lock:
                         wvf_child = self.files[
                             filename
                         ].root.r0.event.telescope._f_get_child(tel_type)
                         img_child = None
                         if "dl1" in self.files[filename].root:
-                            if "images" in self.files[filename].root.dl1.event.telescope:
+                            if (
+                                "images"
+                                in self.files[filename].root.dl1.event.telescope
+                            ):
                                 img_child = self.files[
                                     filename
-                                ].root.dl1.event.telescope.images._f_get_child(tel_table)
-                if "calibrate" in self.waveform:
+                                ].root.dl1.event.telescope.images._f_get_child(
+                                    tel_table
+                                )
+                if "calibrate" in self.waveform_type:
                     with lock:
                         wvf_child = self.files[
                             filename
                         ].root.r1.event.telescope._f_get_child(tel_type)
                         img_child = None
                         if "dl1" in self.files[filename].root:
-                            if "images" in self.files[filename].root.dl1.event.telescope:
+                            if (
+                                "images"
+                                in self.files[filename].root.dl1.event.telescope
+                            ):
                                 img_child = self.files[
                                     filename
-                                ].root.dl1.event.telescope.images._f_get_child(tel_table)
+                                ].root.dl1.event.telescope.images._f_get_child(
+                                    tel_table
+                                )
             if self.image_channels is not None:
                 with lock:
                     img_child = self.files[
@@ -1668,7 +1812,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             for i, tel_id in enumerate(self.selected_telescopes[tel_type]):
                 if self.waveform is not None:
                     waveforms.append(
-                        self._get_waveform(wvf_child, tel_type, trigger_info[i], img_child)
+                        self._get_waveform(
+                            wvf_child, tel_type, trigger_info[i], img_child
+                        )
                     )
 
                 if self.image_channels is not None:
@@ -1694,7 +1840,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             )
 
         example = [np.array(trigger_info >= 0, np.int8)]
-        if self.waveform is not None:
+        if self.waveform_type is not None:
             example.extend([np.stack(waveforms)])
         if self.image_channels is not None:
             example.extend([np.stack(images)])
@@ -1721,8 +1867,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
             example = []
             if self.split_datasets_by == "tel_id":
-                if self.waveform is not None:
-                    if "raw" in self.waveform:
+                if self.waveform_type is not None:
+                    if "raw" in self.waveform_type:
                         with lock:
                             tel_table = "tel_{:03d}".format(tel_id)
                             child = self.files[
@@ -1730,12 +1876,19 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             ].root.r0.event.telescope._f_get_child(tel_table)
                             img_child = None
                             if "dl1" in self.files[filename].root:
-                                if "images" in self.files[filename].root.dl1.event.telescope:
+                                if (
+                                    "images"
+                                    in self.files[filename].root.dl1.event.telescope
+                                ):
                                     img_child = self.files[
                                         filename
-                                    ].root.dl1.event.telescope.images._f_get_child(tel_table)
-                        example.append(self._get_waveform(child, self.tel_type, index, img_child))
-                    if "calibrate" in self.waveform:
+                                    ].root.dl1.event.telescope.images._f_get_child(
+                                        tel_table
+                                    )
+                        example.append(
+                            self._get_waveform(child, self.tel_type, index, img_child)
+                        )
+                    if "calibrate" in self.waveform_type:
                         with lock:
                             tel_table = "tel_{:03d}".format(tel_id)
                             child = self.files[
@@ -1743,11 +1896,18 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             ].root.r1.event.telescope._f_get_child(tel_table)
                             img_child = None
                             if "dl1" in self.files[filename].root:
-                                if "images" in self.files[filename].root.dl1.event.telescope:
+                                if (
+                                    "images"
+                                    in self.files[filename].root.dl1.event.telescope
+                                ):
                                     img_child = self.files[
                                         filename
-                                    ].root.dl1.event.telescope.images._f_get_child(tel_table)
-                        example.append(self._get_waveform(child, self.tel_type, index, img_child))
+                                    ].root.dl1.event.telescope.images._f_get_child(
+                                        tel_table
+                                    )
+                        example.append(
+                            self._get_waveform(child, self.tel_type, index, img_child)
+                        )
 
                 if self.image_channels is not None:
                     with lock:
@@ -1766,31 +1926,45 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     parameter_list = list(child[index][self.parameter_list])
                     example.extend([np.stack(parameter_list)])
             elif self.split_datasets_by == "tel_type":
-                if self.waveform is not None:
-                    if "raw" in self.waveform:
+                if self.waveform_type is not None:
+                    if "raw" in self.waveform_type:
                         with lock:
                             child = self.files[
                                 filename
                             ].root.r0.event.telescope._f_get_child(self.tel_type)
                             img_child = None
                             if "dl1" in self.files[filename].root:
-                                if "images" in self.files[filename].root.dl1.event.telescope:
+                                if (
+                                    "images"
+                                    in self.files[filename].root.dl1.event.telescope
+                                ):
                                     img_child = self.files[
                                         filename
-                                    ].root.dl1.event.telescope.images._f_get_child(tel_table)
-                        example.append(self._get_waveform(child, self.tel_type, index, img_child))
-                    if "calibrate" in self.waveform:
+                                    ].root.dl1.event.telescope.images._f_get_child(
+                                        tel_table
+                                    )
+                        example.append(
+                            self._get_waveform(child, self.tel_type, index, img_child)
+                        )
+                    if "calibrate" in self.waveform_type:
                         with lock:
                             child = self.files[
                                 filename
                             ].root.r0.event.telescope._f_get_child(self.tel_type)
                             img_child = None
                             if "dl1" in self.files[filename].root:
-                                if "images" in self.files[filename].root.dl1.event.telescope:
+                                if (
+                                    "images"
+                                    in self.files[filename].root.dl1.event.telescope
+                                ):
                                     img_child = self.files[
                                         filename
-                                    ].root.dl1.event.telescope.images._f_get_child(tel_table)
-                        example.append(self._get_waveform(child, self.tel_type, index, img_child))
+                                    ].root.dl1.event.telescope.images._f_get_child(
+                                        tel_table
+                                    )
+                        example.append(
+                            self._get_waveform(child, self.tel_type, index, img_child)
+                        )
 
                 if self.image_channels is not None:
                     with lock:
