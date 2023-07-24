@@ -103,7 +103,7 @@ class DL1DataReader:
         """
         if self.mode == "mono":
             self.unprocessed_example_description = []
-            if self.waveform is not None:
+            if self.waveform_type is not None:
                 if "first" in self.waveform_format:
                     self.unprocessed_example_description.append(
                         {
@@ -203,7 +203,7 @@ class DL1DataReader:
                         }
                     ]
                 )
-                if self.waveform is not None:
+                if self.waveform_type is not None:
                     if "first" in self.waveform_format:
                         self.unprocessed_example_description.append(
                             {
@@ -463,6 +463,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         parameter_selection=None,
         shuffle=False,
         seed=None,
+        trigger_settings=None,
         waveform_settings=None,
         image_settings=None,
         mapping_settings=None,
@@ -526,27 +527,28 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             mapping_settings = {}
 
         # Raw (R0) or calibrated (R1) waveform
-        self.waveform_settings = waveform_settings
-        if self.waveform_settings is not None:
-            if "raw" in self.waveform_settings["waveform"]:
+        self.waveform_type = None
+        if waveform_settings is not None:
+            self.waveform_type = waveform_settings["waveform_type"]
+            if "raw" in self.waveform_type:
                 self.waveform_sequence_max_length = (
                     self.files[first_file]
                     .root.r0.event.telescope.tel_001.coldescrs["waveform"]
                     .shape[-1]
                 )
-                self.waveform_r0pedsub = self.waveform_settings["waveform_r0pedsub"]
-            if "calibrate" in self.waveform_settings["waveform"]:
+                self.waveform_r0pedsub = waveform_settings["waveform_r0pedsub"]
+            if "calibrate" in self.waveform_type:
                 self.waveform_sequence_max_length = (
                     self.files[first_file]
                     .root.r1.event.telescope.tel_001.coldescrs["waveform"]
                     .shape[-1]
                 )
                 self.waveform_r0pedsub = False
-            self.waveform_sequence_length = waveform_sequence_length
+            self.waveform_sequence_length = waveform_settings["waveform_sequence_length"]
             if self.waveform_sequence_length is None:
                 self.waveform_sequence_length = self.waveform_sequence_max_length
             # Set returning format for waveforms
-            self.waveform_format = self.waveform_settings["waveform_format"]
+            self.waveform_format = waveform_settings["waveform_format"]
             if not ("first" in self.waveform_format or "last" in self.waveform_format):
                 raise ValueError(
                     "Invalid returning format for waveforms '{}'. Valid options: "
@@ -1156,7 +1158,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 example_identifiers_file.close()
 
         # ImageMapper (1D charges -> 2D images or 3D waveforms)
-        if self.image_channels is not None or self.waveform is not None:
+        if self.image_channels is not None or self.waveform_type is not None:
             if self.image_channels is not None:
                 # Check the transform value used for the file compression
                 for tel_id in np.arange(1, 180):
@@ -1200,7 +1202,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 pixel_positions=self.pixel_positions, **mapping_settings
             )
 
-            if self.waveform is not None:
+            if self.waveform_type is not None:
                 if "first" in self.waveform_format:
                     for camera_type in mapping_settings["camera_types"]:
                         self.image_mapper.image_shapes[camera_type] = (
@@ -1330,8 +1332,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         if waveform_index != -1 and child:
             with lock:
                 vector = child[waveform_index]["waveform"]
-            if self.waveform is not None:
-                if "raw" in self.waveform:
+            if self.waveform_type is not None:
+                if "raw" in self.waveform_type:
                     vector = vector[0]
                 waveform_max = np.argmax(np.sum(vector, axis=0))
             if dl1_cleaning_mask is not None:
@@ -1371,7 +1373,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 vector = vector - pixped_nsb[:,None]
 
             # Apply the DL1 cleaning mask if selected
-            if "clean" in self.waveform or "mask" in self.waveform:
+            if "clean" in self.waveform_type or "mask" in self.waveform_type:
                 vector *= dl1_cleaning_mask[:, None]
 
             # Crop the waveform
