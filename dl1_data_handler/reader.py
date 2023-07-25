@@ -1330,7 +1330,15 @@ class DL1DataReaderSTAGE1(DL1DataReader):
     # First extract a raw 2D vector and transform it into a 3D waveform using a
     # mapping table. When 'indexed_conv' is selected this function should
     # return the unmapped vector.
-    def _get_waveform(self, child, tel_type, waveform_index, img_child=None):
+    def _get_waveform(
+        self,
+        child,
+        tel_type,
+        waveform_index,
+        img_child=None,
+        sim_child=None,
+        random_trigger_patch=False,
+    ):
         vector = np.zeros(
             shape=(
                 self.num_pixels[self._get_camera_type(tel_type)],
@@ -1365,6 +1373,14 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             with lock:
                 dl1_cleaning_mask = np.array(
                     img_child[waveform_index]["image_mask"], dtype=int
+                )
+
+        # Retrieve the true image if the child of the simulated images are provided
+        true_image, trigger_patch_true_image_sum = None, None
+        if waveform_index != -1 and sim_child:
+            with lock:
+                true_image = np.array(
+                    sim_child[waveform_index]["true_image"], dtype=int
                 )
 
         # If the telescope didn't trigger, the waveform index is -1 and a blank
@@ -1438,7 +1454,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 vector, self._get_camera_type(tel_type)
             )
 
-            if self.trigger_settings is not None and "raw" in self.waveform_type:
+            if sim_child:
                 trigger_patch_center = {}
                 waveform_shape_x = self.waveform_shapes[
                     self._get_camera_type(tel_type)
@@ -1448,12 +1464,14 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 ][1]
 
                 # Select randomly if signal or any other random trigger patch are processed
-                if np.random.randint(2, dtype=bool):
-                    print("yes")
-                    # Find hot spot
-                    merged_waveform = np.sum(mapped_waveform, axis=2)
-                    hot_spot = np.unravel_index(np.argmax(merged_waveform, axis=None), merged_waveform.shape)
-                    # Detect in which trigger patch the maximum is located
+                if not random_trigger_patch:
+                    # Find hot spot (pixel with the highest intensity of the integrated waveform)
+                    integrated_waveform = np.sum(mapped_waveform, axis=2)
+                    hot_spot = np.unravel_index(
+                        np.argmax(integrated_waveform, axis=None),
+                        integrated_waveform.shape,
+                    )
+                    # Detect in which trigger patch the hot spot is located
                     trigger_patch_center["x"] = self.trigger_patches_xpos[
                         self._get_camera_type(tel_type)
                     ][
@@ -1480,7 +1498,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     ]
 
                 else:
-                    print("no")
                     n_trigger_patches = np.random.randint(
                         len(
                             self.trigger_settings["trigger_patches"][
@@ -1492,6 +1509,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         self._get_camera_type(tel_type)
                     ][n_trigger_patches]
 
+                # Crop the waveform according to the trigger patch
                 mapped_waveform = mapped_waveform[
                     int(trigger_patch_center["x"] - waveform_shape_x / 2) : int(
                         trigger_patch_center["x"] + waveform_shape_x / 2
@@ -1501,6 +1519,21 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     ),
                     :,
                 ]
+                # Get the number of cherenkov photons in the trigger patch
+                mapped_true_image = self.image_mapper.map_image(
+                    true_image, self._get_camera_type(tel_type)
+                )
+                trigger_patch_true_image_sum = np.sum(
+                    mapped_true_image[
+                        int(trigger_patch_center["x"] - waveform_shape_x / 2) : int(
+                            trigger_patch_center["x"] + waveform_shape_x / 2
+                        ),
+                        int(trigger_patch_center["y"] - waveform_shape_y / 2) : int(
+                            trigger_patch_center["y"] + waveform_shape_y / 2
+                        ),
+                        :,
+                    ]
+                )
 
             if "first" in self.waveform_format:
                 for index in np.arange(0, self.waveform_sequence_length, dtype=int):
@@ -1516,7 +1549,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             == "indexed_conv"
         ):
             return vector
-        return waveform
+        return waveform, trigger_patch_true_image_sum
 
     def _construct_telescopes_selection(
         self, subarray_table, selected_telescope_types, selected_telescope_ids
@@ -1637,9 +1670,17 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         return pixel_positions, num_pixels
 
-    def _load_tel_type_data(self, filename, tel_type, trigger_info, pointing_info=None):
+    def _load_tel_type_data(
+        self,
+        filename,
+        tel_type,
+        trigger_info,
+        random_trigger_patch=False,
+        pointing_info=None,
+    ):
         triggers = []
         waveforms = []
+        trigger_patch_true_image_sums = []
         images = []
         parameters_lists = []
         pointings = []
@@ -1669,11 +1710,35 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                         ].root.dl1.event.telescope.images._f_get_child(
                                             tel_table
                                         )
-                        waveforms.append(
-                            self._get_waveform(
-                                child, tel_type, trigger_info[i], img_child
-                            )
+                                sim_child = None
+                                if (
+                                    self.trigger_settings is not None
+                                    and "simulation" in self.files[filename].root
+                                ):
+                                    if (
+                                        "images"
+                                        in self.files[
+                                            filename
+                                        ].root.simulation.event.telescope
+                                    ):
+                                        sim_child = self.files[
+                                            filename
+                                        ].root.simulation.event.telescope.images._f_get_child(
+                                            tel_table
+                                        )
+                        waveform, trigger_patch_true_image_sum = self._get_waveform(
+                            child,
+                            tel_type,
+                            trigger_info[i],
+                            img_child,
+                            sim_child,
+                            random_trigger_patch,
                         )
+                        waveforms.append(waveform)
+                        trigger_patch_true_image_sums.append(
+                            trigger_patch_true_image_sum
+                        )
+
                     if "calibrate" in self.waveform_type:
                         child = None
                         with lock:
@@ -1685,7 +1750,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 child = self.files[
                                     filename
                                 ].root.r1.event.telescope._f_get_child(tel_table)
-                                img_child = None
+                                img_child, sim_child = None, None
                                 if "dl1" in self.files[filename].root:
                                     if (
                                         "images"
@@ -1696,11 +1761,15 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                         ].root.dl1.event.telescope.images._f_get_child(
                                             tel_table
                                         )
-                        waveforms.append(
-                            self._get_waveform(
-                                child, tel_type, trigger_info[i], img_child
-                            )
+                        waveform, _ = self._get_waveform(
+                            child,
+                            tel_type,
+                            trigger_info[i],
+                            img_child,
+                            sim_child,
+                            random_trigger_patch,
                         )
+                        waveforms.append(waveform)
 
                 if self.image_channels is not None:
                     child = None
@@ -1768,7 +1837,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             if self.waveform_type is not None:
                 if "raw" in self.waveform_type:
                     with lock:
-                        wvf_child = self.files[
+                        child = self.files[
                             filename
                         ].root.r0.event.telescope._f_get_child(tel_type)
                         img_child = None
@@ -1782,12 +1851,26 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 ].root.dl1.event.telescope.images._f_get_child(
                                     tel_table
                                 )
+                        sim_child = None
+                        if (
+                            self.trigger_settings is not None
+                            and "simulation" in self.files[filename].root
+                        ):
+                            if (
+                                "images"
+                                in self.files[filename].root.simulation.event.telescope
+                            ):
+                                sim_child = self.files[
+                                    filename
+                                ].root.simulation.event.telescope.images._f_get_child(
+                                    tel_table
+                                )
                 if "calibrate" in self.waveform_type:
                     with lock:
-                        wvf_child = self.files[
+                        child = self.files[
                             filename
                         ].root.r1.event.telescope._f_get_child(tel_type)
-                        img_child = None
+                        img_child, sim_child = None, None
                         if "dl1" in self.files[filename].root:
                             if (
                                 "images"
@@ -1810,12 +1893,17 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     ].root.dl1.event.telescope.parameters._f_get_child(tel_type)
 
             for i, tel_id in enumerate(self.selected_telescopes[tel_type]):
-                if self.waveform is not None:
-                    waveforms.append(
-                        self._get_waveform(
-                            wvf_child, tel_type, trigger_info[i], img_child
-                        )
+                if self.waveform_type is not None:
+                    waveform, trigger_patch_true_image_sum = self._get_waveform(
+                        child,
+                        tel_type,
+                        trigger_info[i],
+                        img_child,
+                        sim_child,
+                        random_trigger_patch,
                     )
+                    waveforms.append(waveform)
+                    trigger_patch_true_image_sums.append(trigger_patch_true_image_sum)
 
                 if self.image_channels is not None:
                     images.append(
@@ -1842,6 +1930,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         example = [np.array(trigger_info >= 0, np.int8)]
         if self.waveform_type is not None:
             example.extend([np.stack(waveforms)])
+        if self.trigger_settings is not None:
+            example.extend([np.stack(trigger_patch_true_image_sums)])
         if self.image_channels is not None:
             example.extend([np.stack(images)])
         if self.parameter_list is not None:
@@ -1862,8 +1952,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             # Get a single image
             if self.process_type == "Simulation":
                 nrow, index, tel_id = identifiers[1:4]
+                random_trigger_patch = np.random.randint(2, dtype=bool)
             else:
                 index, tel_id = identifiers[1:3]
+                random_trigger_patch = False
 
             example = []
             if self.split_datasets_by == "tel_id":
@@ -1885,8 +1977,33 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                     ].root.dl1.event.telescope.images._f_get_child(
                                         tel_table
                                     )
-                        example.append(
-                            self._get_waveform(child, self.tel_type, index, img_child)
+                            sim_child = None
+                            if (
+                                self.trigger_settings is not None
+                                and "simulation" in self.files[filename].root
+                            ):
+                                if (
+                                    "images"
+                                    in self.files[
+                                        filename
+                                    ].root.simulation.event.telescope
+                                ):
+                                    sim_child = self.files[
+                                        filename
+                                    ].root.simulation.event.telescope.images._f_get_child(
+                                        tel_table
+                                    )
+                        waveform, trigger_patch_true_image_sum = self._get_waveform(
+                            child,
+                            self.tel_type,
+                            index,
+                            img_child,
+                            sim_child,
+                            random_trigger_patch,
+                        )
+                        waveforms.append(waveform)
+                        trigger_patch_true_image_sums.append(
+                            trigger_patch_true_image_sum
                         )
                     if "calibrate" in self.waveform_type:
                         with lock:
@@ -1894,7 +2011,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             child = self.files[
                                 filename
                             ].root.r1.event.telescope._f_get_child(tel_table)
-                            img_child = None
+                            img_child, sim_child = None, None
                             if "dl1" in self.files[filename].root:
                                 if (
                                     "images"
@@ -1905,9 +2022,15 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                     ].root.dl1.event.telescope.images._f_get_child(
                                         tel_table
                                     )
-                        example.append(
-                            self._get_waveform(child, self.tel_type, index, img_child)
+                        waveform, _ = self._get_waveform(
+                            child,
+                            self.tel_type,
+                            index,
+                            img_child,
+                            sim_child,
+                            random_trigger_patch,
                         )
+                        example.append(waveform)
 
                 if self.image_channels is not None:
                     with lock:
@@ -1943,15 +2066,40 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                     ].root.dl1.event.telescope.images._f_get_child(
                                         tel_table
                                     )
-                        example.append(
-                            self._get_waveform(child, self.tel_type, index, img_child)
+                            sim_child = None
+                            if (
+                                self.trigger_settings is not None
+                                and "simulation" in self.files[filename].root
+                            ):
+                                if (
+                                    "images"
+                                    in self.files[
+                                        filename
+                                    ].root.simulation.event.telescope
+                                ):
+                                    sim_child = self.files[
+                                        filename
+                                    ].root.simulation.event.telescope.images._f_get_child(
+                                        tel_table
+                                    )
+                        waveform, trigger_patch_true_image_sum = self._get_waveform(
+                            child,
+                            self.tel_type,
+                            index,
+                            img_child,
+                            sim_child,
+                            random_trigger_patch,
+                        )
+                        example.append(waveform)
+                        example.extend(
+                            [np.stack(example.extend([np.stack(parameter_list)]))]
                         )
                     if "calibrate" in self.waveform_type:
                         with lock:
                             child = self.files[
                                 filename
-                            ].root.r0.event.telescope._f_get_child(self.tel_type)
-                            img_child = None
+                            ].root.r1.event.telescope._f_get_child(self.tel_type)
+                            img_child, sim_child = None, None
                             if "dl1" in self.files[filename].root:
                                 if (
                                     "images"
@@ -1962,9 +2110,15 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                     ].root.dl1.event.telescope.images._f_get_child(
                                         tel_table
                                     )
-                        example.append(
-                            self._get_waveform(child, self.tel_type, index, img_child)
+                        waveform, _ = self._get_waveform(
+                            child,
+                            self.tel_type,
+                            index,
+                            img_child,
+                            sim_child,
+                            random_trigger_patch,
                         )
+                        example.append(waveform)
 
                 if self.image_channels is not None:
                     with lock:
@@ -2035,17 +2189,23 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             if self.process_type == "Simulation":
                 nrow = identifiers[1]
                 trigger_info = identifiers[2]
+                random_trigger_patch = np.random.randint(2, dtype=bool)
                 if self.pointing_mode == "divergent":
                     pointing_info = identifiers[3]
             else:
                 trigger_info = identifiers[1]
+                random_trigger_patch = False
                 if self.pointing_mode == "divergent":
                     pointing_info = identifiers[2]
 
             example = []
             for ind, tel_type in enumerate(self.selected_telescopes):
                 tel_type_example = self._load_tel_type_data(
-                    filename, tel_type, trigger_info[ind], pointing_info
+                    filename,
+                    tel_type,
+                    trigger_info[ind],
+                    pointing_info,
+                    random_trigger_patch,
                 )
                 example.extend(tel_type_example)
 
