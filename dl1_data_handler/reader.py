@@ -432,7 +432,7 @@ class DL1DataReader:
         )
         # If the telescope didn't trigger, the image index is -1 and a blank
         # image of all zeros with be loaded
-        if image_index != -1 and child:
+        if image_index != -1 and child is not None:
             with lock:
                 record = child[image_index]
                 for i, channel in enumerate(self.image_channels):
@@ -1394,7 +1394,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         # Retrieve the DL1 cleaning mask if the child of the DL1 images are provided
         dl1_cleaning_mask = None
-        if waveform_index != -1 and img_child:
+        if waveform_index != -1 and img_child is not None:
             with lock:
                 dl1_cleaning_mask = np.array(
                     img_child[waveform_index]["image_mask"], dtype=int
@@ -1402,7 +1402,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         # Retrieve the true image if the child of the simulated images are provided
         true_image, trigger_patch_true_image_sum = None, None
-        if waveform_index != -1 and sim_child:
+        if waveform_index != -1 and self.aitrigger:
             with lock:
                 true_image = np.expand_dims(
                     np.array(sim_child[waveform_index]["true_image"], dtype=int), axis=1
@@ -1410,7 +1410,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         # If the telescope didn't trigger, the waveform index is -1 and a blank
         # waveform of all zeros with be loaded
-        if waveform_index != -1 and child:
+        if waveform_index != -1 and child is not None:
             with lock:
                 vector = child[waveform_index]["waveform"]
             if self.waveform_type is not None:
@@ -1479,7 +1479,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 vector, self._get_camera_type(tel_type)
             )
 
-            if sim_child:
+            if self.trigger_settings is not None:
                 trigger_patch_center = {}
                 waveform_shape_x = self.waveform_shapes[
                     self._get_camera_type(tel_type)
@@ -1740,10 +1740,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                             tel_table
                                         )
                                 sim_child = None
-                                if (
-                                    self.aitrigger
-                                    and "simulation" in self.files[filename].root
-                                ):
+                                if self.aitrigger and self.process_type == "Simulation":
                                     if (
                                         "images"
                                         in self.files[
@@ -1882,7 +1879,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                     tel_table
                                 )
                         sim_child = None
-                        if self.aitrigger and "simulation" in self.files[filename].root:
+                        if self.aitrigger and self.process_type == "Simulation":
                             if (
                                 "images"
                                 in self.files[filename].root.simulation.event.telescope
@@ -2011,7 +2008,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             sim_child = None
                             if (
                                 self.trigger_settings is not None
-                                and "simulation" in self.files[filename].root
+                                and self.process_type == "Simulation"
                             ):
                                 if (
                                     "images"
