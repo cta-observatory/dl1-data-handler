@@ -141,7 +141,7 @@ class DL1DataReader:
                             "dtype": np.dtype(np.float16),
                         }
                     )
-                if self.trigger_settings is not None and "raw" in self.waveform_type:
+                if self.aitrigger and "raw" in self.waveform_type:
                     self.unprocessed_example_description.append(
                         {
                             "name": "trigger_patch_true_image_sum",
@@ -205,9 +205,9 @@ class DL1DataReader:
                 self.unprocessed_example_description.extend(
                     [
                         {
-                            "name": tel_type + "_triggers",
+                            "name": tel_type + "_HWtriggers",
                             "tel_type": tel_type,
-                            "base_name": "triggers",
+                            "base_name": "HWtriggers",
                             "shape": (num_tels,),
                             "dtype": np.dtype(np.int8),
                         }
@@ -253,10 +253,7 @@ class DL1DataReader:
                                 "dtype": np.dtype(np.float16),
                             }
                         )
-                    if (
-                        self.trigger_settings is not None
-                        and "raw" in self.waveform_type
-                    ):
+                    if self.aitrigger and "raw" in self.waveform_type:
                         self.unprocessed_example_description.append(
                             {
                                 "name": tel_type + "_trigger_patch_true_image_sum",
@@ -554,6 +551,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         # AI-based trigger system
         self.trigger_settings = trigger_settings
+        self.aitrigger, self.include_nsb_patches = False, False
+        if self.trigger_settings is not None:
+            self.aitrigger = self.trigger_settings["aitrigger"]
+            self.include_nsb_patches = self.trigger_settings["include_nsb_patches"]
 
         # Raw (R0) or calibrated (R1) waveform
         self.waveform_type = None
@@ -1138,7 +1139,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             # The sum of the weights of all examples stays the same.
             self.num_classes = len(self.simulated_particles) - 1
             if self.process_type == "Simulation":
-                if len(self.simulated_particles) > 2:
+                if len(self.simulated_particles) > 2 and not self.aitrigger:
                     self.shower_primary_id_to_class = {}
                     self.class_names = []
                     for p, particle_id in enumerate(
@@ -1546,21 +1547,22 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     :,
                 ]
                 # Get the number of cherenkov photons in the trigger patch
-                mapped_true_image = self.image_mapper.map_image(
-                    true_image, self._get_camera_type(tel_type)
-                )
-                trigger_patch_true_image_sum = np.sum(
-                    mapped_true_image[
-                        int(trigger_patch_center["x"] - waveform_shape_x / 2) : int(
-                            trigger_patch_center["x"] + waveform_shape_x / 2
-                        ),
-                        int(trigger_patch_center["y"] - waveform_shape_y / 2) : int(
-                            trigger_patch_center["y"] + waveform_shape_y / 2
-                        ),
-                        :,
-                    ],
-                    dtype=int,
-                )
+                if self.aitrigger:
+                    mapped_true_image = self.image_mapper.map_image(
+                        true_image, self._get_camera_type(tel_type)
+                    )
+                    trigger_patch_true_image_sum = np.sum(
+                        mapped_true_image[
+                            int(trigger_patch_center["x"] - waveform_shape_x / 2) : int(
+                                trigger_patch_center["x"] + waveform_shape_x / 2
+                            ),
+                            int(trigger_patch_center["y"] - waveform_shape_y / 2) : int(
+                                trigger_patch_center["y"] + waveform_shape_y / 2
+                            ),
+                            :,
+                        ],
+                        dtype=int,
+                    )
 
             if "first" in self.waveform_format:
                 for index in np.arange(0, self.waveform_sequence_length, dtype=int):
@@ -1739,7 +1741,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                         )
                                 sim_child = None
                                 if (
-                                    self.trigger_settings is not None
+                                    self.aitrigger
                                     and "simulation" in self.files[filename].root
                                 ):
                                     if (
@@ -1762,9 +1764,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             random_trigger_patch,
                         )
                         waveforms.append(waveform)
-                        trigger_patch_true_image_sums.append(
-                            trigger_patch_true_image_sum
-                        )
+                        if trigger_patch_true_image_sum:
+                            trigger_patch_true_image_sums.append(
+                                trigger_patch_true_image_sum
+                            )
 
                     if "calibrate" in self.waveform_type:
                         child = None
@@ -1879,10 +1882,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                     tel_table
                                 )
                         sim_child = None
-                        if (
-                            self.trigger_settings is not None
-                            and "simulation" in self.files[filename].root
-                        ):
+                        if self.aitrigger and "simulation" in self.files[filename].root:
                             if (
                                 "images"
                                 in self.files[filename].root.simulation.event.telescope
@@ -1930,7 +1930,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         random_trigger_patch,
                     )
                     waveforms.append(waveform)
-                    trigger_patch_true_image_sums.append(trigger_patch_true_image_sum)
+                    if trigger_patch_true_image_sum is not None:
+                        trigger_patch_true_image_sums.append(
+                            trigger_patch_true_image_sum
+                        )
 
                 if self.image_channels is not None:
                     images.append(
@@ -1957,7 +1960,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         example = [np.array(trigger_info >= 0, np.int8)]
         if self.waveform_type is not None:
             example.extend([np.stack(waveforms)])
-            if self.trigger_settings is not None and "raw" in self.waveform_type:
+            if self.aitrigger and "raw" in self.waveform_type:
                 example.extend([np.stack(trigger_patch_true_image_sums)])
         if self.image_channels is not None:
             example.extend([np.stack(images)])
@@ -1977,12 +1980,13 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         # Load the data and any selected array info
         if self.mode == "mono":
             # Get a single image
+            random_trigger_patch = False
             if self.process_type == "Simulation":
                 nrow, index, tel_id = identifiers[1:4]
-                random_trigger_patch = np.random.randint(2, dtype=bool)
+                if self.include_nsb_patches:
+                    random_trigger_patch = np.random.randint(2, dtype=bool)
             else:
                 index, tel_id = identifiers[1:3]
-                random_trigger_patch = False
 
             example = []
             if self.split_datasets_by == "tel_id":
@@ -2029,7 +2033,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             random_trigger_patch,
                         )
                         example.append(waveform)
-                        example.append(trigger_patch_true_image_sum)
+                        if trigger_patch_true_image_sum is not None:
+                            example.append(trigger_patch_true_image_sum)
 
                     if "calibrate" in self.waveform_type:
                         with lock:
@@ -2094,7 +2099,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                     )
                             sim_child = None
                             if (
-                                self.trigger_settings is not None
+                                self.aitrigger
                                 and "simulation" in self.files[filename].root
                             ):
                                 if (
@@ -2117,7 +2122,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                             random_trigger_patch,
                         )
                         example.append(waveform)
-                        example.append(trigger_patch_true_image_sum)
+                        if trigger_patch_true_image_sum is not None:
+                            example.append(trigger_patch_true_image_sum)
                     if "calibrate" in self.waveform_type:
                         with lock:
                             child = self.files[
@@ -2210,15 +2216,16 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             # Get a list of images and/or image parameters, an array of binary trigger values and telescope pointings
             # for each selected telescope type
             pointing_info = None
+            random_trigger_patch = False
             if self.process_type == "Simulation":
                 nrow = identifiers[1]
                 trigger_info = identifiers[2]
-                random_trigger_patch = np.random.randint(2, dtype=bool)
+                if self.include_nsb_patches:
+                    random_trigger_patch = np.random.randint(2, dtype=bool)
                 if self.pointing_mode == "divergent":
                     pointing_info = identifiers[3]
             else:
                 trigger_info = identifiers[1]
-                random_trigger_patch = False
                 if self.pointing_mode == "divergent":
                     pointing_info = identifiers[2]
 
