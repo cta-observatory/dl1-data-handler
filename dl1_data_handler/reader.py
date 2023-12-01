@@ -673,8 +673,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 ).to_dict("records")[0]
             self.num_classes = len(self.simulated_particles) - 1
             if self.include_nsb_patches:
-                self._nsb_prob = np.around(1/self.num_classes, decimals=2)
-                self._shower_prob = np.around(1-self._nsb_prob, decimals=2)
+                self._nsb_prob = np.around(1 / self.num_classes, decimals=2)
+                self._shower_prob = np.around(1 - self._nsb_prob, decimals=2)
             example_identifiers_file.close()
         else:
             for file_idx, (filename, f) in enumerate(self.files.items()):
@@ -1164,8 +1164,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         self.simulated_particles["total"] / (self.num_classes + 1)
                     )
                     self.num_classes += 1
-                    self._nsb_prob = np.around(1/self.num_classes, decimals=2)
-                    self._shower_prob = np.around(1-self._nsb_prob, decimals=2)
+                    self._nsb_prob = np.around(1 / self.num_classes, decimals=2)
+                    self._shower_prob = np.around(1 - self._nsb_prob, decimals=2)
 
                 if (
                     len(self.simulated_particles) > 2
@@ -2067,7 +2067,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             if self.process_type == "Simulation":
                 nrow, index, tel_id = identifiers[1:4]
                 if self.include_nsb_patches:
-                    random_trigger_patch = np.random.choice([False, True], p=[self._shower_prob, self._nsb_prob])
+                    random_trigger_patch = np.random.choice(
+                        [False, True], p=[self._shower_prob, self._nsb_prob]
+                    )
             else:
                 index, tel_id = identifiers[1:3]
 
@@ -2304,7 +2306,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 nrow = identifiers[1]
                 trigger_info = identifiers[2]
                 if self.include_nsb_patches:
-                    random_trigger_patch = np.random.choice([False, True], p=[self._shower_prob, self._nsb_prob])
+                    random_trigger_patch = np.random.choice(
+                        [False, True], p=[self._shower_prob, self._nsb_prob]
+                    )
                 if self.pointing_mode == "divergent":
                     pointing_info = identifiers[3]
             else:
@@ -2345,7 +2349,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 events = self.files[filename].root.simulation.event.subarray.shower
                 for column in self.event_info:
                     dtype = events.cols._f_col(column).dtype
-                    if random_trigger_patch and column=="true_shower_primary_id":
+                    if random_trigger_patch and column == "true_shower_primary_id":
                         example.append(np.array(404, dtype=dtype))
                     else:
                         example.append(np.array(events[nrow][column], dtype=dtype))
