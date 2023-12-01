@@ -63,6 +63,7 @@ class DL1DataReader:
             101: "proton",
             1: "electron",
             255: "hadron",
+            404: "nsb",
         }
 
         # Set data loading mode
@@ -141,7 +142,7 @@ class DL1DataReader:
                             "dtype": np.dtype(np.float16),
                         }
                     )
-                if self.aitrigger and "raw" in self.waveform_type:
+                if self.reco_cherenkov_photons and "raw" in self.waveform_type:
                     self.unprocessed_example_description.append(
                         {
                             "name": "trigger_patch_true_image_sum",
@@ -253,7 +254,7 @@ class DL1DataReader:
                                 "dtype": np.dtype(np.float16),
                             }
                         )
-                    if self.aitrigger and "raw" in self.waveform_type:
+                    if self.reco_cherenkov_photons and "raw" in self.waveform_type:
                         self.unprocessed_example_description.append(
                             {
                                 "name": tel_type + "_trigger_patch_true_image_sum",
@@ -551,15 +552,23 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         # AI-based trigger system
         self.trigger_settings = trigger_settings
-        self.aitrigger, self.include_nsb_patches = False, False
+        self.reco_cherenkov_photons, self.include_nsb_patches = False, False
         if self.trigger_settings is not None:
-            self.aitrigger = self.trigger_settings["aitrigger"]
+            self.reco_cherenkov_photons = self.trigger_settings[
+                "reco_cherenkov_photons"
+            ]
             self.include_nsb_patches = self.trigger_settings["include_nsb_patches"]
+            self.trigger_patch_from_simulation = self.trigger_settings[
+                "trigger_patch_from_simulation"
+            ]
 
         # Raw (R0) or calibrated (R1) waveform
         self.waveform_type = None
         if waveform_settings is not None:
             self.waveform_type = waveform_settings["waveform_type"]
+            self.waveform_max_from_simulation = waveform_settings[
+                "waveform_max_from_simulation"
+            ]
             if "raw" in self.waveform_type:
                 self.waveform_sequence_max_length = (
                     self.files[first_file]
@@ -663,6 +672,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     example_identifiers_file, key="/shower_primary_id_to_class"
                 ).to_dict("records")[0]
             self.num_classes = len(self.simulated_particles) - 1
+            if self.include_nsb_patches:
+                self._nsb_prob = np.around(1/self.num_classes, decimals=2)
+                self._shower_prob = np.around(1-self._nsb_prob, decimals=2)
             example_identifiers_file.close()
         else:
             for file_idx, (filename, f) in enumerate(self.files.items()):
@@ -1138,8 +1150,27 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             # Scaling by total/2 helps keep the loss to a similar magnitude.
             # The sum of the weights of all examples stays the same.
             self.num_classes = len(self.simulated_particles) - 1
+
             if self.process_type == "Simulation":
-                if len(self.simulated_particles) > 2 and not self.aitrigger:
+                # Include NSB patches is selected
+                if self.include_nsb_patches:
+                    for particle_id in list(self.simulated_particles.keys())[1:]:
+                        self.simulated_particles[particle_id] = int(
+                            self.simulated_particles[particle_id]
+                            * self.num_classes
+                            / (self.num_classes + 1)
+                        )
+                    self.simulated_particles[404] = int(
+                        self.simulated_particles["total"] / (self.num_classes + 1)
+                    )
+                    self.num_classes += 1
+                    self._nsb_prob = np.around(1/self.num_classes, decimals=2)
+                    self._shower_prob = np.around(1-self._nsb_prob, decimals=2)
+
+                if (
+                    len(self.simulated_particles) > 2
+                    and not self.reco_cherenkov_photons
+                ):
                     self.shower_primary_id_to_class = {}
                     self.class_names = []
                     for p, particle_id in enumerate(
@@ -1268,6 +1299,46 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         self.trigger_settings is not None
                         and "raw" in self.waveform_type
                     ):
+                        # Autoset the trigger patches
+                        if (
+                            "trigger_patch_size" not in self.trigger_settings
+                            or "trigger_patches" not in self.trigger_settings
+                        ):
+                            trigger_patches_xpos = np.linspace(
+                                0,
+                                self.image_mapper.image_shapes[camera_type][0],
+                                num=self.trigger_settings["number_of_trigger_patches"][
+                                    0
+                                ]
+                                + 1,
+                                endpoint=False,
+                                dtype=int,
+                            )[1:]
+                            trigger_patches_ypos = np.linspace(
+                                0,
+                                self.image_mapper.image_shapes[camera_type][1],
+                                num=self.trigger_settings["number_of_trigger_patches"][
+                                    0
+                                ]
+                                + 1,
+                                endpoint=False,
+                                dtype=int,
+                            )[1:]
+                            self.trigger_settings["trigger_patch_size"] = {
+                                camera_type: [
+                                    trigger_patches_xpos[0] * 2,
+                                    trigger_patches_ypos[0] * 2,
+                                ]
+                            }
+                            self.trigger_settings["trigger_patches"] = {camera_type: []}
+                            for patches in np.array(
+                                np.meshgrid(trigger_patches_xpos, trigger_patches_ypos)
+                            ).T:
+                                for patch in patches:
+                                    self.trigger_settings["trigger_patches"][
+                                        camera_type
+                                    ].append({"x": patch[0], "y": patch[1]})
+
                         self.waveform_shapes[camera_type] = self.trigger_settings[
                             "trigger_patch_size"
                         ][camera_type]
@@ -1402,11 +1473,14 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         # Retrieve the true image if the child of the simulated images are provided
         true_image, trigger_patch_true_image_sum = None, None
-        if waveform_index != -1 and self.aitrigger:
+        if waveform_index != -1 and sim_child is not None:
             with lock:
                 true_image = np.expand_dims(
                     np.array(sim_child[waveform_index]["true_image"], dtype=int), axis=1
                 )
+            mapped_true_image = self.image_mapper.map_image(
+                true_image, self._get_camera_type(tel_type)
+            )
 
         # If the telescope didn't trigger, the waveform index is -1 and a blank
         # waveform of all zeros with be loaded
@@ -1417,6 +1491,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 if "raw" in self.waveform_type:
                     vector = vector[0]
                 waveform_max = np.argmax(np.sum(vector, axis=0))
+            if self.waveform_max_from_simulation:
+                waveform_max = int((len(vector) / 2) - 1)
             if dl1_cleaning_mask is not None:
                 waveform_max = np.argmax(
                     np.sum(vector * dl1_cleaning_mask[:, None], axis=0)
@@ -1491,12 +1567,19 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 # Select randomly if a trigger patch with (guaranteed) cherenkov signal
                 # or a random trigger patch are processed
                 if not random_trigger_patch:
-                    # Find hot spot (pixel with the highest intensity of the integrated waveform)
-                    integrated_waveform = np.sum(mapped_waveform, axis=2)
-                    hot_spot = np.unravel_index(
-                        np.argmax(integrated_waveform, axis=None),
-                        integrated_waveform.shape,
-                    )
+                    # Find hot spot. Either the pixel with the highest intensity of the
+                    # true Cherenkov image or the integrated waveform.
+                    if self.trigger_patch_from_simulation:
+                        hot_spot = np.unravel_index(
+                            np.argmax(mapped_true_image, axis=None),
+                            mapped_true_image.shape,
+                        )
+                    else:
+                        integrated_waveform = np.sum(mapped_waveform, axis=2)
+                        hot_spot = np.unravel_index(
+                            np.argmax(integrated_waveform, axis=None),
+                            integrated_waveform.shape,
+                        )
                     # Detect in which trigger patch the hot spot is located
                     trigger_patch_center["x"] = self.trigger_patches_xpos[
                         self._get_camera_type(tel_type)
@@ -1547,10 +1630,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     :,
                 ]
                 # Get the number of cherenkov photons in the trigger patch
-                if self.aitrigger:
-                    mapped_true_image = self.image_mapper.map_image(
-                        true_image, self._get_camera_type(tel_type)
-                    )
+                if self.reco_cherenkov_photons:
                     trigger_patch_true_image_sum = np.sum(
                         mapped_true_image[
                             int(trigger_patch_center["x"] - waveform_shape_x / 2) : int(
@@ -1740,7 +1820,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                             tel_table
                                         )
                                 sim_child = None
-                                if self.aitrigger and self.process_type == "Simulation":
+                                if (
+                                    self.reco_cherenkov_photons
+                                    and self.process_type == "Simulation"
+                                ):
                                     if (
                                         "images"
                                         in self.files[
@@ -1879,7 +1962,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                     tel_table
                                 )
                         sim_child = None
-                        if self.aitrigger and self.process_type == "Simulation":
+                        if (
+                            self.reco_cherenkov_photons
+                            and self.process_type == "Simulation"
+                        ):
                             if (
                                 "images"
                                 in self.files[filename].root.simulation.event.telescope
@@ -1957,7 +2043,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
         example = [np.array(trigger_info >= 0, np.int8)]
         if self.waveform_type is not None:
             example.extend([np.stack(waveforms)])
-            if self.aitrigger and "raw" in self.waveform_type:
+            if self.reco_cherenkov_photons and "raw" in self.waveform_type:
                 example.extend([np.stack(trigger_patch_true_image_sums)])
         if self.image_channels is not None:
             example.extend([np.stack(images)])
@@ -1981,7 +2067,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             if self.process_type == "Simulation":
                 nrow, index, tel_id = identifiers[1:4]
                 if self.include_nsb_patches:
-                    random_trigger_patch = np.random.randint(2, dtype=bool)
+                    random_trigger_patch = np.random.choice([False, True], p=[self._shower_prob, self._nsb_prob])
             else:
                 index, tel_id = identifiers[1:3]
 
@@ -2096,7 +2182,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                     )
                             sim_child = None
                             if (
-                                self.aitrigger
+                                self.reco_cherenkov_photons
                                 and "simulation" in self.files[filename].root
                             ):
                                 if (
@@ -2218,7 +2304,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 nrow = identifiers[1]
                 trigger_info = identifiers[2]
                 if self.include_nsb_patches:
-                    random_trigger_patch = np.random.randint(2, dtype=bool)
+                    random_trigger_patch = np.random.choice([False, True], p=[self._shower_prob, self._nsb_prob])
                 if self.pointing_mode == "divergent":
                     pointing_info = identifiers[3]
             else:
@@ -2259,7 +2345,10 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 events = self.files[filename].root.simulation.event.subarray.shower
                 for column in self.event_info:
                     dtype = events.cols._f_col(column).dtype
-                    example.append(np.array(events[nrow][column], dtype=dtype))
+                    if random_trigger_patch and column=="true_shower_primary_id":
+                        example.append(np.array(404, dtype=dtype))
+                    else:
+                        example.append(np.array(events[nrow][column], dtype=dtype))
 
         # Preprocess the example
         example = self.processor.process(example)
