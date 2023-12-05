@@ -1564,60 +1564,62 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     self._get_camera_type(tel_type)
                 ][1]
 
-                # Select randomly if a trigger patch with (guaranteed) cherenkov signal
-                # or a random trigger patch are processed
-                if not random_trigger_patch:
-                    # Find hot spot. Either the pixel with the highest intensity of the
-                    # true Cherenkov image or the integrated waveform.
-                    if self.trigger_patch_from_simulation:
-                        hot_spot = np.unravel_index(
-                            np.argmax(mapped_true_image, axis=None),
-                            mapped_true_image.shape,
-                        )
-                    else:
-                        integrated_waveform = np.sum(mapped_waveform, axis=2)
-                        hot_spot = np.unravel_index(
-                            np.argmax(integrated_waveform, axis=None),
-                            integrated_waveform.shape,
-                        )
-                    # Detect in which trigger patch the hot spot is located
-                    trigger_patch_center["x"] = self.trigger_patches_xpos[
-                        self._get_camera_type(tel_type)
-                    ][
-                        np.argmin(
-                            np.abs(
-                                self.trigger_patches_xpos[
-                                    self._get_camera_type(tel_type)
-                                ]
-                                - hot_spot[0]
-                            )
-                        )
-                    ]
-                    trigger_patch_center["y"] = self.trigger_patches_ypos[
-                        self._get_camera_type(tel_type)
-                    ][
-                        np.argmin(
-                            np.abs(
-                                self.trigger_patches_ypos[
-                                    self._get_camera_type(tel_type)
-                                ]
-                                - hot_spot[1]
-                            )
-                        )
-                    ]
-
+                # Find hot spot. Either the pixel with the highest intensity of the
+                # true Cherenkov image or the integrated waveform.
+                if self.trigger_patch_from_simulation:
+                    hot_spot = np.unravel_index(
+                        np.argmax(mapped_true_image, axis=None),
+                        mapped_true_image.shape,
+                    )
                 else:
-                    # Select a random trigger patch
-                    n_trigger_patches = np.random.randint(
-                        len(
-                            self.trigger_settings["trigger_patches"][
-                                self._get_camera_type(tel_type)
-                            ]
+                    integrated_waveform = np.sum(mapped_waveform, axis=2)
+                    hot_spot = np.unravel_index(
+                        np.argmax(integrated_waveform, axis=None),
+                        integrated_waveform.shape,
+                    )
+                # Detect in which trigger patch the hot spot is located
+                trigger_patch_center["x"] = self.trigger_patches_xpos[
+                    self._get_camera_type(tel_type)
+                ][
+                    np.argmin(
+                        np.abs(
+                            self.trigger_patches_xpos[self._get_camera_type(tel_type)]
+                            - hot_spot[0]
                         )
                     )
-                    trigger_patch_center = self.trigger_settings["trigger_patches"][
-                        self._get_camera_type(tel_type)
-                    ][n_trigger_patches]
+                ]
+                trigger_patch_center["y"] = self.trigger_patches_ypos[
+                    self._get_camera_type(tel_type)
+                ][
+                    np.argmin(
+                        np.abs(
+                            self.trigger_patches_ypos[self._get_camera_type(tel_type)]
+                            - hot_spot[1]
+                        )
+                    )
+                ]
+                # Select randomly if a trigger patch with (guaranteed) cherenkov signal
+                # or a random trigger patch are processed
+                if random_trigger_patch:
+                    while True:
+                        n_trigger_patches = np.random.randint(
+                            len(
+                                self.trigger_settings["trigger_patches"][
+                                    self._get_camera_type(tel_type)
+                                ]
+                            )
+                        )
+                        random_trigger_patch_center = self.trigger_settings[
+                            "trigger_patches"
+                        ][self._get_camera_type(tel_type)][n_trigger_patches]
+                        if (
+                            trigger_patch_center["x"]
+                            != random_trigger_patch_center["x"]
+                            or trigger_patch_center["y"]
+                            != random_trigger_patch_center["y"]
+                        ):
+                            break
+                    trigger_patch_center = random_trigger_patch_center
 
                 # Crop the waveform according to the trigger patch
                 mapped_waveform = mapped_waveform[
