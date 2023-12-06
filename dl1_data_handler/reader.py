@@ -142,7 +142,7 @@ class DL1DataReader:
                             "dtype": np.dtype(np.float16),
                         }
                     )
-                if self.reco_cherenkov_photons and "raw" in self.waveform_type:
+                if self.trigger_settings is not None:
                     self.unprocessed_example_description.append(
                         {
                             "name": "trigger_patch_true_image_sum",
@@ -254,7 +254,7 @@ class DL1DataReader:
                                 "dtype": np.dtype(np.float16),
                             }
                         )
-                    if self.reco_cherenkov_photons and "raw" in self.waveform_type:
+                    if self.trigger_settings is not None:
                         self.unprocessed_example_description.append(
                             {
                                 "name": tel_type + "_trigger_patch_true_image_sum",
@@ -1601,38 +1601,43 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 # Select randomly if a trigger patch with (guaranteed) cherenkov signal
                 # or a random trigger patch are processed
                 if random_trigger_patch:
+                    counter = 0
                     while True:
-                        n_trigger_patches = np.random.randint(
-                            len(
-                                self.trigger_settings["trigger_patches"][
-                                    self._get_camera_type(tel_type)
-                                ]
+                        counter += 1
+                        n_trigger_patches = 0
+                        if counter < 10:
+                            n_trigger_patches = np.random.randint(
+                                len(
+                                    self.trigger_settings["trigger_patches"][
+                                        self._get_camera_type(tel_type)
+                                    ]
+                                )
                             )
-                        )
                         random_trigger_patch_center = self.trigger_settings[
                             "trigger_patches"
                         ][self._get_camera_type(tel_type)][n_trigger_patches]
+
+                        # Get the number of cherenkov photons in the trigger patch
+                        trigger_patch_true_image_sum = np.sum(
+                            mapped_true_image[
+                                int(random_trigger_patch_center["x"] - waveform_shape_x / 2) : int(
+                                    random_trigger_patch_center["x"] + waveform_shape_x / 2
+                                ),
+                                int(random_trigger_patch_center["y"] - waveform_shape_y / 2) : int(
+                                    random_trigger_patch_center["y"] + waveform_shape_y / 2
+                                ),
+                                :,
+                            ],
+                            dtype=int,
+                        )
                         if (
-                            trigger_patch_center["x"]
-                            != random_trigger_patch_center["x"]
-                            or trigger_patch_center["y"]
-                            != random_trigger_patch_center["y"]
+                            trigger_patch_true_image_sum < 1.0
+                            or counter >= 10
                         ):
                             break
                     trigger_patch_center = random_trigger_patch_center
-
-                # Crop the waveform according to the trigger patch
-                mapped_waveform = mapped_waveform[
-                    int(trigger_patch_center["x"] - waveform_shape_x / 2) : int(
-                        trigger_patch_center["x"] + waveform_shape_x / 2
-                    ),
-                    int(trigger_patch_center["y"] - waveform_shape_y / 2) : int(
-                        trigger_patch_center["y"] + waveform_shape_y / 2
-                    ),
-                    :,
-                ]
-                # Get the number of cherenkov photons in the trigger patch
-                if self.reco_cherenkov_photons:
+                else:
+                    # Get the number of cherenkov photons in the trigger patch
                     trigger_patch_true_image_sum = np.sum(
                         mapped_true_image[
                             int(trigger_patch_center["x"] - waveform_shape_x / 2) : int(
@@ -1645,6 +1650,16 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                         ],
                         dtype=int,
                     )
+                # Crop the waveform according to the trigger patch
+                mapped_waveform = mapped_waveform[
+                    int(trigger_patch_center["x"] - waveform_shape_x / 2) : int(
+                        trigger_patch_center["x"] + waveform_shape_x / 2
+                    ),
+                    int(trigger_patch_center["y"] - waveform_shape_y / 2) : int(
+                        trigger_patch_center["y"] + waveform_shape_y / 2
+                    ),
+                    :,
+                ]
 
             if "first" in self.waveform_format:
                 for index in np.arange(0, self.waveform_sequence_length, dtype=int):
@@ -1823,7 +1838,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                         )
                                 sim_child = None
                                 if (
-                                    self.reco_cherenkov_photons
+                                    self.trigger_settings is not None
                                     and self.process_type == "Simulation"
                                 ):
                                     if (
@@ -1965,7 +1980,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 )
                         sim_child = None
                         if (
-                            self.reco_cherenkov_photons
+                            self.trigger_settings is not None
                             and self.process_type == "Simulation"
                         ):
                             if (
