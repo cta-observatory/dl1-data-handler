@@ -552,7 +552,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
         # AI-based trigger system
         self.trigger_settings = trigger_settings
-        self.reco_cherenkov_photons, self.include_nsb_patches = False, False
+        self.reco_cherenkov_photons, self.include_nsb_patches = False, None
         if self.trigger_settings is not None:
             self.reco_cherenkov_photons = self.trigger_settings[
                 "reco_cherenkov_photons"
@@ -672,7 +672,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     example_identifiers_file, key="/shower_primary_id_to_class"
                 ).to_dict("records")[0]
             self.num_classes = len(self.simulated_particles) - 1
-            if self.include_nsb_patches:
+            if self.include_nsb_patches == "auto":
                 self._nsb_prob = np.around(1 / self.num_classes, decimals=2)
                 self._shower_prob = np.around(1 - self._nsb_prob, decimals=2)
             example_identifiers_file.close()
@@ -1153,7 +1153,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
 
             if self.process_type == "Simulation":
                 # Include NSB patches is selected
-                if self.include_nsb_patches:
+                if self.include_nsb_patches == "auto":
                     for particle_id in list(self.simulated_particles.keys())[1:]:
                         self.simulated_particles[particle_id] = int(
                             self.simulated_particles[particle_id]
@@ -2083,10 +2083,12 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             random_trigger_patch = False
             if self.process_type == "Simulation":
                 nrow, index, tel_id = identifiers[1:4]
-                if self.include_nsb_patches:
+                if self.include_nsb_patches == "auto":
                     random_trigger_patch = np.random.choice(
                         [False, True], p=[self._shower_prob, self._nsb_prob]
                     )
+                elif self.include_nsb_patches == "all":
+                    random_trigger_patch = True
             else:
                 index, tel_id = identifiers[1:3]
 
@@ -2322,10 +2324,12 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             if self.process_type == "Simulation":
                 nrow = identifiers[1]
                 trigger_info = identifiers[2]
-                if self.include_nsb_patches:
+                if self.include_nsb_patches == "auto":
                     random_trigger_patch = np.random.choice(
                         [False, True], p=[self._shower_prob, self._nsb_prob]
                     )
+                elif self.include_nsb_patches == "all":
+                    random_trigger_patch = True
                 if self.pointing_mode == "divergent":
                     pointing_info = identifiers[3]
             else:
@@ -2454,6 +2458,10 @@ class DL1DataReaderDL1DH(DL1DataReader):
 
         if mapping_settings is None:
             mapping_settings = {}
+
+        # Trun off all settings for the AI-based trigger system
+        self.trigger_settings = None
+        self.reco_cherenkov_photons, self.include_nsb_patches = False, None
 
         self.image_scale = None
         self.peak_time_scale = None
