@@ -576,6 +576,9 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     .shape[-1]
                 )
                 self.waveform_r0pedsub = waveform_settings["waveform_r0pedsub"]
+                self.waveform_FADC_offset = None
+                if "waveform_FADC_offset" in waveform_settings:
+                    self.waveform_FADC_offset = waveform_settings["waveform_FADC_offset"]
             if "calibrate" in self.waveform_type:
                 self.waveform_sequence_max_length = (
                     self.files[first_file]
@@ -1358,7 +1361,6 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                                 ]
                             ]
                         )
-
             if self.image_channels is not None:
                 for camera_type in mapping_settings["camera_types"]:
                     self.image_mapper.image_shapes[camera_type] = (
@@ -1499,8 +1501,11 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                 )
 
             # Retrieve the sequence around the shower maximum and calculate the pedestal
-            # level per pixel outside that sequence if R0-pedsub is selected
+            # level per pixel outside that sequence if R0-pedsub is selected and FADC
+            # offset is not provided from the simulation.
             pixped_nsb, nsb_sequence_length = None, None
+            if self.waveform_FADC_offset is not None:
+                pixped_nsb = np.full((vector.shape[0],), self.waveform_FADC_offset, dtype=int)
             if (
                 self.waveform_sequence_max_length - self.waveform_sequence_length
             ) < 0.001:
