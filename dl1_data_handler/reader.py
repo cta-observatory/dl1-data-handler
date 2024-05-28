@@ -1781,13 +1781,11 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             # For now hardcoded, since this information is not in the h5 files.
             # The official CTA DL1 format will contain this information.
             if camera in ["LSTCam", "LSTSiPMCam", "NectarCam", "MAGICCam"]:
-                rotation_angle = -70.9 * np.pi / 180.0
+                rotation_angle = -cam_geom._v_attrs["PIX_ROT"] * np.pi / 180.0
                 if camera == "MAGICCam":
                     rotation_angle = -100.893 * np.pi / 180.0
-                if camera == "LSTSiPMCam":
-                    rotation_angle = -cam_geom._v_attrs["PIX_ROT"] * np.pi / 180.0
                 if self.process_type == "Observation" and camera == "LSTCam":
-                    rotation_angle = -70.8935 * np.pi / 180.0
+                    rotation_angle = -40.89299998552154 * np.pi / 180.0
                 rotation_matrix = np.matrix(
                     [
                         [np.cos(rotation_angle), -np.sin(rotation_angle)],
