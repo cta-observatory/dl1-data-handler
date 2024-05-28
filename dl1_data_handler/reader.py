@@ -1562,6 +1562,8 @@ class DL1DataReaderSTAGE1(DL1DataReader):
             mapped_waveform = self.image_mapper.map_image(
                 vector, self._get_camera_type(tel_type)
             )
+            if self.process_type == "Observation" and self._get_camera_type(tel_type) == "LSTCam":
+                mapped_waveform = np.transpose(np.flip(mapped_waveform, axis=(0, 1)), (1,0,2)) # x = -y & y = -x
 
             if self.trigger_settings is not None:
                 trigger_patch_center = {}
