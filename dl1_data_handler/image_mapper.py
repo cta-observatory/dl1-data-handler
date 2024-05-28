@@ -968,6 +968,21 @@ class ImageMapper:
             output_grid = np.column_stack([x_grid, y_grid])
 
         else:
+            if camera_type == "LSTCam":
+                # Additional smoothing of the 'y_ticks' array for LSTCam pixel positions.
+                num_y_ticks = len(y_ticks)
+                remove_y_val = []
+                change_y_val = []
+                for i in np.arange(num_y_ticks - 1):
+                    if np.abs(y_ticks[i] - y_ticks[i + 1]) <= 0.002:
+                        remove_y_val.append(y_ticks[i])
+                        change_y_val.append(y_ticks[i + 1])
+                for j in np.arange(len(remove_y_val)):
+                    y_ticks.remove(remove_y_val[j])
+                    for k in np.arange(len(y)):
+                        if y[k] == remove_y_val[j]:
+                            y[k] = change_y_val[j]
+
             if len(x_ticks) < len(y_ticks):
                 first_ticks = x_ticks
                 first_pos = x
