@@ -461,7 +461,10 @@ class DL1DataReader:
         ):
             return vector
 
-        return self.image_mapper.map_image(vector, self._get_camera_type(tel_type))
+        image = self.image_mapper.map_image(vector, self._get_camera_type(tel_type))
+        if self.process_type == "Observation" and self._get_camera_type(tel_type) == "LSTCam":
+            image = np.transpose(np.flip(image, axis=(0, 1)), (1,0,2)) # x = -y & y = -x
+        return image
 
     def _append_subarray_info(self, subarray_table, subarray_info, query):
         with lock:
