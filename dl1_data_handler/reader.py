@@ -589,6 +589,7 @@ class DL1DataReaderSTAGE1(DL1DataReader):
                     .shape[-1]
                 )
                 self.waveform_r0pedsub = False
+                self.waveform_FADC_offset = None
             self.waveform_sequence_length = waveform_settings[
                 "waveform_sequence_length"
             ]
