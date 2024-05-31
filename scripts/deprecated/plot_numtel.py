@@ -1,4 +1,8 @@
 import image_extractor
+import matplotlib as plt
+import numpy as np
+import pickle as pkl
+from ctapipe.io import hessio_event_source
 
 # telescope constants
 SCT_IMAGE_WIDTH = 120
