@@ -50,8 +50,7 @@ if __name__ == '__main__':
 
     result = [row[j]
               for j in tel_ids
-              for row in table.where('(event_number == event_num_selected) &
-                                      (run_number == run_num_selected)')]
+              for row in table.where('(event_number == event_num_selected) & (run_number == run_num_selected)')]
 
     for i in [result[0]]:
         full_image_array = np.array(i)
