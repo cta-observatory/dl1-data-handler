@@ -7,12 +7,7 @@ DL1 Data Handler
    :alt: DOI
 
 
-.. image:: https://travis-ci.org/cta-observatory/dl1-data-handler.svg?branch=master
-   :target: https://travis-ci.org/cta-observatory/dl1-data-handler.svg?branch=master
-   :alt: build status
-
-
-.. image:: https://anaconda.org/ctlearn-project/dl1_data_handler/badges/installer/conda.svg
+.. image:: https://anaconda.org/ctlearn-project/dl1_data_handler/badges/version.svg
    :target: https://anaconda.org/ctlearn-project/dl1_data_handler/
    :alt: Anaconda-Server Badge
 
@@ -22,10 +17,9 @@ DL1 Data Handler
     :alt: Latest Release
 
 
-.. image:: https://coveralls.io/repos/github/cta-observatory/dl1-data-handler/badge.svg?branch=master
-   :target: https://coveralls.io/github/cta-observatory/dl1-data-handler?branch=master
-   :alt: Coverage Status
-
+.. image:: https://github.com/cta-observatory/dl1-data-handler/actions/workflows/python-package-conda.yml/badge.svg
+    :target: https://github.com/cta-observatory/dl1-data-handler/actions/workflows/python-package-conda.yml
+    :alt: Continuos Integration
 
 A package of utilities for writing (deprecated), reading, and applying image processing to `Cherenkov Telescope Array (CTA) <https://www.cta-observatory.org/>`_ DL1 data (calibrated images) in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data.
 
@@ -33,12 +27,6 @@ Currently supports data in the CTA pyhessio sim_telarray format, with the possib
 
 Previously named image-extractor (v0.1.0 - v0.6.0). Currently under development, intended for internal use only.
 
-Data Format
------------
-
-[Deprecated] DL1DataWriter implements a standardized format for storing simulated CTA DL1 event data into Pytables files. CTAMLDataDumper is the class which implements the conversion from ctapipe containers to the CTA ML data format. See the wiki page `here <https://github.com/cta-observatory/dl1-data-handler/wiki/CTA-ML-Data-Format>`_ for a full description of this data format and an FAQ.
-
-ctapipe process tool should be used instead.
 
 Installation
 ------------
@@ -86,6 +74,11 @@ Also see setup.py.
 
 Usage
 -----
+
+ImageMapper
+^^^^^^^^^^^
+
+The ImageMapper class transforms the hexagonal input pixels into a 2D Cartesian output image. The basic usage is demonstrated in the `ImageMapper tutorial <https://github.com/cta-observatory/dl1-data-handler/blob/master/notebooks/test_image_mapper.ipynb>`_. It requires `ctapipe-extra <https://github.com/cta-observatory/ctapipe-extra>`_ outside of the dl1-data-handler. See this publication for a detailed description: `arXiv:1912.09898 <https://arxiv.org/abs/1912.09898>`_
 
 [Deprecated] DL1DataWriter
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -177,15 +170,6 @@ It can be called as:
 
 It will automatically sort the simtel files in the file_dir directory into groups with matching particle_type, zenith, azimuth, and production parameters. Within each of these groups, it will group together input files in sequential order into runs of size NUM_INPUTS_PER_RUN. The output filename for each run will be automatically generated as ``[particle_type]_[ze]deg_[az]deg_runs[run_number_range]___[production info].h5``. The output YAML file will be written to output_file.
 
-ImageMapper
-^^^^^^^^^^^
-
-The ImageMapper class transforms the hexagonal input pixels into a 2D Cartesian output image. The basic usage is demonstrated in the `ImageMapper tutorial <https://github.com/cta-observatory/dl1-data-handler/blob/master/notebooks/test_image_mapper.ipynb>`_. It requires `ctapipe-extra <https://github.com/cta-observatory/ctapipe-extra>`_ outside of the dl1-data-handler. See this publication for a detailed description: `arXiv:1912.09898 <https://arxiv.org/abs/1912.09898>`_
-
-Other scripts
-^^^^^^^^^^^^^
-
-All other scripts located in the scripts/deprecated directory are not currently updated to be compatible with dl1-data-handler >= 0.7.0 and should not be used.
 
 Examples/Tips
 -------------
