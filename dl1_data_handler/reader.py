@@ -437,14 +437,17 @@ class DL1DataReader:
             with lock:
                 record = child[image_index]
                 for i, channel in enumerate(self.image_channels):
+                    cleaning_mask = record["image_mask"]
+                    if "time" in channel:
+                        vector[:, i] -= np.mean(record["peak_time"] * cleaning_mask)
+
                     if "clean" in channel or "mask" in channel:
-                        cleaning_mask = "image_mask"
                         if parameter_table >= 0:
                             cleaning_mask += str(parameter_table)
                         if "image" in channel:
-                            vector[:, i] = record["image"] * record[cleaning_mask]
+                            vector[:, i] = record["image"] * cleaning_mask
                         if "time" in channel:
-                            vector[:, i] = record["peak_time"] * record[cleaning_mask]
+                            vector[:, i] = record["peak_time"] * cleaning_mask
                     else:
                         vector[:, i] = record[channel]
 
