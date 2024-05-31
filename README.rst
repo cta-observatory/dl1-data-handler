@@ -21,7 +21,7 @@ DL1 Data Handler
     :target: https://github.com/cta-observatory/dl1-data-handler/actions/workflows/python-package-conda.yml
     :alt: Continuos Integration
 
-A package of utilities for writing (deprecated), reading, and applying image processing to `Cherenkov Telescope Array (CTA) <https://www.cta-observatory.org/>`_ DL1 data (calibrated images) in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data.
+A package of utilities for reading, writing (deprecated), and applying image processing to `Cherenkov Telescope Array (CTA) <https://www.cta-observatory.org/>`_ DL1 data (calibrated images) in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data.
 
 Currently supports data in the CTA pyhessio sim_telarray format, with the possibility of supporting other IACT data formats in the future. Built using ctapipe and PyTables.
 
