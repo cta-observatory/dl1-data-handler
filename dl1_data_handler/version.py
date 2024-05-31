@@ -84,8 +84,8 @@ def get_current_version():
     without cloning it and get the current version.
     """
     result = run([
-        "git", "ls-remote", "--tags"
-    ], stdout= PIPE, text=True)
+        "/usr/bin/git", "ls-remote", "--tags"
+    ], stdout= PIPE, text=True, check=True, shell=False)
 
     output_lines = result.stdout.splitlines()
     
