@@ -437,20 +437,17 @@ class DL1DataReader:
             with lock:
                 record = child[image_index]
                 for i, channel in enumerate(self.image_channels):
-                    cleaning_mask = record["image_mask"]
+                    cleaning_mask = "image_mask"
+                    if parameter_table >= 0:
+                        cleaning_mask += str(parameter_table)
+                    mask = record[cleaning_mask]
+                    if "image" in channel:
+                        vector[:, i] = record["image"]
                     if "time" in channel:
-                        vector[:, i] -= np.mean(record["peak_time"] * cleaning_mask)
-
+                        cleaned_peak_times = record["peak_time"] * mask
+                        vector[:, i] = record["peak_time"] - cleaned_peak_times[np.nonzero(cleaned_peak_times)].mean()
                     if "clean" in channel or "mask" in channel:
-                        if parameter_table >= 0:
-                            cleaning_mask += str(parameter_table)
-                        if "image" in channel:
-                            vector[:, i] = record["image"] * cleaning_mask
-                        if "time" in channel:
-                            vector[:, i] = record["peak_time"] * cleaning_mask
-                    else:
-                        vector[:, i] = record[channel]
-
+                        vector[:, i] *= mask
                     # Apply the transform to recover orginal floating point values if the file were compressed
                     if "image" in channel and self.image_scale:
                         vector[:, i] /= self.image_scale
