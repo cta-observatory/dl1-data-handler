@@ -35,7 +35,10 @@ X_MAX_UNIT = u.g / (u.cm**2)
 
 class DLMAGICEventSource(EventSource):
     import uproot
+    
     def __init__(self, **kwargs):
+        import uproot
+        
         """
         Constructor
 
