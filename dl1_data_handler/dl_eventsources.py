@@ -34,11 +34,8 @@ X_MAX_UNIT = u.g / (u.cm**2)
 
 
 class DLMAGICEventSource(EventSource):
-    import uproot
     
     def __init__(self, **kwargs):
-        import uproot
-        
         """
         Constructor
 
@@ -217,7 +214,7 @@ class DLMAGICEventSource(EventSource):
 
         for file_path in file_list:
             try:
-                with uproot.open(file_path) as input_data: #noqa
+                with uproot.open(file_path) as input_data: # noqa: F821
                     if "Events" not in input_data:
                         is_magic_root_file = False
             except ValueError:
