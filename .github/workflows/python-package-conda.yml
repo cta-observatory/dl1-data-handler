@@ -37,7 +37,7 @@ jobs:
         conda install pytest
         pytest
     - name: Conda package publishing
-        uses: maxibor/conda-package-publish-action@v1.1
-        with:
-          subDir: 'conda'
-          AnacondaToken: ${{ secrets.ANACONDA_TOKEN }}
+      uses: maxibor/conda-package-publish-action@v1.1
+      with:
+        subDir: 'conda'
+        AnacondaToken: ${{ secrets.ANACONDA_TOKEN }}
