@@ -1,7 +1,7 @@
 import image_extractor
 import matplotlib as plt
 import numpy as np
-import pickle as pkl
+import joblib
 from ctapipe.io import hessio_event_source
 
 # telescope constants
@@ -74,8 +74,7 @@ passing_trig_nums_list = []
 
 # bins cuts dict
 
-bins_dict = pkl.load(
-    open("./aux/bins_cuts_dict/bins_cuts_dict_1bin.pkl", "rb"))
+bins_dict = joblib.load("./aux/bins_cuts_dict/bins_cuts_dict_1bin.pkl", "r")
 
 for event in source:
     num_trig = 0
