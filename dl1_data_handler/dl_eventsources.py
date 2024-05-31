@@ -29,7 +29,6 @@ import glob
 import numpy as np
 from scipy.stats import norm
 import re
-import uproot
 
 X_MAX_UNIT = u.g / (u.cm**2)
 
@@ -46,6 +45,13 @@ class DLMAGICEventSource(EventSource):
             NOTE: The file mask of the data to read can be passed with
             the 'input_url' parameter.
         """
+        try:
+            import uproot
+        except ImportError:
+            raise ImportError(
+                "The 'uproot' package is required for the DLMAGICEventSource class."
+            )        
+            
         self.file_list = glob.glob(kwargs["input_url"])
         self.file_list.sort()
 
@@ -97,7 +103,7 @@ class DLMAGICEventSource(EventSource):
             None,
         )
         for file in self.file_list:
-            uproot_file = uproot.open(file)
+            uproot_file = uproot.open(file) #noqa
             if "_Y_" in file:
                 if "_M1_" in file:
                     self.calib_M1 = uproot_file["Events"]
@@ -207,7 +213,7 @@ class DLMAGICEventSource(EventSource):
 
         for file_path in file_list:
             try:
-                with uproot.open(file_path) as input_data:
+                with uproot.open(file_path) as input_data: #noqa
                     if "Events" not in input_data:
                         is_magic_root_file = False
             except ValueError:
