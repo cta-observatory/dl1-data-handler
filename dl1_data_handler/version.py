@@ -85,7 +85,7 @@ def get_current_version():
     """
     result = run([
         "/usr/bin/git", "ls-remote", "--tags"
-    ], stdout= PIPE, text=True, check=True, shell=True)
+    ], stdout= PIPE, text=True, check=True, shell=False)
 
     output_lines = result.stdout.splitlines()
     
