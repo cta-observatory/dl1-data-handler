@@ -46,13 +46,6 @@ class DLMAGICEventSource(EventSource):
             NOTE: The file mask of the data to read can be passed with
             the 'input_url' parameter.
         """
-        try:
-            import uproot
-        except ImportError:
-            raise ImportError(
-                "The 'uproot' package is required for the DLMAGICEventSource class."
-            )
-
         self.file_list = glob.glob(kwargs["input_url"])
         self.file_list.sort()
 
