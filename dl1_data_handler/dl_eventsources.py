@@ -29,6 +29,7 @@ import glob
 import numpy as np
 from scipy.stats import norm
 import re
+import uproot
 
 X_MAX_UNIT = u.g / (u.cm**2)
 
