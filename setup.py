@@ -28,7 +28,7 @@ setup(
         "pandas",
         "pytest-cov",
         "tables>=3.7",
-        "git",
+        "git+https://github.com/cta-observatory/dl1-data-handler",
     ],
     entry_points={
         "console_scripts": [
