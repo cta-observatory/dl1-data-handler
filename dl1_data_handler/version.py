@@ -48,7 +48,7 @@ if name == "nt":
             # if this command succeeded, git is in the path
             return "git"
         # catch the exception thrown if git was not found
-        except CalledProcessError:
+        except subprocess.CalledProcessError:
             pass
         # There are several locations git.exe may be hiding
         possible_locations = []
@@ -82,6 +82,22 @@ def get_git_describe_version(abbrev=0):
     """return the string output of git desribe"""
     try:
         with open(devnull, "w") as fnull:
+            print('3HOLAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+
+            repo_url = "https://github.com/cta-observatory/dl1-data-handler/"
+            output_lines = subprocess.check_output(
+                [
+                    "git",
+                    "ls-remote",
+                    "--tags",
+                    "--refs",
+                    "--sort=version:refname",
+                    repo_url,
+                ],
+                encoding="utf-8",
+            ).splitlines()
+            last_line_ref = output_lines[-1].rpartition("/")[-1]
+            print(last_line_ref)
             
             arguments = [GIT_COMMAND, "describe", "--tags", "--always", "--abbrev=%d" % abbrev]
             print('2HOLAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
