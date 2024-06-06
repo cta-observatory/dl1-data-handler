@@ -6,7 +6,7 @@ jobs:
   pypi-publish:
     name: Publish release to PyPI
     environment:
-      name: pypi
+      name: pypi 
       url: https://pypi.org/project/dl1-data-handler/
     permissions:
       id-token: write
