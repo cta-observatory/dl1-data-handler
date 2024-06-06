@@ -27,7 +27,7 @@ https://github.com/warner/python-versioneer
 but being much more lightwheight
 
 """
-from subprocess import check_output, CalledProcessError
+from subprocess import check_output, CalledProcessError, run, PIPE
 from os import path, name, devnull, environ, listdir
 from ast import literal_eval
 
@@ -83,10 +83,12 @@ def get_git_describe_version(abbrev=0):
     try:
         with open(devnull, "w") as fnull:
             
-            #arguments = [GIT_COMMAND, "describe", "--tags", "--always", "--abbrev=%d" % abbrev]
-            arguments = [GIT_COMMAND, "tag", "-l"]
+            arguments = [GIT_COMMAND, "describe", "--tags", "--always", "--abbrev=%d" % abbrev]
+            print('2HOLAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+            print(subprocess.run(arguments, stdout=subprocess.PIPE))
+            arguments2 = [GIT_COMMAND, "tag", "-l"]
             print('HOLAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
-            print(check_output(arguments, cwd=CURRENT_DIRECTORY, stderr=fnull, env={'GIT_TERMINAL_PROMPT': '0'}).decode("ascii").strip())
+            print(subprocess.run(arguments2, stdout=subprocess.PIPE)))
             return (
                 check_output(arguments, cwd=CURRENT_DIRECTORY, stderr=fnull)
                 .decode("ascii")
