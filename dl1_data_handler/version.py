@@ -88,7 +88,7 @@ def get_git_describe_version(abbrev=0):
             print(subprocess.run(arguments, stdout=subprocess.PIPE))
             arguments2 = [GIT_COMMAND, "tag", "-l"]
             print('HOLAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
-            print(subprocess.run(arguments2, stdout=subprocess.PIPE)))
+            print(subprocess.run(arguments2, stdout=subprocess.PIPE))
             return (
                 check_output(arguments, cwd=CURRENT_DIRECTORY, stderr=fnull)
                 .decode("ascii")
