@@ -44,7 +44,7 @@ if name == "nt":
         """find the path to the git executable on windows"""
         # first see if git is in the path
         try:
-            check_output(["where", "/Q", "git"])
+            subprocess.check_output(["where", "/Q", "git"])
             # if this command succeeded, git is in the path
             return "git"
         # catch the exception thrown if git was not found
@@ -96,7 +96,7 @@ def get_git_describe_version(abbrev=0):
             )
 
 
-    except (OSError, CalledProcessError):
+    except (OSError, subprocess.CalledProcessError):
         return None
 
 
