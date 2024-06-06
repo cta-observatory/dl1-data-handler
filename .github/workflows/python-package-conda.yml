@@ -65,10 +65,10 @@ jobs:
     #- name: Set up Python ${{ matrix.pyv }}
      # run: |
       #  conda install -y python=${{ matrix.pyv }}
-    #- name: Add conda to system path
-     # run: |
-        # $CONDA is an environment variable pointing to the root of the miniconda directory
-      #  echo $CONDA/bin >> $GITHUB_PATH
+    - name: Add conda to system path
+      run: |
+        #$CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA/bin >> $GITHUB_PATH 
     - name: Install dependencies
       run: |
         conda env update --file environment.yml --name base 
