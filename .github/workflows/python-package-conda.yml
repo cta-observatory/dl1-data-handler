@@ -47,11 +47,26 @@ jobs:
         #platforms: 'win osx linux'
 
   condapublish:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-22.04]
+        pyv: [3.9, '3.10', 3.11, 3.12]
+      max-parallel: 5
+    runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
     steps:
     - uses: actions/checkout@v4
-    - name: first 
+    - name: Set up Python ${{ matrix.pyv }}
       run: |
+        conda install -y python=${{ matrix.pyv }}
+    - name: Add conda to system path
+      run: |
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA/bin >> $GITHUB_PATH
+    - name: Install dependencies
+      run: |
+        conda env update --file environment.yml --name base
         conda install git
     - name: publish-to-conda
       uses: fcakyon/conda-publish-action@v1.3
