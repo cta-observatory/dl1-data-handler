@@ -1,6 +1,6 @@
 name: Release CI
 
-on: [push]
+on: [release]
 
 jobs:
   pypi-publish:
