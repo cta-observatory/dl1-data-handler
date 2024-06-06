@@ -17,7 +17,7 @@ jobs:
       run: |
         git fetch --tags
         git fetch --prune --unshallow || true
-        export LATEST_RELEASE_VERSION=$(git describe --abbrev=7 --tags)
+        export LATEST_RELEASE_VERSION=$(git describe --abbrev=0 --tags)
         echo "::set-output name=latest-release::$(echo $LATEST_RELEASE_VERSION)"
         echo The latest release version is \"$LATEST_RELEASE_VERSION\".
       shell: bash
