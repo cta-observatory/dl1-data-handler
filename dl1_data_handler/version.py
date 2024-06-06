@@ -86,7 +86,7 @@ def get_git_describe_version(abbrev=0):
             #arguments = [GIT_COMMAND, "describe", "--tags", "--always", "--abbrev=%d" % abbrev]
             arguments = [GIT_COMMAND, "tag", "-l"]
             print('HOLAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
-            print(check_output(arguments, cwd=CURRENT_DIRECTORY, stderr=fnull).decode("ascii").strip())
+            print(check_output(arguments, cwd=CURRENT_DIRECTORY, stderr=fnull, env={'GIT_TERMINAL_PROMPT': '0'}).decode("ascii").strip())
             return (
                 check_output(arguments, cwd=CURRENT_DIRECTORY, stderr=fnull)
                 .decode("ascii")
