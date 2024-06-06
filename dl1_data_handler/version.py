@@ -90,7 +90,7 @@ def get_git_describe_version(abbrev=0):
             print('HOLAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
             print(subprocess.run(arguments2, stdout=subprocess.PIPE))
             return (
-                check_output(arguments, cwd=CURRENT_DIRECTORY, stderr=fnull)
+                subprocess.check_output(arguments, cwd=CURRENT_DIRECTORY, stderr=fnull)
                 .decode("ascii")
                 .strip()
             )
