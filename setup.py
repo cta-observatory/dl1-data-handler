@@ -28,6 +28,7 @@ setup(
         "pandas",
         "pytest-cov",
         "tables>=3.7",
+        "git",
     ],
     entry_points={
         "console_scripts": [
