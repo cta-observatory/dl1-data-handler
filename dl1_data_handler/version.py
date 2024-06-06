@@ -82,7 +82,7 @@ def get_git_describe_version(abbrev=7):
     """return the string output of git desribe"""
     try:
         with open(devnull, "w") as fnull:
-            arguments = [GIT_COMMAND, "describe", "--tags", "--abbrev=%d" % abbrev]
+            arguments = [GIT_COMMAND, "describe", "--tags", "--abbrev=%d" % abbrev, "--always"]
             return (
                 check_output(arguments, cwd=CURRENT_DIRECTORY, stderr=fnull)
                 .decode("ascii")
