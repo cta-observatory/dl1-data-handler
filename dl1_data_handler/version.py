@@ -27,7 +27,7 @@ https://github.com/warner/python-versioneer
 but being much more lightwheight
 
 """
-from subprocess import check_output, CalledProcessError, run, PIPE
+import subprocess as subprocess
 from os import path, name, devnull, environ, listdir
 from ast import literal_eval
 
