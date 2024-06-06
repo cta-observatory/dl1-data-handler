@@ -12,24 +12,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
-    - name: Fetch latest release version
-      id: fetch-latest-release
-      run: |
-        git fetch --tags
-        git fetch --prune --unshallow || true
-        export LATEST_RELEASE_VERSION=$(git describe --abbrev=0 --tags)
-        echo "::set-output name=latest-release::$(echo $LATEST_RELEASE_VERSION)"
-        echo The latest release version is \"$LATEST_RELEASE_VERSION\".
-      shell: bash
-    - name: Test
-      run: echo ${{ steps.fetch-latest-release.outputs.latest-release }}    
-
-    - name: get latest release ${{ github.event.release.tag_name }}
-      run: |
-        echo 'HOLA'
-    #- name: update _version_cache.py ${{ github.event.release.tag_name }}
-     # run: |
-     #   echo 'HOLA'
     - name: Set up Python ${{ matrix.pyv }}
       run: |
         conda install -y python=${{ matrix.pyv }}
@@ -55,9 +37,9 @@ jobs:
       run: |
         conda install pytest
         pytest
-    - name: Conda package publishing
-      uses: fcakyon/conda-publish-action@v1.3
-      with:
-        subdir: '.'
-        anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
-        platforms: 'win osx linux'
+    #- name: Conda package publishing
+     # uses: fcakyon/conda-publish-action@v1.3
+      #with:
+       # subdir: '.'
+        #anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
+        #platforms: 'win osx linux'
