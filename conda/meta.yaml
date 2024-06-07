@@ -12,7 +12,7 @@ build:
   
 requirements:
   build:
-    - python==3.12
+    - python ==3.12
     - numpy >=1.20
     - astropy
     - scipy
@@ -22,7 +22,7 @@ requirements:
     - pandas
     - git
   host:
-    - python==3.12
+    - python ==3.12
     - numpy >=1.20
     - astropy
     - scipy
@@ -32,7 +32,7 @@ requirements:
     - pandas
     - git
   run:
-    - python==3.12
+    - python ==3.12
     - numpy >=1.20
     - jupyter
     - astropy
