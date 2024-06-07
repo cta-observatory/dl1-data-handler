@@ -62,7 +62,7 @@ jobs:
       run: |
         conda env update --file environment.yml --name base
     - name: publish-to-conda
-      uses: maxibor/conda-package-publish-action@v1.1
+      uses: fcakyon/conda-publish-action@v1.3
       with:
         subdir: 'conda'
         anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
