@@ -53,7 +53,7 @@ jobs:
     - uses: actions/checkout@v4
     - name: Install dependencies
       run: |
-        pip install numpy
+        conda --no-plugins install numpy
     - name: publish-to-conda
       uses: fcakyon/conda-publish-action@v1.3
       with:
