@@ -57,7 +57,7 @@ jobs:
         echo $CONDA/bin >> $GITHUB_PATH
     - name: Install dependencies
       run: |
-        conda install numpy
+        conda env update --file environment.yml --name base
     - name: publish-to-conda
       uses: fcakyon/conda-publish-action@v1.3
       with:
