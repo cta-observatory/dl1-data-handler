@@ -1,11 +1,12 @@
+{% set data = load_setup_py_data(setup_file='../setup.py', from_recipe_dir=True) %}
 
 package:
   name: dl1_data_handler
-  version: {{ GIT_DESCRIBE_TAG }}
+  version:  {{ data.get('version') }}
 source:
   #path: ./
   git_url: https://github.com/cta-observatory/dl1-data-handler.git
-  git_rev: {{ GIT_DESCRIBE_TAG }}
+  git_rev: v.0.11.1
 
 build:
   #noarch: generic
