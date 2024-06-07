@@ -21,6 +21,7 @@ requirements:
     - ctapipe ==0.20.0
     - pytables >=3.8
     - pandas
+    - git
   host:
     - python ==3.12
     - numpy >=1.20
@@ -30,6 +31,7 @@ requirements:
     - ctapipe ==0.20.0
     - pytables >=3.8
     - pandas
+    - git
   run:
     - python ==3.12
     - numpy >=1.20
@@ -39,6 +41,8 @@ requirements:
     - ctapipe ==0.20.0
     - pytables >=3.8
     - pandas
+    - git
+
   test:
     imports:
       - dl1-data-handler
