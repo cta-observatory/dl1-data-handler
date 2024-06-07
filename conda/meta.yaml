@@ -1,0 +1,55 @@
+package:
+  name: dl1_data_handler
+  version: "0.11.1"
+
+source:
+  path: ./
+  #git_url: https://github.com/cta-observatory/dl1-data-handler.git
+  #git_rev: v0.11.0
+
+build:
+  #noarch: generic
+  number: 0
+
+requirements:
+  build:
+    - python ==3.12
+    - numpy >=1.20
+    - astropy
+    - scipy
+    - jupyter
+    - ctapipe ==0.20.0
+    - pytables >=3.8
+    - pandas
+  host:
+    - python ==3.12
+    - numpy >=1.20
+    - astropy
+    - scipy
+    - jupyter
+    - ctapipe ==0.20.0
+    - pytables >=3.8
+    - pandas
+  run:
+    - python ==3.12
+    - numpy >=1.20
+    - jupyter
+    - astropy
+    - scipy
+    - ctapipe ==0.20.0
+    - pytables >=3.8
+    - pandas
+  test:
+    imports:
+      - dl1-data-handler
+
+about:
+  home: https://github.com/cta-observatory/dl1-data-handler
+  license: MIT
+  license_file: LICENSE
+  summary: DL1 to PyTables HDF5 data dumper/writer/processor for ML studies.
+extra:
+  recipe-maintainers:
+    - nietootein
+    - TjarkMiener
+
