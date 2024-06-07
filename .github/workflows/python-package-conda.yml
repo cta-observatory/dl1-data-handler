@@ -51,6 +51,9 @@ jobs:
       id-token: write
     steps:
     - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.pyv }}
+      run: |
+        conda install -y python=${{ matrix.pyv }}
     - name: Add conda to system path
       run: |
         # $CONDA is an environment variable pointing to the root of the miniconda directory
