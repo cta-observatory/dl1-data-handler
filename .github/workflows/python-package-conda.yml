@@ -71,7 +71,6 @@ jobs:
     - name: publish-to-conda
       uses: fcakyon/conda-publish-action@v1.3
       with:
-        subdir: '.'
+        subdir: '.conda'
         anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
         platforms: 'win osx linux'
-        buildoptions: '--no-test'
