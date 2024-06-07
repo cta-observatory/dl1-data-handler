@@ -69,8 +69,16 @@ jobs:
         conda env update --file environment.yml --name base
         conda install git
     - name: publish-to-conda
-      uses: fcakyon/conda-publish-action@v1.3
+      #uses: fcakyon/conda-publish-action@v1.3
+      #with:
+       # subdir: '.'
+        #anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
+        #platforms: 'win osx linux'
+          #- name: publish-to-conda
+      uses: MichaelsJP/conda-package-publish-action@v1.0.0
       with:
-        subdir: '.'
-        anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
-        platforms: 'win osx linux'
+        subDir: '.'
+        AnacondaToken: ${{ secrets.ANACONDA_TOKEN }}
+        platforms: 'all'
+        override: true
+        dry_run: true
