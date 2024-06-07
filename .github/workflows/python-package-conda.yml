@@ -51,17 +51,6 @@ jobs:
       id-token: write
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.pyv }}
-      run: |
-        conda install -y python=${{ matrix.pyv }}
-    - name: Add conda to system path
-      run: |
-        # $CONDA is an environment variable pointing to the root of the miniconda directory
-        echo $CONDA/bin >> $GITHUB_PATH
-    - name: Install dependencies
-      run: |
-        conda env update --file environment.yml --name base
-        conda install git
     - name: publish-to-conda
       uses: fcakyon/conda-publish-action@v1.3
       with:
