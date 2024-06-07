@@ -5,7 +5,7 @@ from .processor import *
 from .reader import *
 from .table_definitions import *
 from .transforms import *
-
+from numpy import *
 from .version import get_version
 
 __version__ = get_version(pep440=False)
