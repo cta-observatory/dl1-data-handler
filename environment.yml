@@ -16,5 +16,3 @@ dependencies:
     - pandas
     - pip:
         - pydot
-        - git+https://github.com/cta-observatory/dl1-data-handler@master
-
