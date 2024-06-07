@@ -1,6 +1,7 @@
 from setuptools import setup, find_packages
 from os import path
 from dl1_data_handler.version import *
+import numpy 
 
 here = path.abspath(path.dirname(__file__))
 
