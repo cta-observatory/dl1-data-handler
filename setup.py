@@ -5,8 +5,10 @@ from dl1_data_handler import __version__
 
 def versiontest():
     file = open("testversion.txt").readlines()
-    for lines in file:
-        print(lines)
+    for line in file:
+        for word in line.split():
+            print(word)
+            return word
 
 here = path.abspath(path.dirname(__file__))
 
