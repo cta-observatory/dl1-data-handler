@@ -1,6 +1,6 @@
-from dl1_data_handler.version import get_version  
+from dl1_data_handler.version import get_version_pypi  
 def example():
-    return get_version(pep440=False)
+    return get_version_pypi()
 
 
 if __name__ == "__main__":
