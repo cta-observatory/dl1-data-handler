@@ -1,6 +1,7 @@
-from dl1_data_handler.version import get_version
-import json 
-  
-aux = get_version(pep440=False)
-print("'aux'")
-#details = {'version': aux}
+from dl1_data_handler.version import get_version  
+def example():
+    return get_version(pep440=False)
+
+
+if __name__ == "__main__":
+    print(example())
