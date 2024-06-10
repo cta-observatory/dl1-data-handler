@@ -118,6 +118,12 @@ jobs:
       id: step_two
       run: |
           echo "${{ steps.step1.outputs.changelog }}"  
+    - name: Write1
+      uses: schdck/create-env-json@v1
+      id: create-env
+      with:
+        file-name: 'env.json'
+        super:  "${{ steps.step1.outputs.changelog }}"
     - name: Write
       uses: 1arp/create-a-file-action@0.4.5
       with:
