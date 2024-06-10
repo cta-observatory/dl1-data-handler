@@ -91,5 +91,40 @@ jobs:
       with:
         subdir: 'conda'
         anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
+
+
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04]
+        pyv: [3.12]
+      max-parallel: 5
+    runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Set up Python ${{ matrix.pyv }}
+      run: |
+        conda install -y python=${{ matrix.pyv }}
+    - name: Get version
+      run: |
+        output=$(python exectestversion.py)
+        echo "::set-output name=changelog::$output"
+      id: step1
+    - name: Use the value
+      id: step_two
+      run: |
+          echo "${{ steps.step1.outputs.changelog }}"  
+    - name: Write
+      uses: 1arp/create-a-file-action@0.4.5
+      with:
+        path: '.'
+        isAbsolutePath: true
+        file: 'testversion.txt'
+        content: |
+          "${{ steps.step1.outputs.changelog }}"
         
         
