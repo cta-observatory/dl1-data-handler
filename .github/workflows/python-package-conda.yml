@@ -60,7 +60,8 @@ jobs:
         conda install -y python=${{ matrix.pyv }}
     - name: Get version
       run: |
-        echo "TESTVERSION=$(python exectestversion.py)" >> $GITHUB_ENV 
+        echo "TAG_NAME=$(python exectestversion.py)" >> $GITHUB_OUTPUT
+      id: version
     - name: Use the value
       id: step_two
       run: |
@@ -72,7 +73,7 @@ jobs:
         isAbsolutePath: false
         file: 'testversion.txt'
         content: |
-          ${{ env.FOO }}
+          ${{ steps.version.outputs.TAG_NAME }}
     - name: Set up git
       run: |
         conda install git
