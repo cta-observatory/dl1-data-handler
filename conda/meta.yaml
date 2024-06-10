@@ -1,5 +1,5 @@
 {% set version_match = load_file_regex(
-  load_file="dl1-data-handler/__init__.py",
+  load_file="dl1-data-handler/dl1-data-handler/__init__.py",
   regex_pattern='^__version__ = "(.+)"') %}
 {% set version = version_match[1] %}
 
