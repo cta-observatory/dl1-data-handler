@@ -60,7 +60,19 @@ jobs:
         conda install -y python=${{ matrix.pyv }}
     - name: Get version
       run: |
-        python exectestversion.py
+        echo "TESTVERSION=$(python exectestversion.py)" >> $GITHUB_ENV 
+    - name: Use the value
+      id: step_two
+      run: |
+          echo "${{ env.FOO }}"    
+    - name: Write
+      uses: 1arp/create-a-file-action@0.4.5
+      with:
+        path: '.'
+        isAbsolutePath: false
+        file: 'testversion.txt'
+        content: |
+          ${{ env.FOO }}
     - name: Set up git
       run: |
         conda install git
