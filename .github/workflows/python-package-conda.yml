@@ -39,14 +39,11 @@ jobs:
       run: |
         conda install pytest
         pytest
-    - name: Publish conda package from PyPI package
-      uses: AgnostiqHQ/conda-skeleton-publish@v1
+    - name: publish-to-conda
+      uses: maxibor/conda-package-publish-action@v1.1
       with:
-        pypi_package: "dl1-data-handler"
-        python_version: "3.12"
-        upload_channel: "holtz"
-        access_token: ${{ secrets.ANACONDA_TOKEN }}
-        stable: true
+        subDir: 'conda'
+        AnacondaToken: ${{ secrets.ANACONDA_TOKEN }}
 
   condapublish:
     strategy:
