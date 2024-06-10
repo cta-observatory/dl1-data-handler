@@ -81,21 +81,27 @@ if name == "nt":
 def get_git_describe_version(abbrev=0):
     """return the string output of git desribe"""
     try:
-        with open(devnull, "w") as fnull:
-            repo_url = "https://github.com/cta-observatory/dl1-data-handler/"
-            output_lines = subprocess.check_output(
-                [
-                    "git",
-                    "ls-remote",
-                    "--tags",
-                    "--refs",
-                    "--sort=version:refname",
-                    repo_url,
-                ],
-                encoding="utf-8",
-            ).splitlines()
-            last_line_ref = output_lines[-1].rpartition("/")[-1]
-            return (last_line_ref)
+        repo_url = "https://github.com/cta-observatory/dl1-data-handler/"
+        output_lines = subprocess.check_output(
+            [
+                "git",
+                "ls-remote",
+                "--tags",
+                "--refs",
+                "--sort=version:refname",
+                repo_url,
+            ],
+            encoding="utf-8",
+        ).splitlines()
+        last_line_ref = output_lines[-1].rpartition("/")[-1]
+        print(last_line_ref)
+        #return (last_line_ref)
+        arguments = [GIT_COMMAND, "describe", "--tags", "--abbrev=%d" % abbrev]
+        return (
+            check_output(arguments, cwd=CURRENT_DIRECTORY, stderr=fnull)
+            .decode("ascii")
+            .strip()
+        )
 
     except (OSError, subprocess.CalledProcessError):
         return None
