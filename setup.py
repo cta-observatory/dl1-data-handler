@@ -1,6 +1,7 @@
 from setuptools import setup, find_packages
 from os import path
 from dl1_data_handler.version import *
+from dl1_data_handler import __version__
 
 
 here = path.abspath(path.dirname(__file__))
