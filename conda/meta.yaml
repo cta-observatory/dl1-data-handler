@@ -6,7 +6,7 @@ source:
   #path: .
   #git_url: ..
   git_url: https://github.com/cta-observatory/dl1-data-handler
-  git_tag: "master"
+  #git_tag: "master"
   #git_rev: v0.11.1
 
 build:
