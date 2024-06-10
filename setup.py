@@ -7,7 +7,7 @@ def getVersionFromFile():
     file = open("versionBackup.txt").readlines()
     for line in file:
         for word in line.split():
-            return str(word)
+            return word
 
 here = path.abspath(path.dirname(__file__))
 
