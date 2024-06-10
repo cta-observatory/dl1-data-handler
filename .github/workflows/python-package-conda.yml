@@ -57,7 +57,7 @@ jobs:
     - name: Set up git
       run: |
         conda install git
-        sudo apt-get install git-all
+        sudo apt-get install git
     - name: Add conda to system path
       run: |
         # $CONDA is an environment variable pointing to the root of the miniconda directory
