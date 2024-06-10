@@ -102,7 +102,7 @@ jobs:
         isAbsolutePath: true
         file: 'versionBackup.txt'
         content: |
-          "${{ steps.step1.outputs.version }}"
+          ${{ steps.step1.outputs.version }}
 
     - name: Push changes    
       run: |
