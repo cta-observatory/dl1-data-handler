@@ -14,8 +14,6 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, "README.rst"), encoding="utf-8") as f:
     long_description = f.read()
     
-exec(open('dl1_data_handler/version.py').read())
-
 setup(
     name="dl1_data_handler",
     version=versiontest(),
