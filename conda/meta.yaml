@@ -5,7 +5,7 @@
 
 package:
   name: dl1_data_handler
-  version: {{ GIT_DESCRIBE_TAG }}
+  version: "{{ GIT_DESCRIBE_TAG }}"
   
   source:
   #path: .
