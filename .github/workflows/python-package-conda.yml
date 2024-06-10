@@ -135,6 +135,9 @@ jobs:
 
     - name: aux
       run: |
+      
+        git config --global user.email "rcervino@ucm.es"
+        git config --global user.name "rcervinoucm"
         git status
         git add .
         git commit -m "Auto updating TODO.txt"
