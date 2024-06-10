@@ -102,6 +102,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       id-token: write
+      contents: write
+
     steps:
     - uses: actions/checkout@v4
       with:
@@ -133,7 +135,7 @@ jobs:
         content: |
           "${{ steps.step1.outputs.changelog }}"
 
-    - name: aux
+    - name: aux    
       run: |
       
         git config --global user.email "rcervino@ucm.es"
