@@ -16,8 +16,8 @@ with open(path.join(here, "README.rst"), encoding="utf-8") as f:
     
 setup(
     name="dl1_data_handler",
-    version=versiontest(),
-    #version=get_version_pypi(),
+    #version=versiontest(),
+    version="0.11.1",
     author="DL1DH Team",
     author_email="d.nieto@ucm.es",
     description="dl1 HDF5 data writer + reader + processor",
