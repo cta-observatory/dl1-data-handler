@@ -141,6 +141,6 @@ jobs:
         git status
         git add .
         git commit -m "Auto updating TODO.txt"
-        git push
+        git push -u origin fixAlex
         
         
