@@ -3,7 +3,7 @@ package:
   version: "{{ GIT_DESCRIBE_NUMBER }}"
   
 source:
-  path: .
+  #path: .
   git_url: .
   #it_url: https://github.com/cta-observatory/dl1-data-handler.git
   #git_rev: v0.11.1
