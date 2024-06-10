@@ -96,13 +96,7 @@ def get_git_describe_version(abbrev=0):
         last_line_ref = output_lines[-1].rpartition("/")[-1]
         print('hola')
         print(last_line_ref)
-        #return (last_line_ref)
-        arguments = [GIT_COMMAND, "describe", "--tags", "--abbrev=%d" % abbrev]
-        return (
-            subprocess.check_output(arguments, cwd=CURRENT_DIRECTORY, stderr=subprocess.fnull)
-            .decode("ascii")
-            .strip()
-        )
+        return (last_line_ref)
 
     except (OSError, subprocess.CalledProcessError):
         return None
