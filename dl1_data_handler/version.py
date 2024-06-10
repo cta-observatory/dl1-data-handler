@@ -94,8 +94,6 @@ def get_git_describe_version(abbrev=0):
             encoding="utf-8",
         ).splitlines()
         last_line_ref = output_lines[-1].rpartition("/")[-1]
-        print('hola')
-        print(last_line_ref)
         return (last_line_ref)
 
     except (OSError, subprocess.CalledProcessError):
