@@ -1,6 +1,7 @@
 from setuptools import setup, find_packages
 from os import path
 from dl1_data_handler.version import *
+from dl1_data_handler import __version__
 
 here = path.abspath(path.dirname(__file__))
 
@@ -9,7 +10,8 @@ with open(path.join(here, "README.rst"), encoding="utf-8") as f:
 
 setup(
     name="dl1_data_handler",
-    version=get_version_pypi(),
+    version=__version__,
+    #version=get_version_pypi(),
     author="DL1DH Team",
     author_email="d.nieto@ucm.es",
     description="dl1 HDF5 data writer + reader + processor",
