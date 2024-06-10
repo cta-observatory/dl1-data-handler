@@ -9,7 +9,7 @@ package:
   
   source:
   #path: .
-  git_url: .
+  git_url: ../
   #it_url: https://github.com/cta-observatory/dl1-data-handler.git
   #git_rev: v0.11.1
 
