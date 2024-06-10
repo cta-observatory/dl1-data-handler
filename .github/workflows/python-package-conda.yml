@@ -68,5 +68,5 @@ jobs:
     - name: publish-to-conda
       uses: fcakyon/conda-publish-action@v1.3
       with:
-        subdir: 'conda'
+        subdir: '.'
         anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
