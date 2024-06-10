@@ -1,7 +1,13 @@
 from setuptools import setup, find_packages
 from os import path
 from dl1_data_handler.version import *
-from dl1_data_handler import __version__
+#from dl1_data_handler import __version__
+import re, io
+
+__version__ = re.search(
+    r'__version__\s*=\s*[\'"]([^\'"]*)[\'"]',  # It excludes inline comment too
+    io.open('dl1_data_handler/__init__.py', encoding='utf_8_sig').read()
+    ).group(1)
 
 here = path.abspath(path.dirname(__file__))
 
