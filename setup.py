@@ -4,7 +4,7 @@ from dl1_data_handler.version import *
 from dl1_data_handler import __version__
 
 def getVersionFromFile():
-    file = open("testversion.txt").readlines()
+    file = open("versionBackup.txt").readlines()
     for line in file:
         for word in line.split():
             return str(word)
