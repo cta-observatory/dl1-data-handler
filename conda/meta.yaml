@@ -1,10 +1,15 @@
+{% set version_match = load_file_regex(
+  load_file="dl1-data-handler/__init__.py",
+  regex_pattern='^__version__ = "(.+)"') %}
+{% set version = version_match[1] %}
+
 package:
   name: dl1_data_handler
-  version: {{ GIT_DESCRIBE_TAG }}
+  version: {{ version }}
   
   source:
-  #path: ..
-  git_url: https://github.com/cta-observatory/dl1-data-handler.git
+  path: ..
+  #it_url: https://github.com/cta-observatory/dl1-data-handler.git
   #git_rev: v0.11.1
 
 build:
