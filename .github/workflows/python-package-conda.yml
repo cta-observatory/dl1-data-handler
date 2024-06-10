@@ -40,7 +40,7 @@ jobs:
         conda install pytest
         pytest
     - name: Publish conda package from PyPI package
-      uses: actions/conda-skeleton-publish@v1
+      uses: AgnostiqHQ/conda-skeleton-publish@v1
       with:
         pypi_package: "dl1-data-handler"
         python_version: "3.12"
