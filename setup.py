@@ -7,7 +7,6 @@ def versiontest():
     file = open("testversion.txt").readlines()
     for line in file:
         for word in line.split():
-            print(word)
             return word
 
 here = path.abspath(path.dirname(__file__))
