@@ -132,5 +132,12 @@ jobs:
         file: 'testversion.txt'
         content: |
           "${{ steps.step1.outputs.changelog }}"
+
+    - name: aux
+      run: |
+        git status
+        git add .
+        git commit -m "Auto updating TODO.txt"
+        git push
         
         
