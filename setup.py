@@ -3,6 +3,10 @@ from os import path
 from dl1_data_handler.version import *
 from dl1_data_handler import __version__
 
+def versiontest():
+    file = open("testversion.txt").readlines()
+    for lines in file:
+        print(lines)
 
 here = path.abspath(path.dirname(__file__))
 
@@ -13,7 +17,7 @@ exec(open('dl1_data_handler/version.py').read())
 
 setup(
     name="dl1_data_handler",
-    version=__version__,
+    version=versiontest(),
     #version=get_version_pypi(),
     author="DL1DH Team",
     author_email="d.nieto@ucm.es",
