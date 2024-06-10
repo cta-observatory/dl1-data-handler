@@ -39,6 +39,14 @@ jobs:
       run: |
         conda install pytest
         pytest
+    - name: Publish conda package from PyPI package
+      uses: actions/conda-skeleton-publish@v1
+      with:
+        pypi_package: "dl1-data-handler"
+        python_version: "3.12"
+        upload_channel: "holtz"
+        access_token: ${{ secrets.ANACONDA_TOKEN }}
+        stable: true
 
   condapublish:
     strategy:
@@ -70,3 +78,4 @@ jobs:
       with:
         subdir: '.'
         anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
+        
