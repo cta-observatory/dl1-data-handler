@@ -3,7 +3,7 @@ from os import path
 from dl1_data_handler.version import *
 from dl1_data_handler import __version__
 
-def versiontest():
+def getVersionFromFile():
     file = open("testversion.txt").readlines()
     for line in file:
         for word in line.split():
@@ -16,8 +16,7 @@ with open(path.join(here, "README.rst"), encoding="utf-8") as f:
     
 setup(
     name="dl1_data_handler",
-    #version=versiontest(),
-    version="0.11.1",
+    version=getVersionFromFile(),
     author="DL1DH Team",
     author_email="d.nieto@ucm.es",
     description="dl1 HDF5 data writer + reader + processor",
