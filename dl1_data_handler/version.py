@@ -99,7 +99,7 @@ def get_git_describe_version(abbrev=0):
         #return (last_line_ref)
         arguments = [GIT_COMMAND, "describe", "--tags", "--abbrev=%d" % abbrev]
         return (
-            subprocess.check_output(arguments, cwd=CURRENT_DIRECTORY, stderr=fnull)
+            subprocess.check_output(arguments, cwd=CURRENT_DIRECTORY, stderr=subprocess.fnull)
             .decode("ascii")
             .strip()
         )
