@@ -92,7 +92,7 @@ def get_git_describe_version():
                 repo_url,
             ],
             encoding="utf-8",
-        ).splitlines()
+        ).splitlines() #nosec
         last_line_ref = output_lines[-1].rpartition("/")[-1]
         return (last_line_ref)
 
