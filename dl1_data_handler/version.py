@@ -27,7 +27,7 @@ https://github.com/warner/python-versioneer
 but being much more lightwheight
 
 """
-import subprocess as subprocess
+import subprocess
 from os import path, name, devnull, environ, listdir
 from ast import literal_eval
 
@@ -78,7 +78,7 @@ if name == "nt":
     GIT_COMMAND = find_git_on_windows()
 
 
-def get_git_describe_version(abbrev=0):
+def get_git_describe_version():
     """return the string output of git desribe"""
     try:
         repo_url = "https://github.com/cta-observatory/dl1-data-handler/"
