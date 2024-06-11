@@ -63,6 +63,16 @@ jobs:
     - name: Set up Python ${{ matrix.pyv }}
       run: |
         conda install -y python=${{ matrix.pyv }}
+    - name: Add conda to system path
+      run: |
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA/bin >> $GITHUB_PATH
+    - name: Install dependencies
+      run: |
+        conda env update --file environment.yml --name base
+        supo-apt install python3-numpy
+        pip install numpy
+        conda install numpy
     - name: Get version
       run: |
         output=$(python versionScript.py)
@@ -86,13 +96,7 @@ jobs:
         git commit -m "version update"
         git push -u origin fixAlex
         
-    - name: Add conda to system path
-      run: |
-        # $CONDA is an environment variable pointing to the root of the miniconda directory
-        echo $CONDA/bin >> $GITHUB_PATH
-    - name: Install dependencies
-      run: |
-        conda env update --file environment.yml --name base
+
     - name: publish-to-conda
       uses: fcakyon/conda-publish-action@v1.3
       with:
