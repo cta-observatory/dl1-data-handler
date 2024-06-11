@@ -1,7 +1,5 @@
 from setuptools import setup, find_packages
 from os import path
-from dl1_data_handler.version import *
-from dl1_data_handler import __version__
 
 def getVersionFromFile():
     file = open("versionBackup.txt").readlines()
