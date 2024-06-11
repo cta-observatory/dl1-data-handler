@@ -53,44 +53,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       id-token: write
+      contents: write
     steps:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         all_commits: true
         all_tags: true
-    - name: Set up Python ${{ matrix.pyv }}
-      run: |
-        conda install -y python=${{ matrix.pyv }}
-    - name: Add conda to system path
-      run: |
-        # $CONDA is an environment variable pointing to the root of the miniconda directory
-        echo $CONDA/bin >> $GITHUB_PATH
-    - name: Install dependencies
-      run: |
-        conda env update --file environment.yml --name base
-    - name: publish-to-conda
-      uses: fcakyon/conda-publish-action@v1.3
-      with:
-        subdir: 'conda'
-        anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
-
-
-  test:
-    strategy:
-      matrix:
-        os: [ubuntu-22.04]
-        pyv: [3.12]
-      max-parallel: 5
-    runs-on: ${{ matrix.os }}
-    permissions:
-      id-token: write
-      contents: write
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
     - name: Set up Python ${{ matrix.pyv }}
       run: |
         conda install -y python=${{ matrix.pyv }}
@@ -107,7 +76,7 @@ jobs:
         file: 'versionBackup.txt'
         content: |
           ${{ steps.step1.outputs.version }}
-
+          
     - name: Push changes    
       run: |
         git config --global user.email "rcervino@ucm.es"
@@ -117,4 +86,17 @@ jobs:
         git commit -m "version update"
         git push -u origin fixAlex
         
+    - name: Add conda to system path
+      run: |
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA/bin >> $GITHUB_PATH
+    - name: Install dependencies
+      run: |
+        conda env update --file environment.yml --name base
+    - name: publish-to-conda
+      uses: fcakyon/conda-publish-action@v1.3
+      with:
+        subdir: 'conda'
+        anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
+
         
