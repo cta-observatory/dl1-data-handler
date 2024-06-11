@@ -67,8 +67,6 @@ jobs:
       run: |
         conda env update --file environment.yml --name base
         sudo apt-get install python3-numpy
-        pip install numpy
-        conda install numpy
     - name: Get version
       run: |
         output=$(python versionScript.py)
@@ -89,7 +87,7 @@ jobs:
         git config --global user.name "rcervinoucm"
         git status
         git add .
-        git commit -m "version update"
+        git commit -m "version update" --allow-empty
         git push -u origin fixAlex
         
 
