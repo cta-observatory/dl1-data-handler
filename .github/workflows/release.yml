@@ -1,6 +1,8 @@
-name: Release CI
+name: Release CD
 
-on: [release]
+on:
+  release:
+    types: [published]
 
 jobs:
   pypi-publish:
