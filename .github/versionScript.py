@@ -1,9 +1,9 @@
 import sys
 
 sys.path.append("..")
-
+from dl1_dta_handler import version
 def get_version():
-    return get_version()
+    return get_version_pypi()
 
 
 if __name__ == "__main__":
