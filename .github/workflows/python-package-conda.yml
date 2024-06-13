@@ -69,7 +69,7 @@ jobs:
         sudo apt-get install python3-numpy
     - name: Get version
       run: |
-        output=$(python .github/versionScript.py)
+        output=$(python dl1_data_handler/versionScript.py)
         echo "version=$output" >> $GITHUB_OUTPUT
       id: step1  
     - name: Write
@@ -95,34 +95,3 @@ jobs:
       with:
         subdir: 'conda'
         anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
-
-
-        
-  test:
-    strategy:
-      matrix:
-        os: [ubuntu-22.04]
-        pyv: ["3.10"]
-      max-parallel: 5
-    runs-on: ${{ matrix.os }}
-    permissions:
-      id-token: write
-      contents: write
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    - name: Get version
-      run: |
-        output=$(python dl1_data_handler/versionScript.py)
-        echo "version=$output" >> $GITHUB_OUTPUT
-      id: step1  
-    - name: Write
-      uses: 1arp/create-a-file-action@0.4.5
-      with:
-        path: '.'
-        isAbsolutePath: true
-        file: '.github/versionBackup.txt'
-        content: |
-          ${{ steps.step1.outputs.version }}
-          
