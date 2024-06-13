@@ -583,7 +583,7 @@ class DLDataReader:
 
                         
                     # Apply the multiplicity cut after the parameter cuts for the subarray
-                    if parameter_selection and multiplicity_selection["Subarray"] > 1:
+                    if multiplicity_selection["Subarray"] > 1:
                         subarray_triggers = np.zeros(len(event_id))
                         for tel_type in selected_telescopes:
                             subarray_triggers += np.count_nonzero(
@@ -630,6 +630,18 @@ class DLDataReader:
                                 )
                             else:
                                 example_identifiers.append((file_idx, sim_idx, img_idx))
+                    else:
+                        # Construct the example identifiers
+                        for idx in range(len(allevents)):
+                            img_idx = []
+                            for tel_type in selected_telescopes:
+                                img_idx.append(image_indices[tel_type][idx])
+                            if self.pointing_mode in ["subarray", "divergent"]:
+                                example_identifiers.append(
+                                    (file_idx, img_idx, array_pointing)
+                                )
+                            else:
+                                example_identifiers.append((file_idx, img_idx))
 
                 # Confirm that the files are consistent and merge them
                 if not self.telescopes:
