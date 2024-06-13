@@ -1,4 +1,8 @@
 import sys
+import pprint
+
+pprint.pprint(sys.path)
+
  
 # append the path of the
 # parent directory
