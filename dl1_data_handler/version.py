@@ -79,7 +79,7 @@ if name == "nt":
 
 
 def get_git_describe_version():
-    """return the string output of git desribe"""
+    """return the string output of git describe"""
     try:
         repo_url = "https://github.com/cta-observatory/dl1-data-handler/"
         output_lines = subprocess.check_output(
