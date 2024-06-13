@@ -6,7 +6,6 @@ from .reader import *
 from .table_definitions import *
 from .transforms import *'''
 
-from .version import get_version
-from .version import get_version_pypi
+from .version import *
 
 __version__ = get_version(pep440=False)
