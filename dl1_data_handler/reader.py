@@ -203,24 +203,24 @@ class DLDataReader:
                 if table.split("/")[-2] == "images" and self.image_channels is not None:
                     # Check the transform value used for the file compression
                     if (
-                        "image_TRANSFORM_SCALE"
+                        "CTAFIELD_3_TRANSFORM_SCALE"
                         in self.files[first_file].root[table]._v_attrs
                         and self.image_scale is None
                     ):
                         self.image_scale = (
                             self.files[first_file]
                             .root[table]
-                            ._v_attrs["image_TRANSFORM_SCALE"]
+                            ._v_attrs["CTAFIELD_3_TRANSFORM_SCALE"]
                         )
                     if (
-                        "peak_time_TRANSFORM_SCALE"
+                        "CTAFIELD_4_TRANSFORM_SCALE"
                         in self.files[first_file].root[table]._v_attrs
                         and self.peak_time_scale is None
                     ):
                         self.peak_time_scale = (
                             self.files[first_file]
                             .root[table]
-                            ._v_attrs["peak_time_TRANSFORM_SCALE"]
+                            ._v_attrs["CTAFIELD_4_TRANSFORM_SCALE"]
                         )
 
         self.simulation_info = None
@@ -750,7 +750,7 @@ class DLDataReader:
                         in self.files[first_file].root.dl1.event.telescope.images
                     ):
                         if (
-                            "image_TRANSFORM_SCALE"
+                            "CTAFIELD_3_TRANSFORM_SCALE"
                             in self.files[first_file]
                             .root.dl1.event.telescope.images[tel_table]
                             ._v_attrs
@@ -759,10 +759,10 @@ class DLDataReader:
                             self.image_scale = (
                                 self.files[first_file]
                                 .root.dl1.event.telescope.images[tel_table]
-                                ._v_attrs["image_TRANSFORM_SCALE"]
+                                ._v_attrs["CTAFIELD_3_TRANSFORM_SCALE"]
                             )
                         if (
-                            "peak_time_TRANSFORM_SCALE"
+                            "CTAFIELD_4_TRANSFORM_SCALE"
                             in self.files[first_file]
                             .root.dl1.event.telescope.images[tel_table]
                             ._v_attrs
@@ -771,7 +771,7 @@ class DLDataReader:
                             self.peak_time_scale = (
                                 self.files[first_file]
                                 .root.dl1.event.telescope.images[tel_table]
-                                ._v_attrs["peak_time_TRANSFORM_SCALE"]
+                                ._v_attrs["CTAFIELD_4_TRANSFORM_SCALE"]
                             )
 
             self.pixel_positions, self.num_pixels = self._construct_pixel_positions(
