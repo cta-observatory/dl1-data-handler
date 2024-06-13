@@ -2,7 +2,7 @@ import sys
 sys.path.append('//home/runner/work/dl1-data-handler/dl1-data-handler/dl1-data-handler')
 
 #from ..dl1_data_handler.dl1_data_handler import get_version_pypi
-import get_version_pypi
+import dl1-data-handler
 def get_version():
     return get_version_pypi()
 
