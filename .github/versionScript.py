@@ -1,6 +1,6 @@
 import sys
+from .. import dl1_data_handler 
 
-from dl1-data-handler.dl1-data-handler.dl1_data_handler import version
 def get_version():
     return get_version_pypi()
 
