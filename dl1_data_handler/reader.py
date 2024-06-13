@@ -68,7 +68,14 @@ class DLDataReader:
         self.subarray_shower = self.files[
             first_file
         ].root.simulation.event.subarray.shower
-        self.data_model_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
+        self.data_format_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
+        if int(self.data_format_version.split(".")[0].replace("v", "")) < 6:
+            raise Exception(
+                "Provided CTAO data format version is '{}' (must be >= v.6.0.0).".format(
+                    self.data_model_version
+                )
+            )
+
         self.process_type = self._v_attrs["CTA PROCESS TYPE"]
         self.instrument_id = self._v_attrs["CTA INSTRUMENT ID"]
         # Set class weights to None
