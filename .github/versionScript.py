@@ -1,17 +1,12 @@
 import sys
-import pprint
-print(sys.path)
+import os
 
- 
-# append the path of the
-# parent directory
 sys.path.append("..")
-pprint.pprint(sys.path)
 
-#from dl1_data_handler import get_version_pypi
+from ..dl1_data_handler.dl1_data_handler import get_version_pypi
 
 def get_version():
-    return 0#get_version_pypi()
+    return get_version_pypi()
 
 
 if __name__ == "__main__":
