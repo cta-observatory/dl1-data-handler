@@ -1264,7 +1264,7 @@ class DLDataReader:
     # First extract a raw 1D vector and transform it into a 2D image using a
     # mapping table. When 'indexed_conv' is selected this function should
     # return the unmapped vector.
-    def _get_image(self, child, tel_type, image_index, parameter_table=-1):
+    def _get_image(self, child, tel_type, image_index):
         vector = np.zeros(
             shape=(
                 self.num_pixels[self._get_camera_type(tel_type)],
@@ -1279,8 +1279,6 @@ class DLDataReader:
                 record = child[image_index]
                 for i, channel in enumerate(self.image_channels):
                     cleaning_mask = "image_mask"
-                    if parameter_table >= 0:
-                        cleaning_mask += str(parameter_table)
                     mask = record[cleaning_mask]
                     if "image" in channel:
                         vector[:, i] = record["image"]
