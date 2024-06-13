@@ -1,4 +1,6 @@
-from dl1_data_handler.dl1_data_handler.version import get_version_pypi  
+import sys
+sys.path.append('/dl1_data_handler/dl1_data_handler/version')
+from version import get_version_pypi
 
 def get_version():
     return get_version_pypi()
