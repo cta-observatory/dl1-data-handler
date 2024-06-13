@@ -1291,10 +1291,16 @@ class DLDataReader:
                     if "clean" in channel or "mask" in channel:
                         vector[:, i] *= mask
                     # Apply the transform to recover orginal floating point values if the file were compressed
-                    if "image" in channel and self.image_scale:
-                        vector[:, i] /= self.image_scale
-                    if "time" in channel and self.image_scale:
-                        vector[:, i] /= self.peak_time_scale
+                    if "image" in channel:
+                        if self.image_scale > 0:
+                            vector[:, i] /= self.image_scale
+                        if self.image_offset > 0:
+                            vector[:, i] -= self.image_offset
+                    if "time" in channel:
+                        if self.peak_time_scale > 0:
+                            vector[:, i] /= self.peak_time_scale
+                        if self.peak_time_offset > 0:
+                            vector[:, i] -= self.peak_time_offset
 
         # If 'indexed_conv' is selected, we only need the unmapped vector.
         if (
