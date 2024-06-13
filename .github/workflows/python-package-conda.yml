@@ -98,3 +98,38 @@ jobs:
 
 
         
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04]
+        pyv: ["3.10"]
+      max-parallel: 5
+    runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Set up Python ${{ matrix.pyv }}
+      run: |
+        conda install -y python=${{ matrix.pyv }}
+    - name: Add conda to system path
+      run: |
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA/bin >> $GITHUB_PATH
+    - name: Get version
+      run: |
+        output=$(python .github/versionScript.py)
+        echo "version=$output" >> $GITHUB_OUTPUT
+      id: step1  
+    - name: Write
+      uses: 1arp/create-a-file-action@0.4.5
+      with:
+        path: '.'
+        isAbsolutePath: true
+        file: '.github/versionBackup.txt'
+        content: |
+          ${{ steps.step1.outputs.version }}
+          
