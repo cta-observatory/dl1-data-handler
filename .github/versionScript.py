@@ -3,7 +3,7 @@ import sys
 sys.path.append("..")
 
 def get_version():
-    return get_version_pypi()
+    return get_version()
 
 
 if __name__ == "__main__":
