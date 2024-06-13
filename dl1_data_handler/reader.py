@@ -69,9 +69,6 @@ class DLDataReader:
             first_file
         ].root.simulation.event.subarray.shower
         self.data_model_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
-        self.data_model_mainversion = int(
-            self.data_model_version.split(".")[0].replace("v", "")
-        )
         self.process_type = self._v_attrs["CTA PROCESS TYPE"]
         self.instrument_id = self._v_attrs["CTA INSTRUMENT ID"]
         # Set class weights to None
@@ -272,7 +269,7 @@ class DLDataReader:
                 # Read simulation information from each observation needed for pyIRF
                 if self.process_type == "Simulation":
                     self.simulation_info = self._construct_simulated_info(
-                        f, self.simulation_info, file_type="stage1"
+                        f, self.simulation_info
                     )
                 # Telescope selection
                 (
@@ -1185,13 +1182,12 @@ class DLDataReader:
                 )
         return
 
-    def _construct_simulated_info(self, file, simulation_info, file_type="stage1"):
+    def _construct_simulated_info(self, file, simulation_info):
         """
         Construct the simulated_info from the DL1 hdf5 file for the pyIRF SimulatedEventsInfo table & GammaBoard.
         Parameters
         ----------
             file (hdf5 file): file containing the simulation information
-            file_type (string): type of file (Valid option: 'stage1' or 'dl1dh')
             simulation_info (dict): dictionary of pyIRF simulation info
 
         Returns
@@ -1200,34 +1196,18 @@ class DLDataReader:
 
         """
 
-        if file_type == "stage1":
-            simulation_table = file.root.configuration.simulation
-            runs = simulation_table._f_get_child("run")
-            shower_reuse = max(np.array(runs.cols._f_col("shower_reuse")))
-            if self.data_model_mainversion >= 4:
-                n_showers = sum(np.array(runs.cols._f_col("n_showers"))) * shower_reuse
-            else:
-                n_showers = (
-                    sum(np.array(runs.cols._f_col("num_showers"))) * shower_reuse
-                )
-            energy_range_min = min(np.array(runs.cols._f_col("energy_range_min")))
-            energy_range_max = max(np.array(runs.cols._f_col("energy_range_max")))
-            max_scatter_range = max(np.array(runs.cols._f_col("max_scatter_range")))
-            spectral_index = np.array(runs.cols._f_col("spectral_index"))[0]
-            min_viewcone_radius = max(np.array(runs.cols._f_col("min_viewcone_radius")))
-            max_viewcone_radius = max(np.array(runs.cols._f_col("max_viewcone_radius")))
-            min_alt = min(np.array(runs.cols._f_col("min_alt")))
-            max_alt = max(np.array(runs.cols._f_col("max_alt")))
-        elif file_type == "dl1dh":
-            n_showers = file.root._v_attrs["num_showers"]
-            energy_range_min = file.root._v_attrs["energy_range_min"]
-            energy_range_max = file.root._v_attrs["energy_range_max"]
-            max_scatter_range = file.root._v_attrs["max_scatter_range"]
-            spectral_index = file.root._v_attrs["spectral_index"]
-            min_viewcone_radius = file.root._v_attrs["min_viewcone_radius"]
-            max_viewcone_radius = file.root._v_attrs["max_viewcone_radius"]
-            min_alt = file.root._v_attrs["min_alt"]
-            max_alt = file.root._v_attrs["max_alt"]
+        simulation_table = file.root.configuration.simulation
+        runs = simulation_table._f_get_child("run")
+        shower_reuse = max(np.array(runs.cols._f_col("shower_reuse")))
+        n_showers = sum(np.array(runs.cols._f_col("n_showers"))) * shower_reuse
+        energy_range_min = min(np.array(runs.cols._f_col("energy_range_min")))
+        energy_range_max = max(np.array(runs.cols._f_col("energy_range_max")))
+        max_scatter_range = max(np.array(runs.cols._f_col("max_scatter_range")))
+        spectral_index = np.array(runs.cols._f_col("spectral_index"))[0]
+        min_viewcone_radius = max(np.array(runs.cols._f_col("min_viewcone_radius")))
+        max_viewcone_radius = max(np.array(runs.cols._f_col("max_viewcone_radius")))
+        min_alt = min(np.array(runs.cols._f_col("min_alt")))
+        max_alt = max(np.array(runs.cols._f_col("max_alt")))
 
         if simulation_info:
             simulation_info["n_showers"] += float(n_showers)
@@ -1626,10 +1606,9 @@ class DLDataReader:
             tel_type = row["tel_description"].decode()
             if tel_type not in telescopes:
                 telescopes[tel_type] = []
-            if self.data_model_mainversion > 1:
-                camera_index = row["camera_index"]
-                if self._get_camera_type(tel_type) not in camera2index:
-                    camera2index[self._get_camera_type(tel_type)] = camera_index
+            camera_index = row["camera_index"]
+            if self._get_camera_type(tel_type) not in camera2index:
+                camera2index[self._get_camera_type(tel_type)] = camera_index
             telescopes[tel_type].append(row["tel_id"])
 
         # Enforce an automatic minimal telescope selection cut:
@@ -1671,27 +1650,13 @@ class DLDataReader:
         num_pixels (dict): dictionary of `{cameras: num_pixels}`
 
         """
-        if self.data_model_mainversion < 4:
-            cameras = [
-                description.decode("UTF-8").split("_")[-1]
-                for description in telescope_type_information.optics.cols._f_col(
-                    "description"
-                )
-            ]
-        else:
-            cameras = self.camera2index.keys()
 
         pixel_positions = {}
         num_pixels = {}
-        for camera in cameras:
-            if not self.data_model_version.startswith("v1"):
-                cam_geom = telescope_type_information.camera._f_get_child(
-                    "geometry_{}".format(self.camera2index[camera])
-                )
-            else:
-                cam_geom = telescope_type_information.camera._f_get_child(
-                    "geometry_{}".format(camera)
-                )
+        for camera in self.camera2index.keys():
+            cam_geom = telescope_type_information.camera._f_get_child(
+                "geometry_{}".format(self.camera2index[camera])
+            )
             pix_x = np.array(cam_geom.cols._f_col("pix_x"))
             pix_y = np.array(cam_geom.cols._f_col("pix_y"))
             num_pixels[camera] = len(pix_x)
