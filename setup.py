@@ -32,7 +32,7 @@ setup(
         "jupyter",
         "pandas",
         "pytest-cov",
-        "tables>=3.7",
+        "tables>=3.8",
     ],
     entry_points={
         "console_scripts": [
