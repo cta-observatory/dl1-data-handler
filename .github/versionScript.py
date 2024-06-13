@@ -1,7 +1,7 @@
-from ..dl1_data_handler.version import get_version_pypi
+from ..dl1_data_handler import version
 
 def get_version():
-    return get_version_pypi()
+    return version.get_version_pypi()
 
 
 if __name__ == "__main__":
