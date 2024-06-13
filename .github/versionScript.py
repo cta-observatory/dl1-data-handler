@@ -1,7 +1,6 @@
 import sys
 import pprint
-
-pprint.pprint(sys.path)
+print(sys.path)
 
  
 # append the path of the
