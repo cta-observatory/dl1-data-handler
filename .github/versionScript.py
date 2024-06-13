@@ -1,4 +1,10 @@
-from dl1_data_handler.dl1_data_handler import version
+import sys
+ 
+# append the path of the
+# parent directory
+sys.path.append("..")
+
+from dl1_data_handler import version
 
 def get_version():
     return version.get_version_pypi()
