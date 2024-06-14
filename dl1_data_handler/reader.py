@@ -133,16 +133,19 @@ class DLDataReader:
             self.telescope_pointings = {}
             for tel_id in self.tel_ids:
                 with lock:
-                    self.telescope_pointings["tel_{:03d}".format(tel_id)] = self.files[
-                        first_file
-                    ].root.configuration.telescope.pointing._f_get_child(
-                        "tel_{:03d}".format(tel_id)
+                    self.telescope_pointings["tel_{:03d}".format(tel_id)] = read_table(
+                        self.files[first_file],
+                        "/configuration/telescope/pointing/tel_{:03d}".format(tel_id),
                     )
 
             # Only fix telescope pointings valid!
             # No divergent pointing implemented!
-            pointing_alt = self.telescope_pointings["tel_{:03d}".format(tel_id)].cols._f_col("telescope_pointing_altitude")[0]
-            pointing_az = self.telescope_pointings["tel_{:03d}".format(tel_id)].cols._f_col("telescope_pointing_azimuth")[0]
+            pointing_alt = self.telescope_pointings["tel_{:03d}".format(tel_id)][
+                "telescope_pointing_altitude"
+            ][0]
+            pointing_az = self.telescope_pointings["tel_{:03d}".format(tel_id)][
+                "telescope_pointing_azimuth"
+            ][0]
             # Set the telescope pointing to the delta Alt/Az tranform
             if transforms is not None:
                 for transform in transforms:
