@@ -32,7 +32,6 @@ class DLDataReader:
         file_list,
         example_identifiers_file=None,
         mode="mono",
-        pointing_mode="fix_subarray",
         selected_telescope_types=None,
         selected_telescope_ids=None,
         multiplicity_selection=None,
@@ -65,6 +64,7 @@ class DLDataReader:
         self.subarray_layout = self.files[
             first_file
         ].root.configuration.instrument.subarray.layout
+        self.tel_ids = self.subarray_layout.cols._f_col("tel_id")
         self.subarray_shower = self.files[
             first_file
         ].root.simulation.event.subarray.shower
@@ -109,21 +109,6 @@ class DLDataReader:
             event_info = []
         self.event_info = event_info
 
-        # Set pointing mode
-        # Fix_subarray: Fix subarray pointing (MC production)
-        # Subarray: Subarray pointing with different pointing over time (Operation or MC production with different pointing)
-        # Fix_divergent: Fix divergent pointing (MC production)
-        # Divergent: Divergent pointing with different pointing over time (Operation or MC production with different pointing)
-        if pointing_mode in ["fix_subarray", "subarray", "fix_divergent", "divergent"]:
-            self.pointing_mode = pointing_mode
-        else:
-            raise ValueError(
-                "Invalid pointing mode selection '{}'. Valid options: "
-                "'fix_subarray', 'subarray', 'fix_divergent', 'divergent'".format(
-                    pointing_mode
-                )
-            )
-
         if selected_telescope_ids is None:
             selected_telescope_ids = []
         (
@@ -141,6 +126,18 @@ class DLDataReader:
 
         if mapping_settings is None:
             mapping_settings = {}
+
+        # Telescope pointings
+        self.telescope_pointings = None
+        if self.process_type == "Simulation":
+            self.pointing = {}
+            for tel_id in self.tel_ids:
+                with lock:
+                    self.pointing["tel_{:03d}".format(tel_id)] = self.files[
+                        first_file
+                    ].root.configuration.telescope.pointing._f_get_child(
+                        "tel_{:03d}".format(tel_id)
+                    )
 
         # AI-based trigger system
         self.trigger_settings = trigger_settings
@@ -209,9 +206,7 @@ class DLDataReader:
 
         # Get offset and scaling of images
         if self.image_channels is not None:
-            first_tel_table = "tel_{:03d}".format(
-                self.subarray_layout.cols._f_col("tel_id")[0]
-            )
+            first_tel_table = "tel_{:03d}".format(self.tel_ids[0])
             with lock:
                 img_table_v_attrs = (
                     self.files[first_file]
@@ -378,10 +373,6 @@ class DLDataReader:
                                         < filter["max_value"]
                                     ]
 
-                    # TODO: Fix pointing over time (see ctapipe issue 1484 & 1562)
-                    if self.pointing_mode in ["subarray", "divergent"]:
-                        array_pointing = 0
-
                     # Track number of events for each particle type
                     if self.process_type == "Simulation":
                         self.simulated_particles["total"] += len(allevents)
@@ -400,26 +391,16 @@ class DLDataReader:
                             allevents["img_index"],
                             allevents["tel_id"],
                         ):
-                            if self.pointing_mode in ["subarray", "divergent"]:
-                                example_identifiers.append(
-                                    (file_idx, sim_idx, img_idx, tel_id, array_pointing)
-                                )
-                            else:
-                                example_identifiers.append(
-                                    (file_idx, sim_idx, img_idx, tel_id)
-                                )
+                            example_identifiers.append(
+                                (file_idx, sim_idx, img_idx, tel_id)
+                            )
                     else:
                         # Construct the example identifiers
                         for img_idx, tel_id in zip(
                             allevents["img_index"],
                             allevents["tel_id"],
                         ):
-                            if self.pointing_mode in ["subarray", "divergent"]:
-                                example_identifiers.append(
-                                    (file_idx, img_idx, tel_id, array_pointing)
-                                )
-                            else:
-                                example_identifiers.append((file_idx, img_idx, tel_id))
+                            example_identifiers.append((file_idx, img_idx, tel_id))
 
                 elif self.mode == "stereo":
                     # Read the trigger table.
@@ -451,12 +432,7 @@ class DLDataReader:
                     event_id = allevents["event_id"]
                     tels_with_trigger = np.array(allevents["tels_with_trigger"])
                     tel_id_to_trigger_idx = {
-                        tel_id: idx
-                        for idx, tel_id in enumerate(
-                            read_table(f, "/configuration/instrument/subarray/layout/")[
-                                "tel_id"
-                            ]
-                        )
+                        tel_id: idx for idx, tel_id in enumerate(self.tel_ids)
                     }
                     if self.process_type == "Simulation":
                         sim_indices = np.array(allevents["sim_index"], np.int32)
@@ -600,13 +576,6 @@ class DLDataReader:
                                 aftercuts_multiplicty_mask
                             ]
 
-                    # TODO: Fix pointing over time (see ctapipe issue 1484 & 1562)
-                    if self.pointing_mode == "subarray":
-                        array_pointings = 0
-                    elif self.pointing_mode == "divergent":
-                        tel_ids = np.hstack(list(selected_telescopes.values()))
-                        array_pointings = np.zeros(len(tel_ids), np.int8)
-
                     if self.process_type == "Simulation":
                         # Track number of events for each particle type
                         self.simulated_particles["total"] += len(sim_indices)
@@ -625,24 +594,14 @@ class DLDataReader:
                             img_idx = []
                             for tel_type in selected_telescopes:
                                 img_idx.append(image_indices[tel_type][idx])
-                            if self.pointing_mode in ["subarray", "divergent"]:
-                                example_identifiers.append(
-                                    (file_idx, sim_idx, img_idx, array_pointings)
-                                )
-                            else:
-                                example_identifiers.append((file_idx, sim_idx, img_idx))
+                            example_identifiers.append((file_idx, sim_idx, img_idx))
                     else:
                         # Construct the example identifiers
                         for idx in range(len(allevents)):
                             img_idx = []
                             for tel_type in selected_telescopes:
                                 img_idx.append(image_indices[tel_type][idx])
-                            if self.pointing_mode in ["subarray", "divergent"]:
-                                example_identifiers.append(
-                                    (file_idx, img_idx, array_pointing)
-                                )
-                            else:
-                                example_identifiers.append((file_idx, img_idx))
+                            example_identifiers.append((file_idx, img_idx))
 
                 # Confirm that the files are consistent and merge them
                 if not self.telescopes:
@@ -878,40 +837,6 @@ class DLDataReader:
                         len(self.image_channels),  # number of channels
                     )
 
-        if self.pointing_mode == "fix_subarray":
-            subarray_pointing = self.files[
-                first_file
-            ].root.dl1.monitoring.subarray.pointing
-            self.pointing = np.array(
-                [
-                    subarray_pointing[0]["array_altitude"],
-                    subarray_pointing[0]["array_azimuth"],
-                ],
-                np.float32,
-            )
-            # Set the telescope pointing to the delta Alt/Az tranform
-            if transforms is not None:
-                for transform in transforms:
-                    if transform.name == "deltaAltAz_fix_subarray":
-                        transform.set_tel_pointing(self.pointing)
-
-        elif self.pointing_mode == "fix_divergent":
-            self.pointing = {}
-            for tel_type in selected_telescopes:
-                tel_ids = np.array(selected_telescopes[tel_type])
-                for tel_id in tel_ids:
-                    tel_table = "tel_{:03d}".format(tel_id)
-                    telescope_pointing = self.files[
-                        first_file
-                    ].root.dl1.monitoring.telescope.pointing._f_get_child(tel_table)
-                    self.pointing[tel_id] = np.array(
-                        [
-                            telescope_pointing[0]["altitude"],
-                            telescope_pointing[0]["azimuth"],
-                        ],
-                        np.float32,
-                    )
-
         if self.process_type == "Simulation":
             self._construct_unprocessed_example_description(
                 self.subarray_layout,
@@ -1017,17 +942,6 @@ class DLDataReader:
                         "tel_type": self.tel_type,
                         "base_name": "parameters",
                         "shape": ((1,) + (len(self.parameter_list),)),
-                        "dtype": np.dtype(np.float32),
-                    }
-                )
-
-            if self.pointing_mode == "divergent":
-                self.unprocessed_example_description.append(
-                    {
-                        "name": "pointing",
-                        "tel_type": self.tel_type,
-                        "base_name": "pointing",
-                        "shape": (2,),
                         "dtype": np.dtype(np.float32),
                     }
                 )
@@ -1140,17 +1054,6 @@ class DLDataReader:
                         ]
                     )
 
-                if self.pointing_mode in ["divergent"]:
-                    self.unprocessed_example_description.append(
-                        {
-                            "name": tel_type + "_pointings",
-                            "tel_type": tel_type,
-                            "base_name": "pointings",
-                            "shape": (num_tels,) + (2,),
-                            "dtype": np.dtype(np.float32),
-                        }
-                    )
-
                 for col_name in self.subarray_info:
                     col = subarray_table.cols._f_col(col_name)
                     self.unprocessed_example_description.append(
@@ -1162,17 +1065,6 @@ class DLDataReader:
                             "dtype": col.dtype,
                         }
                     )
-
-        if self.pointing_mode == "subarray":
-            self.unprocessed_example_description.append(
-                {
-                    "name": "pointing",
-                    "tel_type": None,
-                    "base_name": "pointing",
-                    "shape": (2,),
-                    "dtype": np.dtype(np.float32),
-                }
-            )
 
         # Add event info to description
         if self.process_type == "Simulation":
@@ -1816,30 +1708,6 @@ class DLDataReader:
                         parameter_list.append(np.nan)
                 parameters_lists.append(np.array(parameter_list, dtype=np.float32))
 
-            if self.pointing_mode == "divergent":
-                child = None
-                with lock:
-                    tel_table = "tel_{:03d}".format(tel_id)
-                    if (
-                        tel_table
-                        in self.files[filename].root.dl1.monitoring.telescope.pointing
-                    ):
-                        child = self.files[
-                            filename
-                        ].root.dl1.monitoring.telescope.pointing._f_get_child(tel_table)
-                if child:
-                    pointings.append(
-                        np.array(
-                            [
-                                child[pointing_info[i]]["altitude"],
-                                child[pointing_info[i]]["azimuth"],
-                            ],
-                            np.float32,
-                        )
-                    )
-                else:
-                    pointings.append(np.array([np.nan, np.nan], np.float32))
-
         example = [np.array(trigger_info >= 0, np.int8)]
         if self.waveform_type is not None:
             example.extend([np.stack(waveforms)])
@@ -1849,8 +1717,6 @@ class DLDataReader:
             example.extend([np.stack(images)])
         if self.parameter_list is not None:
             example.extend([np.stack(parameters_lists)])
-        if self.pointing_mode == "divergent":
-            example.extend([np.stack(pointings)])
         example.extend([np.stack(info) for info in subarray_info])
         return example
 
@@ -1973,46 +1839,9 @@ class DLDataReader:
             )
             example.extend([np.stack(info) for info in subarray_info])
 
-            if self.pointing_mode == "subarray":
-                pointing_info = identifiers[4]
-                with lock:
-                    subarray_pointing = self.files[
-                        filename
-                    ].root.dl1.monitoring.subarray.pointing
-                example.append(
-                    np.array(
-                        [
-                            subarray_pointing[pointing_info]["array_altitude"],
-                            subarray_pointing[pointing_info]["array_azimuth"],
-                        ],
-                        np.float32,
-                    )
-                )
-            elif self.pointing_mode == "divergent":
-                pointing_info = identifiers[4]
-                with lock:
-                    tel_table = "tel_{:03d}".format(tel_id)
-                    if (
-                        tel_table
-                        in self.files[filename].root.dl1.monitoring.telescope.pointing
-                    ):
-                        child = self.files[
-                            filename
-                        ].root.dl1.monitoring.telescope.pointing._f_get_child(tel_table)
-                example.append(
-                    np.array(
-                        [
-                            child[pointing_info]["altitude"],
-                            child[pointing_info]["azimuth"],
-                        ],
-                        np.float32,
-                    )
-                )
-
         elif self.mode == "stereo":
-            # Get a list of images and/or image parameters, an array of binary trigger values and telescope pointings
+            # Get a list of images and/or image parameters, an array of binary trigger values
             # for each selected telescope type
-            pointing_info = None
             random_trigger_patch = False
             if self.process_type == "Simulation":
                 nrow = identifiers[1]
@@ -2023,12 +1852,8 @@ class DLDataReader:
                     )
                 elif self.include_nsb_patches == "all":
                     random_trigger_patch = True
-                if self.pointing_mode == "divergent":
-                    pointing_info = identifiers[3]
             else:
                 trigger_info = identifiers[1]
-                if self.pointing_mode == "divergent":
-                    pointing_info = identifiers[2]
 
             example = []
             for ind, tel_type in enumerate(self.selected_telescopes):
@@ -2040,22 +1865,6 @@ class DLDataReader:
                     random_trigger_patch,
                 )
                 example.extend(tel_type_example)
-
-            if self.pointing_mode == "subarray":
-                pointing_info = identifiers[3]
-                with lock:
-                    subarray_pointing = self.files[
-                        filename
-                    ].root.dl1.monitoring.subarray.pointing
-                example.append(
-                    np.array(
-                        [
-                            subarray_pointing[pointing_info]["array_altitude"],
-                            subarray_pointing[pointing_info]["array_azimuth"],
-                        ],
-                        np.float32,
-                    )
-                )
 
         # Load event info
         if self.process_type == "Simulation":
