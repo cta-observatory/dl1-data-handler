@@ -139,6 +139,13 @@ class DLDataReader:
                         "tel_{:03d}".format(tel_id)
                     )
 
+            # Set the telescope pointing to the delta Alt/Az tranform
+            if transforms is not None:
+                for transform in transforms:
+                    if transform.name == "deltaAltAz":
+                        transform.set_tel_pointing(self.pointing)
+
+
         # AI-based trigger system
         self.trigger_settings = trigger_settings
         self.reco_cherenkov_photons, self.include_nsb_patches = False, None

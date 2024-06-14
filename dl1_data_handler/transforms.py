@@ -86,7 +86,7 @@ class MCEnergy(Transform):
         return example
 
 
-class DeltaAltAz_fix_subarray(Transform):
+class DeltaAltAz(Transform):
     def __init__(
         self,
         base_name="direction",
@@ -97,7 +97,7 @@ class DeltaAltAz_fix_subarray(Transform):
     ):
         super().__init__()
 
-        self.name = "deltaAltAz_fix_subarray"
+        self.name = "deltaAltAz"
         self.base_name = base_name
         self.alt_col_name = alt_col_name
         self.az_col_name = az_col_name
@@ -141,51 +141,6 @@ class DeltaAltAz_fix_subarray(Transform):
             elif des["base_name"] == self.base_name:
                 example.append(np.array([alt, az]))
         return example
-
-
-class AltAz(Transform):
-    def __init__(
-        self,
-        name="direction",
-        alt_col_name="true_alt",
-        az_col_name="true_az",
-        deg2rad=True,
-    ):
-        super().__init__()
-        self.name = name
-        self.alt_col_name = alt_col_name
-        self.az_col_name = az_col_name
-        self.deg2rad = deg2rad
-        self.shape = 2
-        self.dtype = np.dtype("float32")
-        self.unit = "rad"
-
-    def describe(self, description):
-        self.description = description
-        self.description.append(
-            {
-                "name": self.name,
-                "tel_type": None,
-                "base_name": self.name,
-                "shape": self.shape,
-                "dtype": self.dtype,
-                "unit": self.unit,
-            }
-        )
-        return self.description
-
-    def __call__(self, example):
-        for i, (val, des) in enumerate(
-            itertools.zip_longest(example, self.description)
-        ):
-            if des["base_name"] == self.alt_col_name:
-                alt = np.radians(example[i]) if self.deg2rad else example[i]
-            elif des["base_name"] == self.az_col_name:
-                az = np.radians(example[i]) if self.deg2rad else example[i]
-            elif des["base_name"] == self.name:
-                example.append(np.array([alt, az]))
-        return example
-
 
 class CoreXY(Transform):
     def __init__(self, name="impact"):
