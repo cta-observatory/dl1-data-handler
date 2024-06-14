@@ -130,21 +130,24 @@ class DLDataReader:
         # Telescope pointings
         self.telescope_pointings = None
         if self.process_type == "Simulation":
-            self.pointing = {}
+            self.telescope_pointings = {}
             for tel_id in self.tel_ids:
                 with lock:
-                    self.pointing["tel_{:03d}".format(tel_id)] = self.files[
+                    self.telescope_pointings["tel_{:03d}".format(tel_id)] = self.files[
                         first_file
                     ].root.configuration.telescope.pointing._f_get_child(
                         "tel_{:03d}".format(tel_id)
                     )
 
+            # Only fix telescope pointings valid!
+            # No divergent pointing implemented!
+            pointing_alt = self.telescope_pointings["tel_{:03d}".format(tel_id)].cols._f_col("telescope_pointing_altitude")[0]
+            pointing_az = self.telescope_pointings["tel_{:03d}".format(tel_id)].cols._f_col("telescope_pointing_azimuth")[0]
             # Set the telescope pointing to the delta Alt/Az tranform
             if transforms is not None:
                 for transform in transforms:
                     if transform.name == "deltaAltAz":
-                        transform.set_tel_pointing(self.pointing)
-
+                        transform.set_pointing(pointing_alt, pointing_az)
 
         # AI-based trigger system
         self.trigger_settings = trigger_settings
