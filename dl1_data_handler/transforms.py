@@ -106,7 +106,7 @@ class DeltaAltAz(Transform):
         self.shape = 2
         self.dtype = np.dtype("float32")
         self.unit = "rad"
-        self.tel_pointing = np.array([0.0, 0.0], dtype=np.float32)
+        self.pointing_alt, self.pointing_az = None, None
 
     def describe(self, description):
         self.description = description
@@ -122,8 +122,9 @@ class DeltaAltAz(Transform):
         )
         return self.description
 
-    def set_tel_pointing(self, tel_pointing):
-        self.tel_pointing = tel_pointing
+    def set_pointing(self, pointing_alt, pointing_az):
+        self.pointing_alt = pointing_alt
+        self.pointing_az = pointing_az
         return
 
     def __call__(self, example):
@@ -132,12 +133,12 @@ class DeltaAltAz(Transform):
         ):
             if des["base_name"] == self.alt_col_name:
                 alt = np.radians(example[i]) if self.deg2rad else example[i]
-                alt -= self.tel_pointing[0]
+                alt -= self.pointing_alt
             elif des["base_name"] == self.az_col_name:
                 az = np.radians(example[i]) if self.deg2rad else example[i]
                 if self.north_pointing_correction and az > 3*np.pi/2:
                     az -= 2 * np.pi
-                az -= self.tel_pointing[1]
+                az -= self.pointing_az
             elif des["base_name"] == self.base_name:
                 example.append(np.array([alt, az]))
         return example
