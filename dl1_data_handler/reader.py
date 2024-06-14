@@ -166,15 +166,18 @@ class DLDataReader:
 
         # Raw (R0) or calibrated (R1) waveform
         self.waveform_type = None
+        self.waveform_scale, self.waveform_offset = None, None
         if waveform_settings is not None:
             self.waveform_type = waveform_settings["waveform_type"]
             self.waveform_max_from_simulation = waveform_settings[
                 "waveform_max_from_simulation"
             ]
             if "raw" in self.waveform_type:
+                first_tel_table = "tel_{:03d}".format(self.tel_ids[0])
                 self.waveform_sequence_max_length = (
                     self.files[first_file]
-                    .root.r0.event.telescope.tel_001.coldescrs["waveform"]
+                    .root.r0.event.telescope._f_get_child(first_tel_table)
+                    .coldescrs["waveform"]
                     .shape[-1]
                 )
                 self.waveform_r0pedsub = waveform_settings["waveform_r0pedsub"]
@@ -184,13 +187,33 @@ class DLDataReader:
                         "waveform_FADC_offset"
                     ]
             if "calibrate" in self.waveform_type:
+                first_tel_table = "tel_{:03d}".format(self.tel_ids[0])
+                with lock:
+                    wvf_table_v_attrs = (
+                        self.files[first_file]
+                        .root.r1.event.telescope._f_get_child(first_tel_table)
+                        ._v_attrs
+                    )
+
                 self.waveform_sequence_max_length = (
                     self.files[first_file]
-                    .root.r1.event.telescope.tel_001.coldescrs["waveform"]
+                    .root.r1.event.telescope._f_get_child(first_tel_table)
+                    .coldescrs["waveform"]
                     .shape[-1]
                 )
                 self.waveform_r0pedsub = False
                 self.waveform_FADC_offset = None
+                # Check the transform value used for the file compression
+                if (
+                    "CTAFIELD_5_TRANSFORM_SCALE" in wvf_table_v_attrs
+                    and self.waveform_scale is None
+                ):
+                    self.waveform_scale = wvf_table_v_attrs[
+                        "CTAFIELD_5_TRANSFORM_SCALE"
+                    ]
+                    self.waveform_offset = wvf_table_v_attrs[
+                        "CTAFIELD_5_TRANSFORM_OFFSET"
+                    ]
             self.waveform_sequence_length = waveform_settings[
                 "waveform_sequence_length"
             ]
@@ -1284,10 +1307,27 @@ class DLDataReader:
         # waveform of all zeros with be loaded
         if waveform_index != -1 and child is not None:
             with lock:
-                vector = child[waveform_index]["waveform"]
+                vector = np.float32(child[waveform_index]["waveform"])
+                if "calibrate" in self.waveform_type:
+                    # Check if camera has one or two gain(s) and apply selection
+                    if vector.shape[0] == 1:
+                        vector = vector[0]
+                    else:
+                        selected_gain_channel = child[waveform_index][
+                            "selected_gain_channel"
+                        ][:, np.newaxis]
+                        vector = np.where(
+                            selected_gain_channel == 0, vector[0], vector[1]
+                        )
+
             if self.waveform_type is not None:
                 if "raw" in self.waveform_type:
                     vector = vector[0]
+                if "calibrate" in self.waveform_type:
+                    if self.waveform_scale > 0:
+                        vector /= self.waveform_scale
+                    if self.waveform_offset > 0:
+                        vector -= self.waveform_offset
                 waveform_max = np.argmax(np.sum(vector, axis=0))
             if self.waveform_max_from_simulation:
                 waveform_max = int((len(vector) / 2) - 1)
