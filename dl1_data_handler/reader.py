@@ -65,16 +65,18 @@ class DLDataReader:
             first_file
         ].root.configuration.instrument.subarray.layout
         self.tel_ids = self.subarray_layout.cols._f_col("tel_id")
-        self.subarray_shower = self.files[
-            first_file
-        ].root.simulation.event.subarray.shower
         self.data_format_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
         if int(self.data_format_version.split(".")[0].replace("v", "")) < 6:
             raise Exception(
-                f"Provided CTAO data format version is '{self.data_model_version}' (must be >= v.6.0.0)."
+                f"Provided CTAO data format version is '{self.data_format_version}' (must be >= v.6.0.0)."
             )
 
         self.process_type = self._v_attrs["CTA PROCESS TYPE"]
+        self.subarray_shower = None
+        if self.process_type == "Simulation":
+            self.subarray_shower = self.files[
+                first_file
+            ].root.simulation.event.subarray.shower
         self.instrument_id = self._v_attrs["CTA INSTRUMENT ID"]
         # Set class weights to None
         self.class_weight = None
@@ -126,10 +128,16 @@ class DLDataReader:
             mapping_settings = {}
 
         # Telescope pointings
-        self.telescope_pointings = None
-        self.pointing_alt, self.pointing_az = None, None
-        if self.process_type == "Simulation":
-            self.telescope_pointings = {}
+        self.telescope_pointings = {}
+        self.fix_pointing_alt, self.fix_pointing_az = None, None
+        if self.process_type == "Observation":
+            for tel_id in self.tel_ids:
+                with lock:
+                    self.telescope_pointings[f"tel_{tel_id:03d}"] = read_table(
+                        self.files[first_file],
+                        f"/dl1/monitoring/telescope/pointing/tel_{tel_id:03d}",
+                    )
+        elif self.process_type == "Simulation":
             for tel_id in self.tel_ids:
                 with lock:
                     self.telescope_pointings[f"tel_{tel_id:03d}"] = read_table(
@@ -137,19 +145,19 @@ class DLDataReader:
                         f"/configuration/telescope/pointing/tel_{tel_id:03d}",
                     )
 
-            # Only fix telescope pointings valid!
+            # Only fix telescope pointings valid for MCs!
             # No divergent pointing implemented!
-            self.pointing_alt = self.telescope_pointings[f"tel_{tel_id:03d}"][
+            self.fix_pointing_alt = self.telescope_pointings[f"tel_{tel_id:03d}"][
                 "telescope_pointing_altitude"
             ][0]
-            self.pointing_az = self.telescope_pointings[f"tel_{tel_id:03d}"][
+            self.fix_pointing_az = self.telescope_pointings[f"tel_{tel_id:03d}"][
                 "telescope_pointing_azimuth"
             ][0]
             # Set the telescope pointing to the delta Alt/Az tranform
             if transforms is not None:
                 for transform in transforms:
                     if transform.name == "deltaAltAz":
-                        transform.set_pointing(self.pointing_alt, self.pointing_az)
+                        transform.set_pointing(self.fix_pointing_alt, self.fix_pointing_az)
 
         # AI-based trigger system
         self.trigger_settings = trigger_settings
@@ -165,7 +173,7 @@ class DLDataReader:
 
         # Raw (R0) or calibrated (R1) waveform
         self.waveform_type = None
-        self.waveform_scale, self.waveform_offset = None, None
+        self.waveform_scale, self.waveform_offset = 0.0, 0
         if waveform_settings is not None:
             self.waveform_type = waveform_settings["waveform_type"]
             self.waveform_max_from_simulation = waveform_settings[
@@ -205,7 +213,6 @@ class DLDataReader:
                 # Check the transform value used for the file compression
                 if (
                     "CTAFIELD_5_TRANSFORM_SCALE" in wvf_table_v_attrs
-                    and self.waveform_scale is None
                 ):
                     self.waveform_scale = wvf_table_v_attrs[
                         "CTAFIELD_5_TRANSFORM_SCALE"
@@ -230,8 +237,8 @@ class DLDataReader:
         self.image_channels = None
         if image_settings is not None:
             self.image_channels = image_settings["image_channels"]
-        self.image_scale, self.image_offset = None, None
-        self.peak_time_scale, self.peak_time_offset = None, None
+        self.image_scale, self.image_offset = 0.0, 0
+        self.peak_time_scale, self.peak_time_offset = 0.0, 0
         # Image parameters (DL1b)
         self.parameter_list = None
         if parameter_settings is not None:
@@ -249,13 +256,11 @@ class DLDataReader:
             # Check the transform value used for the file compression
             if (
                 "CTAFIELD_3_TRANSFORM_SCALE" in img_table_v_attrs
-                and self.image_scale is None
             ):
                 self.image_scale = img_table_v_attrs["CTAFIELD_3_TRANSFORM_SCALE"]
                 self.image_offset = img_table_v_attrs["CTAFIELD_3_TRANSFORM_OFFSET"]
             if (
                 "CTAFIELD_4_TRANSFORM_SCALE" in img_table_v_attrs
-                and self.peak_time_scale is None
             ):
                 self.peak_time_scale = img_table_v_attrs["CTAFIELD_4_TRANSFORM_SCALE"]
                 self.peak_time_offset = img_table_v_attrs["CTAFIELD_4_TRANSFORM_OFFSET"]
@@ -734,39 +739,8 @@ class DLDataReader:
 
         # ImageMapper (1D charges -> 2D images or 3D waveforms)
         if self.image_channels is not None or self.waveform_type is not None:
-            if self.image_channels is not None:
-                # Check the transform value used for the file compression
-                for tel_id in np.arange(1, 180):
-                    tel_table = f"tel_{tel_id:03d}"
-                    if (
-                        tel_table
-                        in self.files[first_file].root.dl1.event.telescope.images
-                    ):
-                        if (
-                            "CTAFIELD_3_TRANSFORM_SCALE"
-                            in self.files[first_file]
-                            .root.dl1.event.telescope.images[tel_table]
-                            ._v_attrs
-                            and self.image_scale is None
-                        ):
-                            self.image_scale = (
-                                self.files[first_file]
-                                .root.dl1.event.telescope.images[tel_table]
-                                ._v_attrs["CTAFIELD_3_TRANSFORM_SCALE"]
-                            )
-                        if (
-                            "CTAFIELD_4_TRANSFORM_SCALE"
-                            in self.files[first_file]
-                            .root.dl1.event.telescope.images[tel_table]
-                            ._v_attrs
-                            and self.peak_time_scale is None
-                        ):
-                            self.peak_time_scale = (
-                                self.files[first_file]
-                                .root.dl1.event.telescope.images[tel_table]
-                                ._v_attrs["CTAFIELD_4_TRANSFORM_SCALE"]
-                            )
 
+            # Retrieve the camera geometry from the file
             self.pixel_positions, self.num_pixels = self._construct_pixel_positions(
                 self.files[first_file].root.configuration.instrument.telescope
             )
@@ -1204,12 +1178,12 @@ class DLDataReader:
                         vector[:, i] *= mask
                     # Apply the transform to recover orginal floating point values if the file were compressed
                     if "image" in channel:
-                        if self.image_scale > 0:
+                        if self.image_scale > 0.0:
                             vector[:, i] /= self.image_scale
                         if self.image_offset > 0:
                             vector[:, i] -= self.image_offset
                     if "time" in channel:
-                        if self.peak_time_scale > 0:
+                        if self.peak_time_scale > 0.0:
                             vector[:, i] /= self.peak_time_scale
                         if self.peak_time_offset > 0:
                             vector[:, i] -= self.peak_time_offset
@@ -1321,7 +1295,7 @@ class DLDataReader:
                 if "raw" in self.waveform_type:
                     vector = vector[0]
                 if "calibrate" in self.waveform_type:
-                    if self.waveform_scale > 0:
+                    if self.waveform_scale > 0.0:
                         vector /= self.waveform_scale
                     if self.waveform_offset > 0:
                         vector -= self.waveform_offset
@@ -1643,7 +1617,6 @@ class DLDataReader:
         trigger_patch_true_image_sums = []
         images = []
         parameters_lists = []
-        pointings = []
         subarray_info = [[] for column in self.subarray_info]
         for i, tel_id in enumerate(self.selected_telescopes[tel_type]):
             if self.waveform_type is not None:
