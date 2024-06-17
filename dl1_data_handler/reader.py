@@ -129,6 +129,7 @@ class DLDataReader:
 
         # Telescope pointings
         self.telescope_pointings = None
+        self.pointing_alt, self.pointing_az = None, None
         if self.process_type == "Simulation":
             self.telescope_pointings = {}
             for tel_id in self.tel_ids:
@@ -140,17 +141,17 @@ class DLDataReader:
 
             # Only fix telescope pointings valid!
             # No divergent pointing implemented!
-            pointing_alt = self.telescope_pointings["tel_{:03d}".format(tel_id)][
+            self.pointing_alt = self.telescope_pointings["tel_{:03d}".format(tel_id)][
                 "telescope_pointing_altitude"
             ][0]
-            pointing_az = self.telescope_pointings["tel_{:03d}".format(tel_id)][
+            self.pointing_az = self.telescope_pointings["tel_{:03d}".format(tel_id)][
                 "telescope_pointing_azimuth"
             ][0]
             # Set the telescope pointing to the delta Alt/Az tranform
             if transforms is not None:
                 for transform in transforms:
                     if transform.name == "deltaAltAz":
-                        transform.set_pointing(pointing_alt, pointing_az)
+                        transform.set_pointing(self.pointing_alt, self.pointing_az)
 
         # AI-based trigger system
         self.trigger_settings = trigger_settings
@@ -1640,7 +1641,6 @@ class DLDataReader:
         tel_type,
         trigger_info,
         random_trigger_patch=False,
-        pointing_info=None,
     ):
         triggers = []
         waveforms = []
@@ -1914,7 +1914,6 @@ class DLDataReader:
                     filename,
                     tel_type,
                     trigger_info[ind],
-                    pointing_info,
                     random_trigger_patch,
                 )
                 example.extend(tel_type_example)
