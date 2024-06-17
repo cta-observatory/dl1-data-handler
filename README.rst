@@ -85,7 +85,7 @@ Links
 -----
 
 
-* `Cherenkov Telescope Array (CTA) <https://www.ctao.org/>`_ - Homepage of the CTAO collaboration 
+* `Cherenkov Telescope Array (CTA) <https://www.ctao.org/>`_ - Homepage of the CTA Observatory 
 * `CTLearn <https://github.com/ctlearn-project/ctlearn/>`_ and `GammaLearn <https://gitlab.lapp.in2p3.fr/GammaLearn/GammaLearn>`_ - Repository of code for studies on applying deep learning to IACT analysis tasks. Maintained by groups at Columbia University, Universidad Complutense de Madrid, Barnard College (CTLearn) and LAPP (GammaLearn).
 * `ctapipe <https://cta-observatory.github.io/ctapipe/>`_ - Official documentation for the ctapipe analysis package (in development)
 
