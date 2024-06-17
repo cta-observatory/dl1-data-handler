@@ -71,9 +71,7 @@ class DLDataReader:
         self.data_format_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
         if int(self.data_format_version.split(".")[0].replace("v", "")) < 6:
             raise Exception(
-                "Provided CTAO data format version is '{}' (must be >= v.6.0.0).".format(
-                    self.data_model_version
-                )
+                f"Provided CTAO data format version is '{self.data_model_version}' (must be >= v.6.0.0)."
             )
 
         self.process_type = self._v_attrs["CTA PROCESS TYPE"]
@@ -97,8 +95,8 @@ class DLDataReader:
             self.mode = mode
         else:
             raise ValueError(
-                "Invalid mode selection '{}'. Valid options: "
-                "'mono', 'stereo'".format(mode)
+                f"Invalid mode selection '{mode}'. Valid options: "
+                "'mono', 'stereo'"
             )
 
         if subarray_info is None:
@@ -134,17 +132,17 @@ class DLDataReader:
             self.telescope_pointings = {}
             for tel_id in self.tel_ids:
                 with lock:
-                    self.telescope_pointings["tel_{:03d}".format(tel_id)] = read_table(
+                    self.telescope_pointings[f"tel_{tel_id:03d}"] = read_table(
                         self.files[first_file],
-                        "/configuration/telescope/pointing/tel_{:03d}".format(tel_id),
+                        f"/configuration/telescope/pointing/tel_{tel_id:03d}",
                     )
 
             # Only fix telescope pointings valid!
             # No divergent pointing implemented!
-            self.pointing_alt = self.telescope_pointings["tel_{:03d}".format(tel_id)][
+            self.pointing_alt = self.telescope_pointings[f"tel_{tel_id:03d}"][
                 "telescope_pointing_altitude"
             ][0]
-            self.pointing_az = self.telescope_pointings["tel_{:03d}".format(tel_id)][
+            self.pointing_az = self.telescope_pointings[f"tel_{tel_id:03d}"][
                 "telescope_pointing_azimuth"
             ][0]
             # Set the telescope pointing to the delta Alt/Az tranform
@@ -174,7 +172,7 @@ class DLDataReader:
                 "waveform_max_from_simulation"
             ]
             if "raw" in self.waveform_type:
-                first_tel_table = "tel_{:03d}".format(self.tel_ids[0])
+                first_tel_table = f"tel_{self.tel_ids[0]:03d}"
                 self.waveform_sequence_max_length = (
                     self.files[first_file]
                     .root.r0.event.telescope._f_get_child(first_tel_table)
@@ -188,7 +186,7 @@ class DLDataReader:
                         "waveform_FADC_offset"
                     ]
             if "calibrate" in self.waveform_type:
-                first_tel_table = "tel_{:03d}".format(self.tel_ids[0])
+                first_tel_table = f"tel_{self.tel_ids[0]:03d}"
                 with lock:
                     wvf_table_v_attrs = (
                         self.files[first_file]
@@ -224,10 +222,8 @@ class DLDataReader:
             self.waveform_format = waveform_settings["waveform_format"]
             if not ("first" in self.waveform_format or "last" in self.waveform_format):
                 raise ValueError(
-                    "Invalid returning format for waveforms '{}'. Valid options: "
-                    "'timechannel_first', 'timechannel_last'".format(
-                        self.waveform_format
-                    )
+                    f"Invalid returning format for waveforms '{self.waveform_format}'. Valid options: "
+                    "'timechannel_first', 'timechannel_last'"
                 )
 
         # Integrated charges and peak arrival times (DL1a)
@@ -243,7 +239,7 @@ class DLDataReader:
 
         # Get offset and scaling of images
         if self.image_channels is not None:
-            first_tel_table = "tel_{:03d}".format(self.tel_ids[0])
+            first_tel_table = f"tel_{self.tel_ids[0]:03d}"
             with lock:
                 img_table_v_attrs = (
                     self.files[first_file]
@@ -645,7 +641,7 @@ class DLDataReader:
                     self.telescopes = telescopes
                 if self.telescopes != telescopes:
                     raise ValueError(
-                        "Inconsistent telescope definition in " "{}".format(filename)
+                        f"Inconsistent telescope definition in " "{filename}"
                     )
                 self.selected_telescopes = selected_telescopes
 
@@ -741,7 +737,7 @@ class DLDataReader:
             if self.image_channels is not None:
                 # Check the transform value used for the file compression
                 for tel_id in np.arange(1, 180):
-                    tel_table = "tel_{:03d}".format(tel_id)
+                    tel_table = f"tel_{tel_id:03d}"
                     if (
                         tel_table
                         in self.files[first_file].root.dl1.event.telescope.images
@@ -1608,7 +1604,7 @@ class DLDataReader:
         num_pixels = {}
         for camera in self.camera2index.keys():
             cam_geom = telescope_type_information.camera._f_get_child(
-                "geometry_{}".format(self.camera2index[camera])
+                f"geometry_{self.camera2index[camera]}"
             )
             pix_x = np.array(cam_geom.cols._f_col("pix_x"))
             pix_y = np.array(cam_geom.cols._f_col("pix_y"))
@@ -1654,7 +1650,7 @@ class DLDataReader:
                 if "raw" in self.waveform_type:
                     child = None
                     with lock:
-                        tel_table = "tel_{:03d}".format(tel_id)
+                        tel_table = f"tel_{tel_id:03d}"
                         if tel_table in self.files[filename].root.r0.event.telescope:
                             child = self.files[
                                 filename
@@ -1703,7 +1699,7 @@ class DLDataReader:
                 if "calibrate" in self.waveform_type:
                     child = None
                     with lock:
-                        tel_table = "tel_{:03d}".format(tel_id)
+                        tel_table = f"tel_{tel_id:03d}"
                         if tel_table in self.files[filename].root.r1.event.telescope:
                             child = self.files[
                                 filename
@@ -1732,7 +1728,7 @@ class DLDataReader:
             if self.image_channels is not None:
                 child = None
                 with lock:
-                    tel_table = "tel_{:03d}".format(tel_id)
+                    tel_table = f"tel_{tel_id:03d}"
                     if (
                         tel_table
                         in self.files[filename].root.dl1.event.telescope.images
@@ -1745,7 +1741,7 @@ class DLDataReader:
             if self.parameter_list is not None:
                 child = None
                 with lock:
-                    tel_table = "tel_{:03d}".format(tel_id)
+                    tel_table = f"tel_{tel_id:03d}"
                     if (
                         tel_table
                         in self.files[filename].root.dl1.event.telescope.parameters
@@ -1798,7 +1794,7 @@ class DLDataReader:
             if self.waveform_type is not None:
                 if "raw" in self.waveform_type:
                     with lock:
-                        tel_table = "tel_{:03d}".format(tel_id)
+                        tel_table = f"tel_{tel_id:03d}"
                         child = self.files[
                             filename
                         ].root.r0.event.telescope._f_get_child(tel_table)
@@ -1841,7 +1837,7 @@ class DLDataReader:
 
                 if "calibrate" in self.waveform_type:
                     with lock:
-                        tel_table = "tel_{:03d}".format(tel_id)
+                        tel_table = f"tel_{tel_id:03d}"
                         child = self.files[
                             filename
                         ].root.r1.event.telescope._f_get_child(tel_table)
@@ -1868,7 +1864,7 @@ class DLDataReader:
 
             if self.image_channels is not None:
                 with lock:
-                    tel_table = "tel_{:03d}".format(tel_id)
+                    tel_table = f"tel_{tel_id:03d}"
                     child = self.files[
                         filename
                     ].root.dl1.event.telescope.images._f_get_child(tel_table)
@@ -1876,7 +1872,7 @@ class DLDataReader:
 
             if self.parameter_list is not None:
                 with lock:
-                    tel_table = "tel_{:03d}".format(tel_id)
+                    tel_table = f"tel_{tel_id:03d}"
                     child = self.files[
                         filename
                     ].root.dl1.event.telescope.parameters._f_get_child(tel_table)
@@ -1884,7 +1880,7 @@ class DLDataReader:
                 example.extend([np.stack(parameter_list)])
 
             subarray_info = [[] for column in self.subarray_info]
-            tel_query = "tel_id == {}".format(tel_id)
+            tel_query = f"tel_id == {tel_id}"
             self._append_subarray_info(
                 self.files[filename].root.configuration.instrument.subarray.layout,
                 subarray_info,
