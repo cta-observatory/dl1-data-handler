@@ -7,6 +7,7 @@ channels:
 dependencies:
     - python>=3.10
     - astropy
+    - setuptools
     - numpy>=1.20
     - scipy>=1.11
     - pip
@@ -16,4 +17,3 @@ dependencies:
     - pandas
     - pip:
         - pydot
-

@@ -10,8 +10,12 @@ jobs:
         pyv: [3.9, '3.10', 3.11, 3.12]
       max-parallel: 5
     runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: Set up Python ${{ matrix.pyv }}
       run: |
         conda install -y python=${{ matrix.pyv }}
@@ -22,6 +26,7 @@ jobs:
     - name: Install dependencies
       run: |
         conda env update --file environment.yml --name base
+        conda list
     - name: Lint with flake8
       run: |
         conda install flake8
