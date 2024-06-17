@@ -1,15 +1,20 @@
 from setuptools import setup, find_packages
 from os import path
-from dl1_data_handler.version import *
+
+def getVersionFromFile():
+    file = open(".github/versionBackup.txt").readlines()
+    for line in file:
+        for word in line.split():
+            return word
 
 here = path.abspath(path.dirname(__file__))
 
 with open(path.join(here, "README.rst"), encoding="utf-8") as f:
     long_description = f.read()
-
+    
 setup(
     name="dl1_data_handler",
-    version=get_version_pypi(),
+    version=getVersionFromFile(),
     author="DL1DH Team",
     author_email="d.nieto@ucm.es",
     description="dl1 HDF5 data reader + processor",

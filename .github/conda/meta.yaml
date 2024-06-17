@@ -1,19 +1,18 @@
+{% set data = load_setup_py_data() %}
+
 package:
   name: dl1_data_handler
-  version: "0.11.0"
-
+  version: {{ data.get('version') }}
 source:
-  path: ./
-  #git_url: https://github.com/cta-observatory/dl1-data-handler.git
-  #git_rev: v0.11.0
+  path: ../..
 
 build:
   #noarch: generic
   number: 0
-
+  
 requirements:
   build:
-    - python ==3.12
+    - python #==3.12
     - numpy >=1.20
     - astropy
     - scipy
@@ -21,8 +20,9 @@ requirements:
     - ctapipe ==0.20.0
     - pytables >=3.8
     - pandas
+    - git
   host:
-    - python ==3.12
+    - python #==3.12
     - numpy >=1.20
     - astropy
     - scipy
@@ -30,8 +30,9 @@ requirements:
     - ctapipe ==0.20.0
     - pytables >=3.8
     - pandas
+    - git
   run:
-    - python ==3.12
+    - python #==3.12
     - numpy >=1.20
     - jupyter
     - astropy
@@ -39,6 +40,8 @@ requirements:
     - ctapipe ==0.20.0
     - pytables >=3.8
     - pandas
+    - git
+
   test:
     imports:
       - dl1-data-handler
@@ -52,3 +55,4 @@ extra:
   recipe-maintainers:
     - nietootein
     - TjarkMiener
+
