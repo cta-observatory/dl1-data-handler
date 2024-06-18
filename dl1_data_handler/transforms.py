@@ -86,7 +86,7 @@ class MCEnergy(Transform):
         return example
 
 
-class DeltaAltAz_fix_subarray(Transform):
+class DeltaAltAz(Transform):
     def __init__(
         self,
         base_name="direction",
@@ -97,7 +97,7 @@ class DeltaAltAz_fix_subarray(Transform):
     ):
         super().__init__()
 
-        self.name = "deltaAltAz_fix_subarray"
+        self.name = "deltaAltAz"
         self.base_name = base_name
         self.alt_col_name = alt_col_name
         self.az_col_name = az_col_name
@@ -106,7 +106,7 @@ class DeltaAltAz_fix_subarray(Transform):
         self.shape = 2
         self.dtype = np.dtype("float32")
         self.unit = "rad"
-        self.tel_pointing = np.array([0.0, 0.0], dtype=np.float32)
+        self.pointing_alt, self.pointing_az = None, None
 
     def describe(self, description):
         self.description = description
@@ -122,8 +122,9 @@ class DeltaAltAz_fix_subarray(Transform):
         )
         return self.description
 
-    def set_tel_pointing(self, tel_pointing):
-        self.tel_pointing = tel_pointing
+    def set_pointing(self, pointing_alt, pointing_az):
+        self.pointing_alt = pointing_alt
+        self.pointing_az = pointing_az
         return
 
     def __call__(self, example):
@@ -132,60 +133,15 @@ class DeltaAltAz_fix_subarray(Transform):
         ):
             if des["base_name"] == self.alt_col_name:
                 alt = np.radians(example[i]) if self.deg2rad else example[i]
-                alt -= self.tel_pointing[0]
+                alt -= self.pointing_alt
             elif des["base_name"] == self.az_col_name:
                 az = np.radians(example[i]) if self.deg2rad else example[i]
                 if self.north_pointing_correction and az > 3*np.pi/2:
                     az -= 2 * np.pi
-                az -= self.tel_pointing[1]
+                az -= self.pointing_az
             elif des["base_name"] == self.base_name:
                 example.append(np.array([alt, az]))
         return example
-
-
-class AltAz(Transform):
-    def __init__(
-        self,
-        name="direction",
-        alt_col_name="true_alt",
-        az_col_name="true_az",
-        deg2rad=True,
-    ):
-        super().__init__()
-        self.name = name
-        self.alt_col_name = alt_col_name
-        self.az_col_name = az_col_name
-        self.deg2rad = deg2rad
-        self.shape = 2
-        self.dtype = np.dtype("float32")
-        self.unit = "rad"
-
-    def describe(self, description):
-        self.description = description
-        self.description.append(
-            {
-                "name": self.name,
-                "tel_type": None,
-                "base_name": self.name,
-                "shape": self.shape,
-                "dtype": self.dtype,
-                "unit": self.unit,
-            }
-        )
-        return self.description
-
-    def __call__(self, example):
-        for i, (val, des) in enumerate(
-            itertools.zip_longest(example, self.description)
-        ):
-            if des["base_name"] == self.alt_col_name:
-                alt = np.radians(example[i]) if self.deg2rad else example[i]
-            elif des["base_name"] == self.az_col_name:
-                az = np.radians(example[i]) if self.deg2rad else example[i]
-            elif des["base_name"] == self.name:
-                example.append(np.array([alt, az]))
-        return example
-
 
 class CoreXY(Transform):
     def __init__(self, name="impact"):
