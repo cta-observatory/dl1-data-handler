@@ -25,8 +25,7 @@ jobs:
         echo $CONDA/bin >> $GITHUB_PATH
     - name: Install dependencies
       run: |
-        conda env update --file environment.yml -n base libarchive -c main --force-reinstall --solver classic
-        conda list
+        conda env update --file environment.yml --name base --solver=classic conda-forge::conda-libmamba-solver conda-forge::libmamba conda-forge::libmambapy conda-forge::libarchive
     - name: Lint with flake8
       run: |
         conda install flake8
