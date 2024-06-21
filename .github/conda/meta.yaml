@@ -17,7 +17,7 @@ requirements:
     - astropy
     - scipy
     - jupyter
-    - ctapipe ==0.20.0
+    - ctapipe ==0.21.1
     - pytables >=3.8
     - pandas
     - git
@@ -27,7 +27,7 @@ requirements:
     - astropy
     - scipy
     - jupyter
-    - ctapipe ==0.20.0
+    - ctapipe ==0.21.1
     - pytables >=3.8
     - pandas
     - git
@@ -37,7 +37,7 @@ requirements:
     - jupyter
     - astropy
     - scipy
-    - ctapipe ==0.20.0
+    - ctapipe ==0.21.1
     - pytables >=3.8
     - pandas
     - git
