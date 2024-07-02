@@ -27,7 +27,7 @@ setup(
         "numpy>=1.20",
         "scipy>=1.11",
         "astropy",
-        "ctapipe==0.21.1",
+        "ctapipe==0.21.2",
         "traitlets>=5.0",
         "jupyter",
         "pandas",
