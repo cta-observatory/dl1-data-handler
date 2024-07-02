@@ -97,7 +97,7 @@ class DLDataReader:
             self.mode = mode
         else:
             raise ValueError(
-                f"Invalid mode selection '{mode}'. Valid options: " "'mono', 'stereo'"
+                f"Invalid mode selection '{mode}'. Valid options: 'mono', 'stereo'"
             )
 
         if subarray_info is None:
@@ -1849,7 +1849,7 @@ class DLDataReader:
                 index, tel_id = identifiers[1:3]
 
             trg_pixel_id, trg_waveform_sample_id = None, None
-            if self.trigger_settings is not None and self.get_trigger_patch == "file"
+            if self.trigger_settings is not None and self.get_trigger_patch == "file":
                 trg_pixel_id, trg_waveform_sample_id = identifiers[-2:]
 
             example = []
