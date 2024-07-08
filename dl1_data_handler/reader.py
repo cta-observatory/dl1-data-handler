@@ -129,6 +129,7 @@ class DLDataReader:
         # Telescope pointings
         self.telescope_pointings = {}
         self.fix_pointing_alt, self.fix_pointing_az = None, None
+        tel_id = None
         if self.process_type == "Observation":
             for tel_id in self.tel_ids:
                 with lock:
