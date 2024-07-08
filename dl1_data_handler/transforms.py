@@ -1,14 +1,14 @@
+import astropy.units as u
+from astropy.coordinates import SkyCoord
 import numpy as np
 import itertools
 from .processor import Transform
 
 
 class ShowerPrimaryID(Transform):
-    def __init__(
-        self, name="true_shower_primary_id", particle_id_col_name="true_shower_primary_id"
-    ):
+    def __init__(self):
         super().__init__()
-        self.particle_id_col_name = particle_id_col_name
+        self.particle_id_col_name = "true_shower_primary_id"
         self.shower_primary_id_to_class = {
             0: 1,
             101: 0,
@@ -22,7 +22,7 @@ class ShowerPrimaryID(Transform):
             255: "hadron",
         }
 
-        self.name = name
+        self.name = "true_shower_primary_id"
         self.dtype = np.dtype("int8")
 
     def describe(self, description):
@@ -57,19 +57,18 @@ class NormalizeTelescopePositions(Transform):
         return example
 
 
-class MCEnergy(Transform):
-    def __init__(self, name="energy", energy_col_name="true_energy", unit="log(TeV)"):
+class LogEnergy(Transform):
+    def __init__(self):
         super().__init__()
-        self.name = name
-        self.energy_col_name = energy_col_name
+        self.name = "energy"
         self.shape = 1
         self.dtype = np.dtype("float32")
-        self.unit = unit
+        self.unit = "log(TeV)"
 
     def describe(self, description):
         self.description = [
             {**des, "name": self.name, "dtype": self.dtype, "unit": self.unit}
-            if des["name"] == self.energy_col_name
+            if des["name"] == "true_energy"
             else des
             for des in description
         ]
@@ -77,36 +76,21 @@ class MCEnergy(Transform):
 
     def __call__(self, example):
         for i, (val, des) in enumerate(zip(example, self.description)):
-            if des["base_name"] == self.energy_col_name:
-                example[i] = (
-                    np.array([np.log10(val)])
-                    if self.unit == "log(TeV)"
-                    else np.array([val])
-                )
+            if des["base_name"] == "true_energy":
+                example[i] = np.log10(val)
         return example
 
 
-class DeltaAltAz(Transform):
-    def __init__(
-        self,
-        base_name="direction",
-        alt_col_name="true_alt",
-        az_col_name="true_az",
-        deg2rad=True,
-        north_pointing_correction=True,
-    ):
+class SkyOffsetSeparation(Transform):
+    def __init__(self, transform_to_rad=False):
         super().__init__()
 
-        self.name = "deltaAltAz"
-        self.base_name = base_name
-        self.alt_col_name = alt_col_name
-        self.az_col_name = az_col_name
-        self.deg2rad = deg2rad
-        self.north_pointing_correction = north_pointing_correction
-        self.shape = 2
+        self.name = "SkyOffsetSeparation"
+        self.base_name = "direction"
+        self.shape = 3
         self.dtype = np.dtype("float32")
-        self.unit = "rad"
-        self.pointing_alt, self.pointing_az = None, None
+        self.unit = u.rad if transform_to_rad else u.deg
+        self.fix_pointing = None
 
     def describe(self, description):
         self.description = description
@@ -117,36 +101,47 @@ class DeltaAltAz(Transform):
                 "base_name": self.base_name,
                 "shape": self.shape,
                 "dtype": self.dtype,
-                "unit": self.unit,
+                "unit": str(self.unit),
             }
         )
         return self.description
 
-    def set_pointing(self, pointing_alt, pointing_az):
-        self.pointing_alt = pointing_alt
-        self.pointing_az = pointing_az
-        return
+    def set_pointing(self, fix_pointing):
+        self.fix_pointing = fix_pointing
 
     def __call__(self, example):
         for i, (val, des) in enumerate(
             itertools.zip_longest(example, self.description)
         ):
-            if des["base_name"] == self.alt_col_name:
-                alt = np.radians(example[i]) if self.deg2rad else example[i]
-                alt -= self.pointing_alt
-            elif des["base_name"] == self.az_col_name:
-                az = np.radians(example[i]) if self.deg2rad else example[i]
-                if self.north_pointing_correction and az > 3*np.pi/2:
-                    az -= 2 * np.pi
-                az -= self.pointing_az
+            if des["base_name"] == "true_alt":
+                alt = example[i]
+            elif des["base_name"] == "true_az":
+                az = example[i]
             elif des["base_name"] == self.base_name:
-                example.append(np.array([alt, az]))
+                true_direction = SkyCoord(
+                    az * u.deg,
+                    alt * u.deg,
+                    frame="altaz",
+                    unit="deg",
+                )
+                sky_offset = self.fix_pointing.spherical_offsets_to(true_direction)
+                angular_separation = self.fix_pointing.separation(true_direction)
+                example.append(
+                    np.array(
+                        [
+                            sky_offset[0].to_value(self.unit),
+                            sky_offset[1].to_value(self.unit),
+                            angular_separation.to_value(self.unit),
+                        ]
+                    )
+                )
         return example
 
+
 class CoreXY(Transform):
-    def __init__(self, name="impact"):
+    def __init__(self):
         super().__init__()
-        self.name = name
+        self.name = "impact"
         self.shape = 2
         self.dtype = np.dtype("float32")
         self.unit = "km"
