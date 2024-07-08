@@ -9,6 +9,7 @@ from dl1_data_handler.image_mapper import ImageMapper
 from dl1_data_handler.processor import DL1DataProcessor
 
 import astropy.units as u
+from astropy.coordinates import SkyCoord
 from astropy.table import (
     Table,
     join,  # let us merge tables horizontally
@@ -128,7 +129,7 @@ class DLDataReader:
 
         # Telescope pointings
         self.telescope_pointings = {}
-        self.fix_pointing_alt, self.fix_pointing_az = None, None
+        self.fix_pointing = None
         tel_id = None
         if self.process_type == "Observation":
             for tel_id in self.tel_ids:
@@ -147,19 +148,26 @@ class DLDataReader:
 
             # Only fix telescope pointings valid for MCs!
             # No divergent pointing implemented!
-            self.fix_pointing_alt = self.telescope_pointings[f"tel_{tel_id:03d}"][
+            fix_pointing_alt = self.telescope_pointings[f"tel_{tel_id:03d}"][
                 "telescope_pointing_altitude"
-            ][0]
-            self.fix_pointing_az = self.telescope_pointings[f"tel_{tel_id:03d}"][
+            ]
+            fix_pointing_az = self.telescope_pointings[f"tel_{tel_id:03d}"][
                 "telescope_pointing_azimuth"
-            ][0]
-            # Set the telescope pointing to the delta Alt/Az tranform
+            ]
+            # Reading the pointing for the first obs_id assuming fix tel pointing
+            fix_pointing_az = fix_pointing_az[0] * fix_pointing_az.unit
+            fix_pointing_alt = fix_pointing_alt[0] * fix_pointing_alt.unit
+            self.fix_pointing = SkyCoord(
+                fix_pointing_az.to_value(u.deg),
+                fix_pointing_alt.to_value(u.deg),
+                frame="altaz",
+                unit="deg",
+            )
+            # Set the telescope pointing of the SkyOffsetSeparation tranform to the fix pointing
             if transforms is not None:
                 for transform in transforms:
-                    if transform.name == "deltaAltAz":
-                        transform.set_pointing(
-                            self.fix_pointing_alt, self.fix_pointing_az
-                        )
+                    if transform.name == "SkyOffsetSeparation":
+                        transform.set_pointing(self.fix_pointing)
 
         # AI-based trigger system
         self.trigger_settings = trigger_settings
