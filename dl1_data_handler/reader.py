@@ -98,8 +98,7 @@ class DLDataReader:
             self.mode = mode
         else:
             raise ValueError(
-                f"Invalid mode selection '{mode}'. Valid options: "
-                "'mono', 'stereo'"
+                f"Invalid mode selection '{mode}'. Valid options: 'mono', 'stereo'"
             )
 
         if subarray_info is None:
@@ -131,6 +130,7 @@ class DLDataReader:
         # Telescope pointings
         self.telescope_pointings = {}
         self.fix_pointing = None
+        tel_id = None
         if self.process_type == "Observation":
             for tel_id in self.tel_ids:
                 with lock:
@@ -177,9 +177,7 @@ class DLDataReader:
                 "reco_cherenkov_photons"
             ]
             self.include_nsb_patches = self.trigger_settings["include_nsb_patches"]
-            self.trigger_patch_from_simulation = self.trigger_settings[
-                "trigger_patch_from_simulation"
-            ]
+            self.get_trigger_patch = self.trigger_settings["get_trigger_patch"]
 
         # Raw (R0) or calibrated (R1) waveform
         self.waveform_type = None
@@ -221,9 +219,7 @@ class DLDataReader:
                 self.waveform_r0pedsub = False
                 self.waveform_FADC_offset = None
                 # Check the transform value used for the file compression
-                if (
-                    "CTAFIELD_5_TRANSFORM_SCALE" in wvf_table_v_attrs
-                ):
+                if "CTAFIELD_5_TRANSFORM_SCALE" in wvf_table_v_attrs:
                     self.waveform_scale = wvf_table_v_attrs[
                         "CTAFIELD_5_TRANSFORM_SCALE"
                     ]
@@ -269,9 +265,7 @@ class DLDataReader:
             ):
                 self.image_scale = img_table_v_attrs["CTAFIELD_3_TRANSFORM_SCALE"]
                 self.image_offset = img_table_v_attrs["CTAFIELD_3_TRANSFORM_OFFSET"]
-            if (
-                "CTAFIELD_4_TRANSFORM_SCALE" in img_table_v_attrs
-            ):
+            if "CTAFIELD_4_TRANSFORM_SCALE" in img_table_v_attrs:
                 self.peak_time_scale = img_table_v_attrs["CTAFIELD_4_TRANSFORM_SCALE"]
                 self.peak_time_offset = img_table_v_attrs["CTAFIELD_4_TRANSFORM_OFFSET"]
 
@@ -383,6 +377,37 @@ class DLDataReader:
                         tel_tables.append(tel_table)
                     allevents = vstack(tel_tables)
 
+                    # AI-based trigger system
+                    # Obtain trigger patch info from an external algorithm (i.e. DBScan)
+                    if (
+                        self.trigger_settings is not None
+                        and "raw" in self.waveform_type
+                    ):
+                        if self.get_trigger_patch == "file":
+                            try:
+                                # Read csv containing the trigger patch info
+                                trigger_patch_info_csv_file = (
+                                    pd.read_csv(
+                                        filename.replace("r0.dl1.h5", "npe.csv")
+                                    )[["obs_id", "event_id", "tel_id", "trg_pixel_id", "trg_waveform_sample_id"]]
+                                    .astype(int)
+                                )
+                                trigger_patch_info = Table.from_pandas(
+                                    trigger_patch_info_csv_file
+                                )
+                                # Join the events table ith the trigger patch info
+                                allevents = join(
+                                    left=trigger_patch_info,
+                                    right=allevents,
+                                    keys=["obs_id", "event_id", "tel_id"],
+                                )
+                                # Remove non-trigger events with negative pixel ids
+                                allevents = allevents[allevents["trg_pixel_id"] >= 0]
+                            except:
+                                raise IOError(
+                                    f"There is a problem with '{filename.replace('r0.dl1.h5','npe.csv')}'!"
+                                )
+
                     # MC event selection based on the shower simulation table
                     if event_selection:
                         for filter in event_selection:
@@ -434,21 +459,63 @@ class DLDataReader:
                             )
 
                         # Construct the example identifiers
-                        for sim_idx, img_idx, tel_id in zip(
-                            allevents["sim_index"],
-                            allevents["img_index"],
-                            allevents["tel_id"],
-                        ):
-                            example_identifiers.append(
-                                (file_idx, sim_idx, img_idx, tel_id)
-                            )
+                        if self.trigger_settings is not None and self.get_trigger_patch == "file":
+                            for (
+                                sim_idx,
+                                img_idx,
+                                tel_id,
+                                trg_pix_id,
+                                trg_wvf_id,
+                            ) in zip(
+                                allevents["sim_index"],
+                                allevents["img_index"],
+                                allevents["tel_id"],
+                                allevents["trg_pixel_id"],
+                                allevents["trg_waveform_sample_id"],
+                            ):
+                                example_identifiers.append(
+                                    (
+                                        file_idx,
+                                        sim_idx,
+                                        img_idx,
+                                        tel_id,
+                                        trg_pix_id,
+                                        trg_wvf_id,
+                                    )
+                                )
+                        else:
+                            for sim_idx, img_idx, tel_id in zip(
+                                allevents["sim_index"],
+                                allevents["img_index"],
+                                allevents["tel_id"],
+                            ):
+                                example_identifiers.append(
+                                    (file_idx, sim_idx, img_idx, tel_id)
+                                )
                     else:
                         # Construct the example identifiers
-                        for img_idx, tel_id in zip(
-                            allevents["img_index"],
-                            allevents["tel_id"],
-                        ):
-                            example_identifiers.append((file_idx, img_idx, tel_id))
+                        if self.trigger_settings is not None and self.get_trigger_patch == "file":
+                            for img_idx, tel_id, trg_pix_id, trg_wvf_id in zip(
+                                allevents["img_index"],
+                                allevents["tel_id"],
+                                allevents["trg_pixel_id"],
+                                allevents["trg_waveform_sample_id"],
+                            ):
+                                example_identifiers.append(
+                                    (
+                                        file_idx,
+                                        img_idx,
+                                        tel_id,
+                                        trg_pix_id,
+                                        trg_wvf_id,
+                                    )
+                                )
+                        else:
+                            for img_idx, tel_id in zip(
+                                allevents["img_index"],
+                                allevents["tel_id"],
+                            ):
+                                example_identifiers.append((file_idx, img_idx, tel_id))
 
                 elif self.mode == "stereo":
                     # Read the trigger table.
@@ -1236,6 +1303,8 @@ class DLDataReader:
         img_child=None,
         sim_child=None,
         random_trigger_patch=False,
+        trg_pixel_id=None,
+        trg_waveform_sample_id=None,
     ):
         vector = np.zeros(
             shape=(
@@ -1310,12 +1379,14 @@ class DLDataReader:
                     if self.waveform_offset > 0:
                         vector -= self.waveform_offset
                 waveform_max = np.argmax(np.sum(vector, axis=0))
-            if self.waveform_max_from_simulation:
-                waveform_max = int((len(vector) / 2) - 1)
             if dl1_cleaning_mask is not None:
                 waveform_max = np.argmax(
                     np.sum(vector * dl1_cleaning_mask[:, None], axis=0)
                 )
+            if self.waveform_max_from_simulation:
+                waveform_max = int((len(vector) / 2) - 1)
+            if trg_waveform_sample_id is not None:
+                waveform_max = trg_waveform_sample_id
 
             # Retrieve the sequence around the shower maximum and calculate the pedestal
             # level per pixel outside that sequence if R0-pedsub is selected and FADC
@@ -1395,9 +1466,22 @@ class DLDataReader:
                     self._get_camera_type(tel_type)
                 ][1]
 
-                # Find hot spot. Either the pixel with the highest intensity of the
-                # true Cherenkov image or the integrated waveform.
-                if self.trigger_patch_from_simulation:
+                # There are three different ways of retrieving the trigger patches.
+                # In case an external algorithm (i.e. DBScan) is used, the trigger patch
+                # is found by the pixel id provided in a csv file. Otherwise, we search
+                # for a hot spot, which can either be the pixel with the highest intensity
+                # of the true Cherenkov image or the integrated waveform.
+                if self.get_trigger_patch == "file":
+                    pixid_vector = np.zeros(vector.shape)
+                    pixid_vector[trg_pixel_id, :] = 1
+                    mapped_pixid = self.image_mapper.map_image(
+                        pixid_vector, self._get_camera_type(tel_type)
+                    )
+                    hot_spot = np.unravel_index(
+                        np.argmax(mapped_pixid, axis=None),
+                        mapped_pixid.shape,
+                    )
+                elif self.get_trigger_patch == "simulation":
                     hot_spot = np.unravel_index(
                         np.argmax(mapped_true_image, axis=None),
                         mapped_true_image.shape,
@@ -1773,6 +1857,10 @@ class DLDataReader:
             else:
                 index, tel_id = identifiers[1:3]
 
+            trg_pixel_id, trg_waveform_sample_id = None, None
+            if self.trigger_settings is not None and self.get_trigger_patch == "file":
+                trg_pixel_id, trg_waveform_sample_id = identifiers[-2:]
+
             example = []
             if self.waveform_type is not None:
                 if "raw" in self.waveform_type:
@@ -1813,6 +1901,8 @@ class DLDataReader:
                         img_child,
                         sim_child,
                         random_trigger_patch,
+                        trg_pixel_id,
+                        trg_waveform_sample_id,
                     )
                     example.append(waveform)
                     if trigger_patch_true_image_sum is not None:
