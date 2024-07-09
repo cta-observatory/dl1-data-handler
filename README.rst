@@ -51,14 +51,6 @@ necessary package channels, and install dl1-data-handler specified version and i
 
 This should automatically install all dependencies (NOTE: this may take some time, as by default MKL is included as a dependency of NumPy and it is very large).
 
-If you want to import any functionality from dl1-data-handler into your own Python scripts, then you are all set. However, if you wish to make use of any of the scripts in dl1-data-handler/scripts (like write_data.py), you should also clone the repository locally and checkout the corresponding tag (i.e. for version v0.12.0):
-
-.. code-block:: bash
-
-   git clone https://github.com/cta-observatory/dl1-data-handler.git
-   git checkout v0.12.0
-
-dl1-data-handler should already have been installed in your environment by Conda, so no further installation steps (i.e. with setuptools or pip) are necessary and you should be able to run scripts/write_data.py directly.
 
 Dependencies
 ------------
