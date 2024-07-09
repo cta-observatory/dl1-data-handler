@@ -10,6 +10,11 @@ jobs:
       url: https://pypi.org/project/dl1-data-handler/
     permissions:
       id-token: write
+      contents: write
+      deployments: write
+      statuses: write
+      actions: write
+      checks: read
     strategy:
       matrix:
         os: [ubuntu-22.04]
@@ -71,6 +76,10 @@ jobs:
     permissions:
       id-token: write
       contents: write
+      deployments: write
+      statuses: write
+      actions: write
+      checks: read
     steps:
     - uses: actions/checkout@v4
       with:
