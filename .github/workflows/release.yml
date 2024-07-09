@@ -99,30 +99,6 @@ jobs:
         conda env update --file environment.yml --name base
         sudo apt-get install python3-numpy
         
-    - name: Get version
-      run: |
-        output=$(python dl1_data_handler/versionScript.py)
-        echo "version=$output" >> $GITHUB_OUTPUT
-      id: step1  
-      
-    - name: Write
-      uses: 1arp/create-a-file-action@0.4.5
-      with:
-        path: '.'
-        isAbsolutePath: true
-        file: '.github/versionBackup.txt'
-        content: |
-          ${{ steps.step1.outputs.version }}
-          
-    - name: Push changes    
-      run: |
-        git config --global user.email "rcervino@ucm.es"
-        git config --global user.name "rcervinoucm"
-        git status
-        git add .
-        git commit -m "version update" --allow-empty
-        git push
-        
     - name: publish-to-conda
       uses: fcakyon/conda-publish-action@v1.3
       with:
