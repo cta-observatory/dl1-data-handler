@@ -276,7 +276,7 @@ class DLDataReader:
         if example_identifiers_file is None:
             example_identifiers_file = {}
         else:
-            example_identifiers_file = pd.HDFStore(example_identifiers_file)
+            example_identifiers_file = pd.HDFStore(example_identifiers_file, mode='r')
 
         if "/example_identifiers" in list(example_identifiers_file.keys()):
             self.example_identifiers = pd.read_hdf(
