@@ -66,13 +66,23 @@ class DLDataReader:
             first_file
         ].root.configuration.instrument.subarray.layout
         self.tel_ids = self.subarray_layout.cols._f_col("tel_id")
-        self.data_format_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
-        if int(self.data_format_version.split(".")[0].replace("v", "")) < 6:
-            raise Exception(
-                f"Provided CTAO data format version is '{self.data_format_version}' (must be >= v.6.0.0)."
-            )
-
         self.process_type = self._v_attrs["CTA PROCESS TYPE"]
+        self.data_format_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
+
+        # Temp fix until ctapipe can process LST-1 data writing into data format v6.0.0.
+        # For dl1 images we can process real data with version v5.0.0 without any problems.
+        # TODO: Remove v5.0.0 once v6.0.0 is available
+        if self.process_type == "Observation" and image_settings is not None:
+            if int(self.data_format_version.split(".")[0].replace("v", "")) < 5:
+                raise Exception(
+                    f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.5.0.0 for LST-1 data)."
+                )
+        else:
+            if int(self.data_format_version.split(".")[0].replace("v", "")) < 6:
+                raise Exception(
+                    f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.6.0.0)."
+                )
+
         self.subarray_shower = None
         if self.process_type == "Simulation":
             self.subarray_shower = self.files[
