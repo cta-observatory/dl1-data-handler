@@ -74,12 +74,12 @@ class DLDataReader:
         # TODO: Remove v5.0.0 once v6.0.0 is available
         if self.process_type == "Observation" and image_settings is not None:
             if int(self.data_format_version.split(".")[0].replace("v", "")) < 5:
-                raise Exception(
+                raise IOError(
                     f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.5.0.0 for LST-1 data)."
                 )
         else:
             if int(self.data_format_version.split(".")[0].replace("v", "")) < 6:
-                raise Exception(
+                raise IOError(
                     f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.6.0.0)."
                 )
 
