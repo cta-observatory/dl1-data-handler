@@ -83,6 +83,10 @@ class DLDataReader:
                     f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.6.0.0)."
                 )
 
+        if self.process_type == "Observation" and parameter_selection is not None:
+            raise ValueError(
+                f"When processing real observational data, please do not select any quality cut (currently: '{parameter_selection}')."
+            )
         self.subarray_shower = None
         if self.process_type == "Simulation":
             self.subarray_shower = self.files[
