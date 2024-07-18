@@ -66,13 +66,31 @@ class DLDataReader:
             first_file
         ].root.configuration.instrument.subarray.layout
         self.tel_ids = self.subarray_layout.cols._f_col("tel_id")
-        self.data_format_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
-        if int(self.data_format_version.split(".")[0].replace("v", "")) < 6:
-            raise Exception(
-                f"Provided CTAO data format version is '{self.data_format_version}' (must be >= v.6.0.0)."
-            )
-
         self.process_type = self._v_attrs["CTA PROCESS TYPE"]
+        self.data_format_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
+
+        # Temp fix until ctapipe can process LST-1 data writing into data format v6.0.0.
+        # For dl1 images we can process real data with version v5.0.0 without any problems.
+        # TODO: Remove v5.0.0 once v6.0.0 is available
+        if self.process_type == "Observation" and image_settings is not None:
+            if int(self.data_format_version.split(".")[0].replace("v", "")) < 5:
+                raise IOError(
+                    f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.5.0.0 for LST-1 data)."
+                )
+        else:
+            if int(self.data_format_version.split(".")[0].replace("v", "")) < 6:
+                raise IOError(
+                    f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.6.0.0)."
+                )
+        # Add several checks for real data processing, i.e. no quality cut applied and a single file is provided.
+        if self.process_type == "Observation" and parameter_selection is not None:
+            raise ValueError(
+                f"When processing real observational data, please do not select any quality cut (currently: '{parameter_selection}')."
+            )
+        if self.process_type == "Observation" and len(self.files) != 1:
+            raise ValueError(
+                f"When processing real observational data, please provide a single file (currently: '{len(self.files)}')."
+            )
         self.subarray_shower = None
         if self.process_type == "Simulation":
             self.subarray_shower = self.files[
@@ -131,6 +149,7 @@ class DLDataReader:
         self.telescope_pointings = {}
         self.fix_pointing = None
         tel_id = None
+        self.tel_trigger_table = None
         if self.process_type == "Observation":
             for tel_id in self.tel_ids:
                 with lock:
@@ -138,6 +157,11 @@ class DLDataReader:
                         self.files[first_file],
                         f"/dl1/monitoring/telescope/pointing/tel_{tel_id:03d}",
                     )
+            with lock:
+                self.tel_trigger_table = read_table(
+                    self.files[first_file],
+                    "/dl1/event/telescope/trigger",
+                )
         elif self.process_type == "Simulation":
             for tel_id in self.tel_ids:
                 with lock:
@@ -276,7 +300,7 @@ class DLDataReader:
         if example_identifiers_file is None:
             example_identifiers_file = {}
         else:
-            example_identifiers_file = pd.HDFStore(example_identifiers_file, mode='r')
+            example_identifiers_file = pd.HDFStore(example_identifiers_file)
 
         if "/example_identifiers" in list(example_identifiers_file.keys()):
             self.example_identifiers = pd.read_hdf(
