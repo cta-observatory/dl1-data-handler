@@ -3,7 +3,7 @@ requires = ["setuptools >= 65", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "DL1 Data Handler"
+name = "dl1_data_handler"
 description = "A package of utilities for reading, and applying image processing to Cherenkov Telescope Array (CTA) R0/R1/DL0/DL1 data in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data."
 readme = "README.rst"
 license = {text = "BSD-3-Clause"}
