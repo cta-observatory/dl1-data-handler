@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools >= 65", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "DL1 Data Handler"
+description = "A package of utilities for reading, and applying image processing to Cherenkov Telescope Array (CTA) R0/R1/DL0/DL1 data in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data."
+readme = "README.rst"
+license = {text = "BSD-3-Clause"}
+authors = [
+    {name = "Ari Brill"},
+    {name = "Bryan Kim"},
+    {name = "Tjark Miener"},
+    {name = "Daniel Nieto", email = "d.nieto@ucm.es"}
+]
+
+classifiers = [
+    "License :: OSI Approved :: BSD License",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+requires-python = ">=3.10"
+dependencies = [
+    "ctapipe>=0.21.1",
+    "astropy",
+    "numpy>=1.20",
+    "pandas",
+    "pip",
+    "pyyaml",
+    "scipy>=1.11",
+    "traitlets>=5.0",
+    "pydot",
+    "setuptools",
+]
+
+dynamic = ["version"]
+
+[tool.setuptools]
+packages = ["dl1_data_handler"]
+
+[project.optional-dependencies]
+doc = [
+  "sphinx",
+  "sphinx-rtd-theme",
+]
+# self reference allows all to be defined in terms of other extras
+all = ["dl1_data_handler[doc]"]
+
+[project.urls]
+repository = "https://github.com/cta-observatory/dl1-data-handler"
+#documentation = "https://ctlearn.readthedocs.io/en/latest/"
+
+#[project.scripts]
+#ctlearn="ctlearn.run_model:main"
+#build_irf="ctlearn.build_irf:main"
+
+[tool.setuptools_scm]
+version_file = "dl1_data_handler/_version.py"
