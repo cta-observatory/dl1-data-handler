@@ -21,7 +21,60 @@ from ctapipe.io import (
 )  # let us read full tables inside the DL1 output file
 
 
-__all__ = ["DLDataReader"]
+__all__ = ["DLDataReader", "get_unmapped_vector", "apply_image_mapper"]
+
+
+# Get a single telescope image from a particular event, uniquely
+# identified by the filename, tel_type, and image table index.
+# First extract a raw 1D vector and transform it into a 2D image using a
+# mapping table. When 'indexed_conv' is selected this function should
+# return the unmapped vector.
+def get_unmapped_vector(self, dl1_event, image_settings):
+    unmapped_vector = np.zeros(
+        shape=(
+            len(dl1_event["image"]),
+            len(image_settings["image_channels"]),
+        ),
+        dtype=np.float32,
+    )
+    for i, channel in enumerate(image_settings["image_channels"]):
+        mask = dl1_event["image_mask"]
+        if "image" in channel:
+            unmapped_vector[:, i] = dl1_event["image"]
+        if "time" in channel:
+            cleaned_peak_times = dl1_event["peak_time"] * mask
+            unmapped_vector[:, i] = (
+                dl1_event["peak_time"]
+                - cleaned_peak_times[np.nonzero(cleaned_peak_times)].mean()
+            )
+        if "clean" in channel or "mask" in channel:
+            unmapped_vector[:, i] *= mask
+        # Apply the transform to recover orginal floating point values if the file were compressed
+        if "image" in channel:
+            if image_settings["image_scale"] > 0.0:
+                unmapped_vector[:, i] /= image_settings["image_scale"]
+            if image_settings["image_offset"] > 0:
+                unmapped_vector[:, i] -= image_settings["image_offset"]
+        if "time" in channel:
+            if image_settings["peak_time_scale"] > 0.0:
+                unmapped_vector[:, i] /= image_settings["peak_time_scale"]
+            if image_settings["peak_time_offset"] > 0:
+                unmapped_vector[:, i] -= image_settings["peak_time_offset"]
+    return unmapped_vector
+
+
+def apply_image_mapper(
+    self, unmapped_vector, image_mapper, camera_type, process_type="Simulation"
+):
+
+    # If 'indexed_conv' is selected, we only need the unmapped vector.
+    if image_mapper.mapping_method[camera_type] == "indexed_conv":
+        return unmapped_vector
+
+    image = image_mapper.map_image(unmapped_vector, camera_type)
+    if process_type == "Observation" and camera_type == "LSTCam":
+        image = np.transpose(np.flip(image, axis=(0, 1)), (1, 0, 2))  # x = -y & y = -x
+    return image
 
 
 lock = threading.Lock()
@@ -266,9 +319,14 @@ class DLDataReader:
         # Integrated charges and peak arrival times (DL1a)
         self.image_channels = None
         if image_settings is not None:
+            self.image_settings = image_settings
+            self.image_settings["image_scale"] = 0.0
+            self.image_settings["image_offset"] = 0
+            self.image_settings["peak_time_scale"] = 0.0
+            self.image_settings["peak_time_offset"] = 0
+            # For code readability
             self.image_channels = image_settings["image_channels"]
-        self.image_scale, self.image_offset = 0.0, 0
-        self.peak_time_scale, self.peak_time_offset = 0.0, 0
+
         # Image parameters (DL1b)
         self.parameter_list = None
         if parameter_settings is not None:
@@ -284,14 +342,20 @@ class DLDataReader:
                     ._v_attrs
                 )
             # Check the transform value used for the file compression
-            if (
-                "CTAFIELD_3_TRANSFORM_SCALE" in img_table_v_attrs
-            ):
-                self.image_scale = img_table_v_attrs["CTAFIELD_3_TRANSFORM_SCALE"]
-                self.image_offset = img_table_v_attrs["CTAFIELD_3_TRANSFORM_OFFSET"]
+            if "CTAFIELD_3_TRANSFORM_SCALE" in img_table_v_attrs:
+                self.image_settings["image_scale"] = img_table_v_attrs[
+                    "CTAFIELD_3_TRANSFORM_SCALE"
+                ]
+                self.image_settings["image_offset"] = img_table_v_attrs[
+                    "CTAFIELD_3_TRANSFORM_OFFSET"
+                ]
             if "CTAFIELD_4_TRANSFORM_SCALE" in img_table_v_attrs:
-                self.peak_time_scale = img_table_v_attrs["CTAFIELD_4_TRANSFORM_SCALE"]
-                self.peak_time_offset = img_table_v_attrs["CTAFIELD_4_TRANSFORM_OFFSET"]
+                self.image_settings["peak_time_scale"] = img_table_v_attrs[
+                    "CTAFIELD_4_TRANSFORM_SCALE"
+                ]
+                self.image_settings["peak_time_offset"] = img_table_v_attrs[
+                    "CTAFIELD_4_TRANSFORM_OFFSET"
+                ]
 
         self.simulation_info = None
         self.simulated_particles = {}
@@ -410,11 +474,18 @@ class DLDataReader:
                         if self.get_trigger_patch == "file":
                             try:
                                 # Read csv containing the trigger patch info
-                                trigger_patch_info_csv_file = (
-                                    pd.read_csv(
-                                        filename.replace("r0.dl1.h5", "npe.csv")
-                                    )[["obs_id", "event_id", "tel_id", "trg_pixel_id", "trg_waveform_sample_id"]]
-                                    .astype(int)
+                                trigger_patch_info_csv_file = pd.read_csv(
+                                    filename.replace("r0.dl1.h5", "npe.csv")
+                                )[
+                                    [
+                                        "obs_id",
+                                        "event_id",
+                                        "tel_id",
+                                        "trg_pixel_id",
+                                        "trg_waveform_sample_id",
+                                    ]
+                                ].astype(
+                                    int
                                 )
                                 trigger_patch_info = Table.from_pandas(
                                     trigger_patch_info_csv_file
@@ -483,7 +554,10 @@ class DLDataReader:
                             )
 
                         # Construct the example identifiers
-                        if self.trigger_settings is not None and self.get_trigger_patch == "file":
+                        if (
+                            self.trigger_settings is not None
+                            and self.get_trigger_patch == "file"
+                        ):
                             for (
                                 sim_idx,
                                 img_idx,
@@ -518,7 +592,10 @@ class DLDataReader:
                                 )
                     else:
                         # Construct the example identifiers
-                        if self.trigger_settings is not None and self.get_trigger_patch == "file":
+                        if (
+                            self.trigger_settings is not None
+                            and self.get_trigger_patch == "file"
+                        ):
                             for img_idx, tel_id, trg_pix_id, trg_wvf_id in zip(
                                 allevents["img_index"],
                                 allevents["tel_id"],
@@ -1246,66 +1323,6 @@ class DLDataReader:
 
         return simulation_info
 
-    # Get a single telescope image from a particular event, uniquely
-    # identified by the filename, tel_type, and image table index.
-    # First extract a raw 1D vector and transform it into a 2D image using a
-    # mapping table. When 'indexed_conv' is selected this function should
-    # return the unmapped vector.
-    def _get_image(self, child, tel_type, image_index):
-        vector = np.zeros(
-            shape=(
-                self.num_pixels[self._get_camera_type(tel_type)],
-                len(self.image_channels),
-            ),
-            dtype=np.float32,
-        )
-        # If the telescope didn't trigger, the image index is -1 and a blank
-        # image of all zeros with be loaded
-        if image_index != -1 and child is not None:
-            with lock:
-                record = child[image_index]
-                for i, channel in enumerate(self.image_channels):
-                    cleaning_mask = "image_mask"
-                    mask = record[cleaning_mask]
-                    if "image" in channel:
-                        vector[:, i] = record["image"]
-                    if "time" in channel:
-                        cleaned_peak_times = record["peak_time"] * mask
-                        vector[:, i] = (
-                            record["peak_time"]
-                            - cleaned_peak_times[np.nonzero(cleaned_peak_times)].mean()
-                        )
-                    if "clean" in channel or "mask" in channel:
-                        vector[:, i] *= mask
-                    # Apply the transform to recover orginal floating point values if the file were compressed
-                    if "image" in channel:
-                        if self.image_scale > 0.0:
-                            vector[:, i] /= self.image_scale
-                        if self.image_offset > 0:
-                            vector[:, i] -= self.image_offset
-                    if "time" in channel:
-                        if self.peak_time_scale > 0.0:
-                            vector[:, i] /= self.peak_time_scale
-                        if self.peak_time_offset > 0:
-                            vector[:, i] -= self.peak_time_offset
-
-        # If 'indexed_conv' is selected, we only need the unmapped vector.
-        if (
-            self.image_mapper.mapping_method[self._get_camera_type(tel_type)]
-            == "indexed_conv"
-        ):
-            return vector
-
-        image = self.image_mapper.map_image(vector, self._get_camera_type(tel_type))
-        if (
-            self.process_type == "Observation"
-            and self._get_camera_type(tel_type) == "LSTCam"
-        ):
-            image = np.transpose(
-                np.flip(image, axis=(0, 1)), (1, 0, 2)
-            )  # x = -y & y = -x
-        return image
-
     def _append_subarray_info(self, subarray_table, subarray_info, query):
         with lock:
             for row in subarray_table.where(query):
@@ -1827,7 +1844,18 @@ class DLDataReader:
                         child = self.files[
                             filename
                         ].root.dl1.event.telescope.images._f_get_child(tel_table)
-                images.append(self._get_image(child, tel_type, trigger_info[i]))
+                    unmapped_vector = get_unmapped_vector(
+                        self, child[trigger_info[i]], self.image_settings
+                    )
+                images.append(
+                    apply_image_mapper(
+                        self,
+                        unmapped_vector,
+                        self.image_mapper,
+                        self._get_camera_type(tel_type),
+                        self.process_type,
+                    )
+                )
 
             if self.parameter_list is not None:
                 child = None
@@ -1965,7 +1993,18 @@ class DLDataReader:
                     child = self.files[
                         filename
                     ].root.dl1.event.telescope.images._f_get_child(tel_table)
-                example.append(self._get_image(child, self.tel_type, index))
+                    unmapped_vector = get_unmapped_vector(
+                        self, child[index], self.image_settings
+                    )
+                example.append(
+                    apply_image_mapper(
+                        self,
+                        unmapped_vector,
+                        self.image_mapper,
+                        self._get_camera_type(self.tel_type),
+                        self.process_type,
+                    )
+                )
 
             if self.parameter_list is not None:
                 with lock:
