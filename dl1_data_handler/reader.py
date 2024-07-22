@@ -24,7 +24,6 @@ from ctapipe.io import (
 __all__ = [
     "DLDataReader",
     "get_unmapped_image",
-    "apply_image_mapper",
     "get_unmapped_waveform",
     "get_mapped_trigger_patch",
 ]
@@ -322,21 +321,6 @@ def get_mapped_trigger_patch(
     if image_mapper.mapping_method[camera_type] == "indexed_conv":
         return vector, trigger_patch_true_image_sum
     return waveform, trigger_patch_true_image_sum
-
-
-def apply_image_mapper(
-    unmapped_vector, image_mapper, camera_type, process_type="Simulation"
-):
-
-    # If 'indexed_conv' is selected, we only need the unmapped vector.
-    if image_mapper.mapping_method[camera_type] == "indexed_conv":
-        return unmapped_vector
-
-    image = image_mapper.map_image(unmapped_vector, camera_type)
-    if process_type == "Observation" and camera_type == "LSTCam":
-        image = np.transpose(np.flip(image, axis=(0, 1)), (1, 0, 2))  # x = -y & y = -x
-    return image
-
 
 lock = threading.Lock()
 
@@ -1653,14 +1637,11 @@ class DLDataReader:
                                 self.waveform_settings,
                                 dl1_cleaning_mask,
                             )
-                        waveforms.append(
-                            apply_image_mapper(
-                                unmapped_waveform,
-                                self.image_mapper,
-                                self._get_camera_type(tel_type),
-                                self.process_type,
-                            )
-                        )
+                        # Apply the ImageMapper whenever the mapping method is not indexed_conv
+                        if self.image_mapper.mapping_method[self._get_camera_type(tel_type)] != "indexed_conv":
+                            waveforms.append(self.image_mapper.map_image(unmapped_waveform, self._get_camera_type(tel_type)))
+                        else:
+                            waveforms.append(unmapped_waveform)
 
             if self.image_channels is not None:
                 child = None
@@ -1678,14 +1659,11 @@ class DLDataReader:
                         self.image_channels,
                         self.image_transforms,
                     )
-                images.append(
-                    apply_image_mapper(
-                        unmapped_image,
-                        self.image_mapper,
-                        self._get_camera_type(tel_type),
-                        self.process_type,
-                    )
-                )
+                # Apply the ImageMapper whenever the mapping method is not indexed_conv
+                if self.image_mapper.mapping_method[self._get_camera_type(tel_type)] != "indexed_conv":
+                    images.append(self.image_mapper.map_image(unmapped_image, self._get_camera_type(tel_type)))
+                else:
+                    images.append(unmapped_image)
 
             if self.parameter_list is not None:
                 child = None
@@ -1806,14 +1784,11 @@ class DLDataReader:
                             self.waveform_settings,
                             dl1_cleaning_mask,
                         )
-                    example.append(
-                        apply_image_mapper(
-                            unmapped_waveform,
-                            self.image_mapper,
-                            self._get_camera_type(self.tel_type),
-                            self.process_type,
-                        )
-                    )
+                    # Apply the ImageMapper whenever the mapping method is not indexed_conv
+                    if self.image_mapper.mapping_method[self._get_camera_type(self.tel_type)] != "indexed_conv":
+                        example.append(self.image_mapper.map_image(unmapped_waveform, self._get_camera_type(self.tel_type)))
+                    else:
+                        example.append(unmapped_waveform)
 
             if self.image_channels is not None:
                 with lock:
@@ -1824,14 +1799,11 @@ class DLDataReader:
                     unmapped_image = get_unmapped_image(
                         child[index], self.image_channels, self.image_transforms
                     )
-                example.append(
-                    apply_image_mapper(
-                        unmapped_image,
-                        self.image_mapper,
-                        self._get_camera_type(self.tel_type),
-                        self.process_type,
-                    )
-                )
+                # Apply the ImageMapper whenever the mapping method is not indexed_conv
+                if self.image_mapper.mapping_method[self._get_camera_type(self.tel_type)] != "indexed_conv":
+                    example.append(self.image_mapper.map_image(unmapped_image, self._get_camera_type(self.tel_type)))
+                else:
+                    example.append(unmapped_image)
 
             if self.parameter_list is not None:
                 with lock:
