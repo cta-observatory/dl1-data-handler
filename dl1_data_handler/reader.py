@@ -745,27 +745,16 @@ class DLDataReader:
                     if parameter_selection:
                         for filter in parameter_selection:
                             if "min_value" in filter:
-                                if filter["col_name"] in allevents.colnames:
-                                    allevents = allevents[
-                                        allevents[filter["col_name"]]
-                                        >= filter["min_value"]
-                                    ]
-                                else:
-                                    allevents = allevents[
-                                        allevents["camera_frame_" + filter["col_name"]]
-                                        >= filter["min_value"]
-                                    ]
+                                allevents = allevents[
+                                    allevents[filter["col_name"]]
+                                    >= filter["min_value"]
+                                ]
                             if "max_value" in filter:
-                                if filter["col_name"] in allevents.colnames:
-                                    allevents = allevents[
-                                        allevents[filter["col_name"]]
-                                        < filter["max_value"]
-                                    ]
-                                else:
-                                    allevents = allevents[
-                                        allevents["camera_frame_" + filter["col_name"]]
-                                        < filter["max_value"]
-                                    ]
+                                allevents = allevents[
+                                    allevents[filter["col_name"]]
+                                    < filter["max_value"]
+                                ]
+
 
                     # Track number of events for each particle type
                     if self.process_type == "Simulation":
