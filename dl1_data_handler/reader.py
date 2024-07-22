@@ -1363,17 +1363,6 @@ class DLDataReader:
                             "dtype": np.dtype(np.float16),
                         }
                     )
-                    if self.trigger_settings is not None:
-                        self.unprocessed_example_description.append(
-                            {
-                                "name": tel_type + "_trigger_patch_true_image_sum",
-                                "tel_type": tel_type,
-                                "base_name": "true_image_sum",
-                                "shape": (num_tels,) + (1,),
-                                "dtype": np.dtype(np.int),
-                            }
-                        )
-
                 if self.image_channels is not None:
                     self.unprocessed_example_description.extend(
                         [
