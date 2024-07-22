@@ -379,11 +379,7 @@ class DLDataReader:
                 raise IOError(
                     f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.6.0.0)."
                 )
-        # Add several checks for real data processing, i.e. no quality cut applied and a single file is provided.
-        if self.process_type == "Observation" and quality_selection is not None:
-            raise ValueError(
-                f"When processing real observational data, please do not select any quality cut (currently: '{quality_selection}')."
-            )
+        # Add check for real data processing that only a single file is provided.
         if self.process_type == "Observation" and len(self.files) != 1:
             raise ValueError(
                 f"When processing real observational data, please provide a single file (currently: '{len(self.files)}')."
@@ -728,17 +724,19 @@ class DLDataReader:
                                     f"There is a problem with '{filename.replace('r0.dl1.h5','npe.csv')}'!"
                                 )
 
+                    # Initialize a boolean mask to True for all events
+                    self.quality_mask = np.ones(len(allevents), dtype=bool)
                     # Quality selection based on the dl1b parameter and MC shower simulation tables
                     if quality_selection:
                         for filter in quality_selection:
+                            # Update the mask for the minimum value condition
                             if "min_value" in filter:
-                                allevents = allevents[
-                                    allevents[filter["col_name"]] >= filter["min_value"]
-                                ]
+                                self.quality_mask &= (allevents[filter["col_name"]] >= filter["min_value"])
+                            # Update the mask for the maximum value condition
                             if "max_value" in filter:
-                                allevents = allevents[
-                                    allevents[filter["col_name"]] < filter["max_value"]
-                                ]
+                                self.quality_mask &= (allevents[filter["col_name"]] < filter["max_value"])
+                    # Apply the updated mask to filter events
+                    allevents = allevents[self.quality_mask]
 
                     # Track number of events for each particle type
                     if self.process_type == "Simulation":
