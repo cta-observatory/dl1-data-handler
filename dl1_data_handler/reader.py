@@ -1,4 +1,4 @@
-from collections import Counter, OrderedDict
+from collections import OrderedDict
 import random
 import threading
 import numpy as np
@@ -25,7 +25,7 @@ __all__ = [
     "DLDataReader",
     "get_unmapped_image",
     "get_unmapped_waveform",
-    "get_mapped_trigger_patch",
+    "get_mapped_triggerpatch",
 ]
 
 
@@ -129,7 +129,7 @@ def get_unmapped_waveform(
 # First extract a raw 2D vector and transform it into a 3D waveform using a
 # mapping table. When 'indexed_conv' is selected this function should
 # return the unmapped vector.
-def get_mapped_trigger_patch(
+def get_mapped_triggerpatch(
     r0_event,
     waveform_settings,
     trigger_settings,
@@ -1744,7 +1744,7 @@ class DLDataReader:
                                     np.array(sim_child[index]["true_image"], dtype=int),
                                     axis=1,
                                 )
-                        waveform, trigger_patch_true_image_sum = get_mapped_trigger_patch(
+                        waveform, trigger_patch_true_image_sum = get_mapped_triggerpatch(
                             child[index],
                             self.waveform_settings,
                             self.trigger_settings,
