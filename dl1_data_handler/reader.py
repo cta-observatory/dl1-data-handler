@@ -334,8 +334,7 @@ class DLDataReader:
         selected_telescope_types=None,
         selected_telescope_ids=None,
         multiplicity_selection=None,
-        event_selection=None,
-        parameter_selection=None,
+        quality_selection=None,
         shuffle=False,
         seed=None,
         trigger_settings=None,
@@ -381,9 +380,9 @@ class DLDataReader:
                     f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.6.0.0)."
                 )
         # Add several checks for real data processing, i.e. no quality cut applied and a single file is provided.
-        if self.process_type == "Observation" and parameter_selection is not None:
+        if self.process_type == "Observation" and quality_selection is not None:
             raise ValueError(
-                f"When processing real observational data, please do not select any quality cut (currently: '{parameter_selection}')."
+                f"When processing real observational data, please do not select any quality cut (currently: '{quality_selection}')."
             )
         if self.process_type == "Observation" and len(self.files) != 1:
             raise ValueError(
@@ -729,9 +728,9 @@ class DLDataReader:
                                     f"There is a problem with '{filename.replace('r0.dl1.h5','npe.csv')}'!"
                                 )
 
-                    # MC event selection based on the shower simulation table
-                    if event_selection:
-                        for filter in event_selection:
+                    # Quality selection based on the dl1b parameter and MC shower simulation tables
+                    if quality_selection:
+                        for filter in quality_selection:
                             if "min_value" in filter:
                                 allevents = allevents[
                                     allevents[filter["col_name"]] >= filter["min_value"]
@@ -740,21 +739,6 @@ class DLDataReader:
                                 allevents = allevents[
                                     allevents[filter["col_name"]] < filter["max_value"]
                                 ]
-
-                    # Image and parameter selection based on the parameter tables
-                    if parameter_selection:
-                        for filter in parameter_selection:
-                            if "min_value" in filter:
-                                allevents = allevents[
-                                    allevents[filter["col_name"]]
-                                    >= filter["min_value"]
-                                ]
-                            if "max_value" in filter:
-                                allevents = allevents[
-                                    allevents[filter["col_name"]]
-                                    < filter["max_value"]
-                                ]
-
 
                     # Track number of events for each particle type
                     if self.process_type == "Simulation":
@@ -844,9 +828,9 @@ class DLDataReader:
                             keys=["obs_id", "event_id"],
                         )
 
-                        # MC event selection based on the shower simulation table.
-                        if event_selection:
-                            for filter in event_selection:
+                        # Quality selection based on the shower simulation table.
+                        if quality_selection:
+                            for filter in quality_selection:
                                 if "min_value" in filter:
                                     allevents = allevents[
                                         allevents[filter["col_name"]]
@@ -937,35 +921,19 @@ class DLDataReader:
                             tel_table.add_column(
                                 np.arange(len(tel_table)), name="img_index", index=0
                             )
-                            # MC event selection based on the parameter tables.
-                            if parameter_selection:
-                                for filter in parameter_selection:
+                            # Quality selection based on the parameter tables.
+                            if quality_selection:
+                                for filter in quality_selection:
                                     if "min_value" in filter:
-                                        if filter["col_name"] in tel_table.colnames:
-                                            tel_table = tel_table[
-                                                tel_table[filter["col_name"]]
-                                                >= filter["min_value"]
-                                            ]
-                                        else:
-                                            tel_table = tel_table[
-                                                tel_table[
-                                                    "camera_frame_" + filter["col_name"]
-                                                ]
-                                                >= filter["min_value"]
-                                            ]
+                                        tel_table = tel_table[
+                                            tel_table[filter["col_name"]]
+                                            >= filter["min_value"]
+                                        ]
                                     if "max_value" in filter:
-                                        if filter["col_name"] in tel_table.colnames:
-                                            tel_table = tel_table[
-                                                tel_table[filter["col_name"]]
-                                                < filter["max_value"]
-                                            ]
-                                        else:
-                                            tel_table = tel_table[
-                                                tel_table[
-                                                    "camera_frame_" + filter["col_name"]
-                                                ]
-                                                < filter["max_value"]
-                                            ]
+                                        tel_table = tel_table[
+                                            tel_table[filter["col_name"]]
+                                            < filter["max_value"]
+                                        ]
                             merged_table = join(
                                 left=tel_table,
                                 right=allevents[selected_events],
@@ -978,8 +946,8 @@ class DLDataReader:
                             for trig, img in zip(tel_trigger_info, tel_img_index):
                                 img_idx[trig][np.where(tel_ids == tel_id)] = img
 
-                        # Apply the multiplicity cut after the parameter cuts for a particular telescope type
-                        if parameter_selection and multiplicity_selection[tel_type] > 0:
+                        # Apply the multiplicity cut after the quality cuts for a particular telescope type
+                        if quality_selection and multiplicity_selection[tel_type] > 0:
                             aftercuts_multiplicty_mask = (
                                 np.count_nonzero(img_idx + 1, axis=1)
                                 >= multiplicity_selection[tel_type]
