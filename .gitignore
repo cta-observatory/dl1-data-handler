@@ -1,6 +1,6 @@
 #Ignore files
 #############
-
+dl1_data_handler/_version.py
 *.o
 *.png
 *.h5
@@ -8,4 +8,4 @@
 dl1_data_handler/__pycache__
 build
 dist
-dl1_data_handler.egg-info
+*.egg-info/
