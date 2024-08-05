@@ -405,14 +405,6 @@ class DLDataReader:
                 f"Invalid mode selection '{mode}'. Valid options: 'mono', 'stereo'"
             )
 
-        if subarray_info is None:
-            subarray_info = []
-        self.subarray_info = subarray_info
-
-        if event_info is None:
-            event_info = []
-        self.event_info = event_info
-
         if selected_telescope_ids is None:
             selected_telescope_ids = []
         (
