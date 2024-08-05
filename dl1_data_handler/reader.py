@@ -433,7 +433,7 @@ class DLDataReader:
                 with lock:
                     self.telescope_pointings[f"tel_{tel_id:03d}"] = read_table(
                         self.files[first_file],
-                        f"/dl1/monitoring/telescope/pointing/tel_{tel_id:03d}",
+                        f"/dl0/monitoring/telescope/pointing/tel_{tel_id:03d}",
                     )
             with lock:
                 self.tel_trigger_table = read_table(
