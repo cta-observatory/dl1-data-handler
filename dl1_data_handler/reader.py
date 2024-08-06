@@ -1442,7 +1442,7 @@ class DLDataReader:
     ):
         trigger_patches, true_cherenkov_photons = [], []
         random_trigger_patch = False
-        for i, file_idx, img_idx, tel_id in enumerate(
+        for i, (file_idx, img_idx, tel_id) in enumerate(
             zip(file_idxs, img_idxs, tel_ids)
         ):
             filename = list(self.files)[file_idx]
@@ -1486,7 +1486,7 @@ class DLDataReader:
             trigger_patches.append(waveform)
             if trigger_patch_true_image_sum is not None:
                 true_cherenkov_photons.append(trigger_patch_true_image_sum)
-        return trigger_patches, true_cherenkov_photons
+        return np.stack(trigger_patches), true_cherenkov_photons
 
     def _get_stereo_img_features(self, file_idxs, trigger_infos):
         for file_idx, trigger_info in zip(
