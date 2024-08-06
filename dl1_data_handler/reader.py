@@ -1,12 +1,10 @@
 from collections import OrderedDict
-import random
 import threading
 import numpy as np
 import pandas as pd
 import tables
 
 from dl1_data_handler.image_mapper import ImageMapper
-from dl1_data_handler.processor import DL1DataProcessor
 
 import astropy.units as u
 from astropy.coordinates import SkyCoord
@@ -1116,7 +1114,9 @@ class DLDataReader:
                                     ].append({"x": patch[0], "y": patch[1]})
 
                         self.waveform_settings["shapes"][camera_type] = (
-                            self.trigger_settings["patch_size"][camera_type]
+                            self.trigger_settings["patch_size"][camera_type][0],
+                            self.trigger_settings["patch_size"][camera_type][1],
+                            self.waveform_settings["sequence_length"],
                         )
                         self.trigger_settings["patches_xpos"][camera_type] = np.unique(
                             [
