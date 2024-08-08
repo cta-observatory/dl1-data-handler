@@ -358,20 +358,12 @@ class DLDataReader:
         self.process_type = self._v_attrs["CTA PROCESS TYPE"]
         self.data_format_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
 
-        # Temp fix until ctapipe can process LST-1 data writing into data format v6.0.0.
-        # For dl1 images we can process real data with version v5.0.0 without any problems.
-        # TODO: Remove v5.0.0 once v6.0.0 is available
-        if self.process_type == "Observation" and image_settings is not None:
-            if int(self.data_format_version.split(".")[0].replace("v", "")) < 5:
-                raise IOError(
-                    f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.5.0.0 for LST-1 data)."
-                )
-        else:
-            if int(self.data_format_version.split(".")[0].replace("v", "")) < 6:
-                raise IOError(
-                    f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.6.0.0)."
-                )
-        # Add check for real data processing that only a single file is provided.
+        # Check for the minimum ctapipe data format version (v6.0.0)
+        if int(self.data_format_version.split(".")[0].replace("v", "")) < 6:
+            raise IOError(
+                f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.6.0.0)."
+            )
+        # Check for real data processing that only a single file is provided.
         if self.process_type == "Observation" and len(self.files) != 1:
             raise ValueError(
                 f"When processing real observational data, please provide a single file (currently: '{len(self.files)}')."
