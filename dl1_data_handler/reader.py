@@ -10,6 +10,7 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord
 from astropy.table import (
     Table,
+    unique,
     join,  # let us merge tables horizontally
     vstack,  # and vertically
 )
@@ -389,7 +390,6 @@ class DLDataReader:
             0: "gamma",
             101: "proton",
             1: "electron",
-            255: "hadron",
             404: "nsb",
         }
 
@@ -502,9 +502,12 @@ class DLDataReader:
             self.image_transforms["peak_time_offset"] = 0
 
         # Image parameters (DL1b)
-        self.parameter_list = None
-        if parameter_settings is not None:
-            self.parameter_list = parameter_settings["parameter_list"]
+        # Retrieve the column names for the DL1b parameter table
+        with lock:
+            self.dl1b_parameter_colnames = read_table(
+                self.files[first_file],
+                f"/dl1/event/telescope/parameters/tel_{self.tel_ids[0]:03d}",
+            ).colnames
 
         # Get offset and scaling of images
         if self.image_channels is not None:
@@ -539,513 +542,292 @@ class DLDataReader:
             self.example_ids_keep_columns.extend(
                 ["true_energy", "true_alt", "true_az", "true_shower_primary_id"]
             )
+        if mode == "stereo":
+            self.example_ids_keep_columns.extend(
+                ["tels_with_trigger", "hillas_intensity"]
+            )
+            if self.process_type == "Observation":
+                self.example_ids_keep_columns.extend(["time", "event_type"])
         if self.trigger_settings is not None and self.get_trigger_patch_from == "file":
             self.example_ids_keep_columns.extend(
                 ["trg_pixel_id", "trg_waveform_sample_id"]
             )
 
         self.simulation_info = None
-        self.simulated_particles = {}
-        self.simulated_particles["total"] = 0
-        self.example_identifiers = []
-        if example_identifiers_file is None:
-            example_identifiers_file = {}
-        else:
-            example_identifiers_file = pd.HDFStore(example_identifiers_file)
-
-        if "/example_identifiers" in list(example_identifiers_file.keys()):
-            self.example_identifiers = pd.read_hdf(
-                example_identifiers_file, key="/example_identifiers"
-            ).to_numpy()
-            if "/simulation_info" in list(example_identifiers_file.keys()):
-                self.simulation_info = pd.read_hdf(
-                    example_identifiers_file, key="/simulation_info"
-                ).to_dict("records")[0]
-            if "/simulated_particles" in list(example_identifiers_file.keys()):
-                self.simulated_particles = pd.read_hdf(
-                    example_identifiers_file, key="/simulated_particles"
-                ).to_dict("records")[0]
-            if "/class_weight" in list(example_identifiers_file.keys()):
-                self.class_weight = pd.read_hdf(
-                    example_identifiers_file, key="/class_weight"
-                ).to_dict("records")[0]
-            if "/class_names" in list(example_identifiers_file.keys()):
-                class_names = pd.read_hdf(
-                    example_identifiers_file, key="/class_names"
-                ).to_dict("records")
-                self.class_names = [name[0] for name in class_names]
-            if "/shower_primary_id_to_class" in list(example_identifiers_file.keys()):
-                self.shower_primary_id_to_class = pd.read_hdf(
-                    example_identifiers_file, key="/shower_primary_id_to_class"
-                ).to_dict("records")[0]
-            self.num_classes = len(self.simulated_particles) - 1
-            if self.include_nsb_patches == "auto":
-                self._nsb_prob = np.around(1 / self.num_classes, decimals=2)
-                self._shower_prob = np.around(1 - self._nsb_prob, decimals=2)
-            example_identifiers_file.close()
-        else:
-            example_identifiers = []
-            for file_idx, (filename, f) in enumerate(self.files.items()):
-                # Read simulation information from each observation needed for pyIRF
-                if self.process_type == "Simulation":
-                    self.simulation_info = self._construct_simulated_info(
-                        f, self.simulation_info
-                    )
-                # Telescope selection
-                (
-                    telescopes,
-                    selected_telescopes,
-                    camera2index,
-                ) = self._construct_telescopes_selection(
-                    f.root.configuration.instrument.subarray.layout,
-                    selected_telescope_types,
-                    selected_telescope_ids,
+        example_identifiers = []
+        for file_idx, (filename, f) in enumerate(self.files.items()):
+            # Read simulation information from each observation needed for pyIRF
+            if self.process_type == "Simulation":
+                self.simulation_info = self._construct_simulated_info(
+                    f, self.simulation_info
                 )
+            # Telescope selection
+            (
+                telescopes,
+                selected_telescopes,
+                camera2index,
+            ) = self._construct_telescopes_selection(
+                f.root.configuration.instrument.subarray.layout,
+                selected_telescope_types,
+                selected_telescope_ids,
+            )
 
-                # Multiplicity selection
-                if "Subarray" not in multiplicity_selection:
-                    multiplicity_selection["Subarray"] = 1
-                    for tel_type in selected_telescopes:
-                        if tel_type in multiplicity_selection:
-                            multiplicity_selection["Subarray"] = multiplicity_selection[
-                                tel_type
-                            ]
-                if len(selected_telescopes) > 1:
-                    for tel_type in selected_telescopes:
-                        if tel_type not in multiplicity_selection:
-                            multiplicity_selection[tel_type] = 0
-                else:
-                    multiplicity_selection[list(selected_telescopes.keys())[0]] = (
-                        multiplicity_selection["Subarray"]
+            # Construct the shower simulation table
+            if self.process_type == "Simulation":
+                simshower_table = read_table(f, "/simulation/event/subarray/shower")
+
+            if self.mode == "mono":
+                # Construct the table containing all events.
+                # First, the telescope tables are joined with the shower simulation
+                # table and then those joined/merged tables are vertically stacked.
+                tel_tables = []
+                for tel_id in self.selected_telescopes[self.tel_type]:
+                    tel_table = read_table(
+                        f, f"/dl1/event/telescope/parameters/tel_{tel_id:03d}"
                     )
+                    tel_table.add_column(
+                        np.arange(len(tel_table)), name="img_index", index=0
+                    )
+                    if self.process_type == "Simulation":
+                        tel_table = join(
+                            left=tel_table,
+                            right=simshower_table,
+                            keys=["obs_id", "event_id"],
+                        )
+                    tel_tables.append(tel_table)
+                events = vstack(tel_tables)
 
-                # Construct the shower simulation table
+                # AI-based trigger system
+                # Obtain trigger patch info from an external algorithm (i.e. DBScan)
+                if self.trigger_settings is not None and "raw" in self.waveform_type:
+                    if self.trigger_settings["get_patch_from"] == "file":
+                        try:
+                            # Read csv containing the trigger patch info
+                            trigger_patch_info_csv_file = pd.read_csv(
+                                filename.replace("r0.dl1.h5", "npe.csv")
+                            )[
+                                [
+                                    "obs_id",
+                                    "event_id",
+                                    "tel_id",
+                                    "trg_pixel_id",
+                                    "trg_waveform_sample_id",
+                                ]
+                            ].astype(
+                                int
+                            )
+                            trigger_patch_info = Table.from_pandas(
+                                trigger_patch_info_csv_file
+                            )
+                            # Join the events table ith the trigger patch info
+                            events = join(
+                                left=trigger_patch_info,
+                                right=events,
+                                keys=["obs_id", "event_id", "tel_id"],
+                            )
+                            # Remove non-trigger events with negative pixel ids
+                            events = events[events["trg_pixel_id"] >= 0]
+                        except:
+                            raise IOError(
+                                f"There is a problem with '{filename.replace('r0.dl1.h5','npe.csv')}'!"
+                            )
+
+                # Initialize a boolean mask to True for all events
+                self.quality_mask = np.ones(len(events), dtype=bool)
+                # Quality selection based on the dl1b parameter and MC shower simulation tables
+                if quality_selection:
+                    for filter in quality_selection:
+                        # Update the mask for the minimum value condition
+                        if "min_value" in filter:
+                            self.quality_mask &= (
+                                events[filter["col_name"]] >= filter["min_value"]
+                            )
+                        # Update the mask for the maximum value condition
+                        if "max_value" in filter:
+                            self.quality_mask &= (
+                                events[filter["col_name"]] < filter["max_value"]
+                            )
+                # Apply the updated mask to filter events
+                events = events[self.quality_mask]
+
+                # Construct the example identifiers
+                events.keep_columns(self.example_ids_keep_columns)
+                tel_pointing = self._get_tel_pointing(f, self.tel_ids)
+                events = join(
+                    left=events,
+                    right=tel_pointing,
+                    keys=["obs_id", "tel_id"],
+                )
+                events = self._transform_to_spherical_offsets(events)
+                # Add telescope type id which is always 0 in mono mode
+                # Needed to share code with stereo reading mode
+                events.add_column(file_idx, name="file_index", index=0)
+                events.add_column(0, name="tel_type_id", index=3)
+                example_identifiers.append(events)
+
+            elif self.mode == "stereo":
+                # Read the trigger table.
+                trigger_table = read_table(f, "/dl1/event/subarray/trigger")
                 if self.process_type == "Simulation":
-                    simshower_table = read_table(f, "/simulation/event/subarray/shower")
-                    simshower_table.add_column(
-                        np.arange(len(simshower_table)), name="sim_index", index=0
+                    # The shower simulation table is joined with the subarray trigger table.
+                    trigger_table = join(
+                        left=trigger_table,
+                        right=simshower_table,
+                        keys=["obs_id", "event_id"],
                     )
-                    true_shower_primary_id = simshower_table["true_shower_primary_id"][
-                        0
-                    ]
+                events = []
 
-                if self.mode == "mono":
-                    # Construct the table containing all events.
-                    # First, the telescope tables are joined with the shower simulation
-                    # table and then those joined/merged tables are vertically stacked.
-                    tel_tables = []
-                    for tel_id in selected_telescopes[self.tel_type]:
+                for tel_type_id, tel_type in enumerate(self.selected_telescopes):
+                    table_per_type = []
+                    for tel_id in self.selected_telescopes[tel_type]:
+                        # The telescope table is joined with the selected and merged table.
                         tel_table = read_table(
-                            f, f"/dl1/event/telescope/parameters/tel_{tel_id:03d}"
+                            f,
+                            f"/dl1/event/telescope/parameters/tel_{tel_id:03d}",
                         )
                         tel_table.add_column(
                             np.arange(len(tel_table)), name="img_index", index=0
                         )
-
-                        if self.process_type == "Simulation":
-                            tel_table = join(
-                                left=tel_table,
-                                right=simshower_table,
-                                keys=["obs_id", "event_id"],
-                            )
-                        tel_tables.append(tel_table)
-                    allevents = vstack(tel_tables)
-
-                    # AI-based trigger system
-                    # Obtain trigger patch info from an external algorithm (i.e. DBScan)
-                    if (
-                        self.trigger_settings is not None
-                        and "raw" in self.waveform_type
-                    ):
-                        if self.trigger_settings["get_patch_from"] == "file":
-                            try:
-                                # Read csv containing the trigger patch info
-                                trigger_patch_info_csv_file = pd.read_csv(
-                                    filename.replace("r0.dl1.h5", "npe.csv")
-                                )[
-                                    [
-                                        "obs_id",
-                                        "event_id",
-                                        "tel_id",
-                                        "trg_pixel_id",
-                                        "trg_waveform_sample_id",
-                                    ]
-                                ].astype(
-                                    int
-                                )
-                                trigger_patch_info = Table.from_pandas(
-                                    trigger_patch_info_csv_file
-                                )
-                                # Join the events table ith the trigger patch info
-                                allevents = join(
-                                    left=trigger_patch_info,
-                                    right=allevents,
-                                    keys=["obs_id", "event_id", "tel_id"],
-                                )
-                                # Remove non-trigger events with negative pixel ids
-                                allevents = allevents[allevents["trg_pixel_id"] >= 0]
-                            except:
-                                raise IOError(
-                                    f"There is a problem with '{filename.replace('r0.dl1.h5','npe.csv')}'!"
-                                )
-
-                    # Initialize a boolean mask to True for all events
-                    self.quality_mask = np.ones(len(allevents), dtype=bool)
-                    # Quality selection based on the dl1b parameter and MC shower simulation tables
-                    if quality_selection:
-                        for filter in quality_selection:
-                            # Update the mask for the minimum value condition
-                            if "min_value" in filter:
-                                self.quality_mask &= (
-                                    allevents[filter["col_name"]] >= filter["min_value"]
-                                )
-                            # Update the mask for the maximum value condition
-                            if "max_value" in filter:
-                                self.quality_mask &= (
-                                    allevents[filter["col_name"]] < filter["max_value"]
-                                )
-                    # Apply the updated mask to filter events
-                    allevents = allevents[self.quality_mask]
-
-                    # Track number of events for each particle type
-                    if self.process_type == "Simulation":
-                        self.simulated_particles["total"] += len(allevents)
-                        if true_shower_primary_id in self.simulated_particles:
-                            self.simulated_particles[true_shower_primary_id] += len(
-                                allevents
-                            )
-                        else:
-                            self.simulated_particles[true_shower_primary_id] = len(
-                                allevents
-                            )
-
-                    # Construct the example identifiers
-                    allevents.keep_columns(self.example_ids_keep_columns)
-                    allevents.add_column(file_idx, name="file_index", index=0)
-                    if self.process_type == "Simulation":
-                        # Transform true energy into the log space
-                        allevents.add_column(
-                            np.log10(allevents["true_energy"]), name="log_true_energy"
-                        )
-                        # Transform alt and az into spherical offsets
-                        tel_pointing = []
-                        for tel_id in self.tel_ids:
-                            with lock:
-                                tel_pointing.append(
-                                    read_table(
-                                        f,
-                                        f"/configuration/telescope/pointing/tel_{tel_id:03d}",
-                                    )
-                                )
-                        allevents = join(
-                            left=allevents,
-                            right=vstack(tel_pointing),
-                            keys=["obs_id", "tel_id"],
-                        )
-                        # Set the telescope pointing of the SkyOffsetSeparation tranform to the fix pointing
-                        fix_pointing = SkyCoord(
-                            allevents["telescope_pointing_azimuth"],
-                            allevents["telescope_pointing_altitude"],
-                            frame="altaz",
-                        )
-                        true_direction = SkyCoord(
-                            allevents["true_az"],
-                            allevents["true_alt"],
-                            frame="altaz",
-                        )
-                        sky_offset = fix_pointing.spherical_offsets_to(true_direction)
-                        angular_separation = fix_pointing.separation(true_direction)
-                        allevents.add_column(sky_offset[0], name="spherical_offset_az")
-                        allevents.add_column(sky_offset[1], name="spherical_offset_alt")
-                        allevents.add_column(
-                            angular_separation, name="angular_separation"
-                        )
-                        allevents.remove_columns(
-                            [
-                                "telescope_pointing_azimuth",
-                                "telescope_pointing_altitude",
-                            ]
-                        )
-                    example_identifiers.append(allevents)
-
-                elif self.mode == "stereo":
-                    # Read the trigger table.
-                    allevents = read_table(f, "/dl1/event/subarray/trigger")
-                    if self.process_type == "Simulation":
-                        # The shower simulation table is joined with the subarray trigger table.
-                        allevents = join(
-                            left=allevents,
-                            right=simshower_table,
-                            keys=["obs_id", "event_id"],
-                        )
-
-                        # Quality selection based on the shower simulation table.
+                        # Initialize a boolean mask to True for all events
+                        quality_mask = np.ones(len(tel_table), dtype=bool)
+                        # Quality selection based on the dl1b parameter and MC shower simulation tables
                         if quality_selection:
                             for filter in quality_selection:
+                                # Update the mask for the minimum value condition
                                 if "min_value" in filter:
-                                    allevents = allevents[
-                                        allevents[filter["col_name"]]
+                                    quality_mask &= (
+                                        tel_table[filter["col_name"]]
                                         >= filter["min_value"]
-                                    ]
+                                    )
+                                # Update the mask for the maximum value condition
                                 if "max_value" in filter:
-                                    allevents = allevents[
-                                        allevents[filter["col_name"]]
+                                    quality_mask &= (
+                                        tel_table[filter["col_name"]]
                                         < filter["max_value"]
-                                    ]
-
-                    # Apply the multiplicity cut on the subarray.
-                    # Therefore, two telescope types have to be selected at least.
-                    event_id = allevents["event_id"]
-                    tels_with_trigger = np.array(allevents["tels_with_trigger"])
-                    tel_id_to_trigger_idx = {
-                        tel_id: idx for idx, tel_id in enumerate(self.tel_ids)
-                    }
+                                    )
+                        # Merge the telescope table with the trigger table
+                        merged_table = join(
+                            left=tel_table[quality_mask],
+                            right=trigger_table,
+                            keys=["obs_id", "event_id"],
+                        )
+                        table_per_type.append(merged_table)
+                    table_per_type = vstack(table_per_type)
+                    table_per_type = table_per_type.group_by(["obs_id", "event_id"])
+                    table_per_type.keep_columns(self.example_ids_keep_columns)
                     if self.process_type == "Simulation":
-                        sim_indices = np.array(allevents["sim_index"], np.int32)
-                    if len(selected_telescopes) > 1:
-                        # Get all tel ids from the subarray
-                        selection_mask = np.zeros_like(tels_with_trigger)
-                        tel_ids = np.array(selected_telescopes.values())
-                        for tel_id in tel_ids:
-                            selection_mask[:, tel_id_to_trigger_idx[tel_id]] = 1
-                        # Construct the telescope trigger information restricted to allowed telescopes
-                        allowed_tels_with_trigger = tels_with_trigger * selection_mask
-                        # Get the multiplicity and apply the subarray multiplicity cut
-                        subarray_multiplicity, _ = allowed_tels_with_trigger.nonzero()
-                        events, multiplicity = np.unique(
-                            subarray_multiplicity, axis=0, return_counts=True
+                        tel_pointing = self._get_tel_pointing(f, self.tel_ids)
+                        table_per_type = join(
+                            left=table_per_type,
+                            right=tel_pointing,
+                            keys=["obs_id", "tel_id"],
                         )
-                        selected_events = events[
-                            np.where(multiplicity >= multiplicity_selection["Subarray"])
-                        ]
-                        event_id = event_id[selected_events]
-                        if self.process_type == "Simulation":
-                            sim_indices = sim_indices[selected_events]
-
-                    image_indices = {}
-                    for tel_type in selected_telescopes:
-                        # Get all selected tel ids of this telescope type
-                        selection_mask = np.zeros_like(tels_with_trigger)
-                        tel_ids = np.array(selected_telescopes[tel_type])
-                        for tel_id in tel_ids:
-                            selection_mask[:, tel_id_to_trigger_idx[tel_id]] = 1
-                        # Construct the telescope trigger information restricted to allowed telescopes of this telescope type
-                        allowed_tels_with_trigger = tels_with_trigger * selection_mask
-                        # Apply the multiplicity cut on the telescope type only.
-                        if len(selected_telescopes) == 1:
-                            # Get the multiplicity of this telescope type and apply the multiplicity cut
-                            (
-                                tel_type_multiplicity,
-                                _,
-                            ) = allowed_tels_with_trigger.nonzero()
-                            events, multiplicity = np.unique(
-                                tel_type_multiplicity, axis=0, return_counts=True
-                            )
-                            selected_events = events[
-                                np.where(
-                                    multiplicity >= multiplicity_selection[tel_type]
-                                )
-                            ]
-                            event_id = event_id[selected_events]
-                            if self.process_type == "Simulation":
-                                sim_indices = sim_indices[selected_events]
-                        selected_events_trigger = allowed_tels_with_trigger[
-                            selected_events
-                        ]
-
-                        # Get the position of each images of telescopes of this telescope type that triggered
-                        img_idx = -np.ones(
-                            (len(selected_events), len(tel_ids)), np.int32
+                        table_per_type = self._transform_to_spherical_offsets(
+                            table_per_type
                         )
+                    # Apply the multiplicity cut based on the telescope type
+                    if tel_type in multiplicity_selection:
+                        table_per_type = table_per_type.group_by(["obs_id", "event_id"])
 
-                        for tel_id in tel_ids:
-                            # Get the trigger information of this telescope
-                            tel_trigger_info = selected_events_trigger[
-                                :, tel_id_to_trigger_idx[tel_id]
-                            ]
-                            tel_trigger_info = np.where(tel_trigger_info)[0]
-                            # The telescope table is joined with the selected and merged table.
-                            tel_table = read_table(
-                                f,
-                                f"/dl1/event/telescope/parameters/tel_{tel_id:03d}",
-                            )
-                            tel_table.add_column(
-                                np.arange(len(tel_table)), name="img_index", index=0
-                            )
-                            # Quality selection based on the parameter tables.
-                            if quality_selection:
-                                for filter in quality_selection:
-                                    if "min_value" in filter:
-                                        tel_table = tel_table[
-                                            tel_table[filter["col_name"]]
-                                            >= filter["min_value"]
-                                        ]
-                                    if "max_value" in filter:
-                                        tel_table = tel_table[
-                                            tel_table[filter["col_name"]]
-                                            < filter["max_value"]
-                                        ]
-                            merged_table = join(
-                                left=tel_table,
-                                right=allevents[selected_events],
-                                keys=["obs_id", "event_id"],
-                            )
-                            print(allevents[selected_events])
-                            # Get the original position of image in the telescope table.
-                            tel_img_index = np.array(
-                                merged_table["img_index"], np.int32
-                            )
-                            for trig, img in zip(tel_trigger_info, tel_img_index):
-                                img_idx[trig][np.where(tel_ids == tel_id)] = img
+                        def _multiplicity_cut_tel_type(table, key_colnames):
+                            return len(table) >= multiplicity_selection[tel_type]
 
-                        # Apply the multiplicity cut after the quality cuts for a particular telescope type
-                        if quality_selection and multiplicity_selection[tel_type] > 0:
-                            aftercuts_multiplicty_mask = (
-                                np.count_nonzero(img_idx + 1, axis=1)
-                                >= multiplicity_selection[tel_type]
-                            )
-                            img_idx = img_idx[aftercuts_multiplicty_mask]
-                            event_id = event_id[aftercuts_multiplicty_mask]
-                            if self.process_type == "Simulation":
-                                sim_indices = sim_indices[aftercuts_multiplicty_mask]
-                        image_indices[tel_type] = img_idx
-
-                    # Apply the multiplicity cut after the parameter cuts for the subarray
-                    if multiplicity_selection["Subarray"] > 1:
-                        subarray_triggers = np.zeros(len(event_id))
-                        for tel_type in selected_telescopes:
-                            subarray_triggers += np.count_nonzero(
-                                image_indices[tel_type] + 1, axis=1
-                            )
-                        aftercuts_multiplicty_mask = (
-                            subarray_triggers >= multiplicity_selection["Subarray"]
+                        table_per_type = table_per_type.groups.filter(
+                            _multiplicity_cut_tel_type
                         )
-                        if self.process_type == "Simulation":
-                            sim_indices = sim_indices[aftercuts_multiplicty_mask]
-                        for tel_type in selected_telescopes:
-                            image_indices[tel_type] = image_indices[tel_type][
-                                aftercuts_multiplicty_mask
-                            ]
+                    table_per_type.add_column(tel_type_id, name="tel_type_id", index=3)
+                    events.append(table_per_type)
+                events = vstack(events)
+                # Apply the multiplicity cut based on the subarray
+                if "Subarray" in multiplicity_selection:
+                    events = events.group_by(["obs_id", "event_id"])
 
-                    if self.process_type == "Simulation":
-                        # Track number of events for each particle type
-                        self.simulated_particles["total"] += len(sim_indices)
-                        if true_shower_primary_id in self.simulated_particles:
-                            self.simulated_particles[true_shower_primary_id] += len(
-                                sim_indices
-                            )
-                        else:
-                            self.simulated_particles[true_shower_primary_id] = len(
-                                sim_indices
-                            )
+                    def _multiplicity_cut_subarray(table, key_colnames):
+                        return len(table) >= multiplicity_selection["Subarray"]
 
-                        # Construct the example identifiers
-                        # TODO: Find a better way!?
-                        for idx, sim_idx in enumerate(sim_indices):
-                            img_idx = []
-                            for tel_type in selected_telescopes:
-                                img_idx.append(image_indices[tel_type][idx])
-                            example_identifiers.append((file_idx, sim_idx, img_idx))
-                    else:
-                        # Construct the example identifiers
-                        for idx in range(len(allevents)):
-                            img_idx = []
-                            for tel_type in selected_telescopes:
-                                img_idx.append(image_indices[tel_type][idx])
-                            example_identifiers.append((file_idx, img_idx))
+                    events = events.groups.filter(_multiplicity_cut_subarray)
+                events.add_column(file_idx, name="file_index", index=0)
+                example_identifiers.append(events)
 
-            self.example_identifiers = vstack(example_identifiers)
-            # Add index column to the example identifiers to later retrieve batches
-            # using the loc functionality
+        self.example_identifiers = vstack(example_identifiers)
+
+        # Add index column to the example identifiers to later retrieve batches
+        # using the loc functionality
+        if self.mode == "mono":
             self.example_identifiers.add_column(
                 np.arange(len(self.example_identifiers)), name="index", index=0
             )
             self.example_identifiers.add_index("index")
-            # Handling the particle ids automatically and class weights calculation
-            # Scaling by total/2 helps keep the loss to a similar magnitude.
-            # The sum of the weights of all examples stays the same.
-            self.num_classes = len(self.simulated_particles) - 1
+        elif self.mode == "stereo":
+            self.unique_example_identifiers = unique(
+                self.example_identifiers, keys=["obs_id", "event_id"]
+            )
+        #    # Need this PR https://github.com/astropy/astropy/pull/15826
+        #    # waiting astropy v7.0.0
+        #    # self.example_identifiers.add_index(["obs_id", "event_id"])
 
-            if self.process_type == "Simulation":
-                # Include NSB patches is selected
-                if self.include_nsb_patches == "auto":
-                    for particle_id in list(self.simulated_particles.keys())[1:]:
-                        self.simulated_particles[particle_id] = int(
-                            self.simulated_particles[particle_id]
-                            * self.num_classes
-                            / (self.num_classes + 1)
-                        )
-                    self.simulated_particles[404] = int(
-                        self.simulated_particles["total"] / (self.num_classes + 1)
+        # Handling the particle ids automatically and class weights calculation
+        # Scaling by total/2 helps keep the loss to a similar magnitude.
+        # The sum of the weights of all examples stays the same.
+        self.simulated_particles = {}
+        if self.process_type == "Simulation":
+            # Track number of events for each particle type
+            self.simulated_particles["total"] = self.__len__()
+            for primary_id in self.shower_primary_id_to_name:
+                if self.mode == "mono":
+                    n_particles = np.count_nonzero(
+                        self.example_identifiers["true_shower_primary_id"] == primary_id
                     )
-                    self.num_classes += 1
-                    self._nsb_prob = np.around(1 / self.num_classes, decimals=2)
-                    self._shower_prob = np.around(1 - self._nsb_prob, decimals=2)
+                elif self.mode == "stereo":
+                    n_particles = np.count_nonzero(
+                        self.unique_example_identifiers["true_shower_primary_id"]
+                        == primary_id
+                    )
+                # Store the number of events for each particle type if there are any
+                if n_particles > 0 and primary_id != 404:
+                    self.simulated_particles[primary_id] = n_particles
+            self.n_classes = len(self.simulated_particles) - 1
+            # Include NSB patches is selected
+            if self.include_nsb_patches == "auto":
+                for particle_id in list(self.simulated_particles.keys())[1:]:
+                    self.simulated_particles[particle_id] = int(
+                        self.simulated_particles[particle_id]
+                        * self.n_classes
+                        / (self.n_classes + 1)
+                    )
+                self.simulated_particles[404] = int(
+                    self.simulated_particles["total"] / (self.n_classes + 1)
+                )
+                self.n_classes += 1
+                self._nsb_prob = np.around(1 / self.n_classes, decimals=2)
+                self._shower_prob = np.around(1 - self._nsb_prob, decimals=2)
 
-                self.shower_primary_id_to_class = {}
-                self.class_names = []
-                for p, particle_id in enumerate(
-                    list(self.simulated_particles.keys())[1:]
-                ):
-                    self.shower_primary_id_to_class[particle_id] = p
-                    self.class_names.append(
-                        (self.shower_primary_id_to_name[particle_id])
-                    )
-                # Caculate common transformation of MC data
-                # Transform shower primary id to class
-                # Create a vectorized function to map the values
-                vectorized_map = np.vectorize(self.shower_primary_id_to_class.get)
-                # Apply the mapping to the astropy column
-                true_shower_primary_class = vectorized_map(
-                    self.example_identifiers["true_shower_primary_id"]
-                )
-                self.example_identifiers.add_column(
-                    true_shower_primary_class, name="true_shower_primary_class"
-                )
-                if len(self.simulated_particles) > 2:
-                    self.class_weight = {}
-                    for particle_id, num_particles in self.simulated_particles.items():
-                        if particle_id != "total":
-                            self.class_weight[
-                                self.shower_primary_id_to_class[particle_id]
-                            ] = (1 / num_particles) * (
-                                self.simulated_particles["total"] / 2.0
-                            )
+            self.shower_primary_id_to_class = {}
+            self.class_names = []
+            for p, particle_id in enumerate(list(self.simulated_particles.keys())[1:]):
+                self.shower_primary_id_to_class[particle_id] = p
+                self.class_names.append((self.shower_primary_id_to_name[particle_id]))
+            # Calculate class weights if there are more than 2 classes (particle classification task)
+            if len(self.simulated_particles) > 2:
+                self.class_weight = {}
+                for particle_id, n_particles in self.simulated_particles.items():
+                    if particle_id != "total":
+                        self.class_weight[
+                            self.shower_primary_id_to_class[particle_id]
+                        ] = (1 / n_particles) * (
+                            self.simulated_particles["total"] / 2.0
+                        )
 
-            # Dump example_identifiers and simulation_info to a pandas hdf5 file
-            """
-            if not isinstance(example_identifiers_file, dict):
-                pd.DataFrame(data=self.example_identifiers).to_hdf(
-                    example_identifiers_file, key="example_identifiers", mode="a"
-                )
-                if self.simulation_info:
-                    pd.DataFrame(
-                        data=pd.DataFrame(self.simulation_info, index=[0])
-                    ).to_hdf(example_identifiers_file, key="simulation_info", mode="a")
-                if self.simulated_particles:
-                    pd.DataFrame(
-                        data=pd.DataFrame(self.simulated_particles, index=[0])
-                    ).to_hdf(
-                        example_identifiers_file, key="simulated_particles", mode="a"
-                    )
-                    if self.class_weight:
-                        pd.DataFrame(
-                            data=pd.DataFrame(self.class_weight, index=[0])
-                        ).to_hdf(example_identifiers_file, key="class_weight", mode="a")
-                        pd.DataFrame(data=pd.DataFrame(self.class_names)).to_hdf(
-                            example_identifiers_file, key="class_names", mode="a"
-                        )
-                        pd.DataFrame(
-                            data=pd.DataFrame(
-                                self.shower_primary_id_to_class, index=[0]
-                            )
-                        ).to_hdf(
-                            example_identifiers_file,
-                            key="shower_primary_id_to_class",
-                            mode="a",
-                        )
-                example_identifiers_file.close()
-            """
+            # Apply common transformation of MC data
+            # Transform shower primary id to class
+            self.example_identifiers = self._transform_to_primary_class(
+                self.example_identifiers
+            )
+            # Transform true energy into the log space
+            self.example_identifiers = self._transform_to_log_energy(
+                self.example_identifiers
+            )
+
         # ImageMapper (1D charges -> 2D images or 3D waveforms)
         if self.image_channels is not None or self.waveform_type is not None:
 
@@ -1142,7 +924,10 @@ class DLDataReader:
         return tel_type.split("_")[-1]
 
     def __len__(self):
-        return len(self.example_identifiers)
+        if self.mode == "mono":
+            return len(self.example_identifiers)
+        elif self.mode == "stereo":
+            return len(self.unique_example_identifiers)
 
     def _construct_simulated_info(self, file, simulation_info):
         """
@@ -1303,62 +1088,132 @@ class DLDataReader:
 
         return pixel_positions, num_pixels
 
-    def batch_generation(self, batch_indices):
+    def _get_tel_pointing(self, file, tel_ids):
+        tel_pointing = []
+        for tel_id in tel_ids:
+            with lock:
+                tel_pointing.append(
+                    read_table(
+                        file,
+                        f"/configuration/telescope/pointing/tel_{tel_id:03d}",
+                    )
+                )
+        return vstack(tel_pointing)
+
+    def _transform_to_primary_class(self, table):
+        # Transform shower primary id to class
+        # Create a vectorized function to map the values
+        vectorized_map = np.vectorize(self.shower_primary_id_to_class.get)
+        # Apply the mapping to the astropy column
+        true_shower_primary_class = vectorized_map(table["true_shower_primary_id"])
+        table.add_column(true_shower_primary_class, name="true_shower_primary_class")
+        return table
+
+    def _transform_to_log_energy(self, table):
+        # Transform true energy into the log space
+        table.add_column(np.log10(table["true_energy"]), name="log_true_energy")
+        return table
+
+    def _transform_to_spherical_offsets(self, table):
+        # Transform alt and az into spherical offsets
+        # Set the telescope pointing of the SkyOffsetSeparation tranform to the fix pointing
+        fix_pointing = SkyCoord(
+            table["telescope_pointing_azimuth"],
+            table["telescope_pointing_altitude"],
+            frame="altaz",
+        )
+        true_direction = SkyCoord(
+            table["true_az"],
+            table["true_alt"],
+            frame="altaz",
+        )
+        sky_offset = fix_pointing.spherical_offsets_to(true_direction)
+        angular_separation = fix_pointing.separation(true_direction)
+        table.add_column(sky_offset[0], name="spherical_offset_az")
+        table.add_column(sky_offset[1], name="spherical_offset_alt")
+        table.add_column(angular_separation, name="angular_separation")
+        table.remove_columns(
+            [
+                "telescope_pointing_azimuth",
+                "telescope_pointing_altitude",
+            ]
+        )
+        return table
+
+    def batch_generation(self, batch_indices, dl1b_parameter_list=None):
         "Generates data containing batch_size samples"
         features = {}
-        batch = self.example_identifiers.loc[batch_indices]
-        #TODO: Define API with subclasses for all those cases
+        # TODO: Define API with subclasses for all those cases
         # batch_generation should be generic and call the specific method
         # for retrieving the features
-        #TODO: rename _get_... to _generate_features()
+        # TODO: rename _get_... to _generate_features()
         if self.mode == "mono":
-            if self.image_channels is not None:
-                features["images"] = self._get_mono_img_features(
-                    batch["file_index"], batch["img_index"], batch["tel_id"]
-                )
-            if self.parameter_list is not None:
-                features["parameters"] = self._get_mono_pmt_features(
-                    batch["file_index"], batch["img_index"], batch["tel_id"]
-                )
-            if self.waveform_type is not None:
-                if "raw" in self.waveform_type:
-                    if (
-                        self.trigger_settings is not None
-                        and self.get_trigger_patch_from == "file"
-                    ):
-                        trigger_patches, true_cherenkov_photons = self._get_mono_trg_features(
-                            batch["file_index"],
-                            batch["img_index"],
-                            batch["tel_id"],
-                            batch["trg_pixel_id"],
-                            batch["trg_waveform_sample_id"],
-                        )
-                    else:
-                        trigger_patches, true_cherenkov_photons  = self._get_mono_trg_features(
-                            batch["file_index"], batch["img_index"], batch["tel_id"]
-                        )
-                    features["waveforms"] = trigger_patches
-                    batch.add_column(true_cherenkov_photons, name="true_cherenkov_photons")
-                if "calibrated" in self.waveform_type:
-                    features["waveforms"] = self._get_mono_wvf_features(
-                        batch["file_index"], batch["img_index"], batch["tel_id"]
-                    )
+            batch = self.example_identifiers.loc[batch_indices]
         elif self.mode == "stereo":
+            # Workaround for the missing feature in astropy:
+            # Need this PR https://github.com/astropy/astropy/pull/15826
+            # waiting astropy v7.0.0
+            example_identifiers_grouped = self.example_identifiers.group_by(
+                ["obs_id", "event_id"]
+            )
+            batch = example_identifiers_grouped.groups[batch_indices]
+            # Sort events based on their telescope types by the hillas intensity in a given batch
+            batch.sort(
+                ["obs_id", "event_id", "tel_type_id", "hillas_intensity"], reverse=True
+            )
+            batch.sort(["obs_id", "event_id", "tel_type_id"])
+        if self.image_channels is not None:
+            features["images"] = self._get_img_features(
+                batch["file_index"],
+                batch["img_index"],
+                batch["tel_type_id"],
+                batch["tel_id"],
+            )
+        if dl1b_parameter_list is not None:
+            features["parameters"] = self._get_pmt_features(
+                batch["file_index"],
+                batch["img_index"],
+                batch["tel_id"],
+                dl1b_parameter_list,
+            )
+        if self.waveform_type is not None:
+            if "raw" in self.waveform_type:
+                if (
+                    self.trigger_settings is not None
+                    and self.get_trigger_patch_from == "file"
+                ):
+                    trigger_patches, true_cherenkov_photons = self._get_trg_features(
+                        batch["file_index"],
+                        batch["img_index"],
+                        batch["tel_type_id"],
+                        batch["tel_id"],
+                        batch["trg_pixel_id"],
+                        batch["trg_waveform_sample_id"],
+                    )
+                else:
+                    trigger_patches, true_cherenkov_photons = self._get_trg_features(
+                        batch["file_index"],
+                        batch["img_index"],
+                        batch["tel_type_id"],
+                        batch["tel_id"],
+                    )
+                features["waveforms"] = trigger_patches
+                batch.add_column(true_cherenkov_photons, name="true_cherenkov_photons")
+            if "calibrated" in self.waveform_type:
+                features["waveforms"] = self._get_wvf_features(
+                    batch["file_index"],
+                    batch["img_index"],
+                    batch["tel_type_id"],
+                    batch["tel_id"],
+                )
 
-            if self.image_channels is not None:
-                features["images"] = self._get_stereo_img_features(
-                    batch["file_index"], batch["img_index"], batch["tel_id"]
-                )
-            if self.parameter_list is not None:
-                features["parameters"] = self._get_stereo_pmt_features(
-                    batch["file_index"], batch["img_index"], batch["tel_id"]
-                )
-        
         return features, batch
 
-    def _get_mono_img_features(self, file_idxs, img_idxs, tel_ids):
+    def _get_img_features(self, file_idxs, img_idxs, tel_type_ids, tel_ids):
         images = []
-        for file_idx, img_idx, tel_id in zip(file_idxs, img_idxs, tel_ids):
+        for file_idx, img_idx, tel_type_id, tel_id in zip(
+            file_idxs, img_idxs, tel_type_ids, tel_ids
+        ):
             filename = list(self.files)[file_idx]
             with lock:
                 tel_table = f"tel_{tel_id:03d}"
@@ -1369,21 +1224,17 @@ class DLDataReader:
                     child[img_idx], self.image_channels, self.image_transforms
                 )
             # Apply the ImageMapper whenever the mapping method is not indexed_conv
-            if (
-                self.image_mapper.mapping_method[self._get_camera_type(self.tel_type)]
-                != "indexed_conv"
-            ):
-                images.append(
-                    self.image_mapper.map_image(
-                        unmapped_image, self._get_camera_type(self.tel_type)
-                    )
-                )
+            camera_type = self._get_camera_type(
+                list(self.selected_telescopes.keys())[tel_type_id]
+            )
+            if self.image_mapper.mapping_method[camera_type] != "indexed_conv":
+                images.append(self.image_mapper.map_image(unmapped_image, camera_type))
             else:
                 images.append(unmapped_image)
-        return np.stack(images)
+        return np.array(images)
 
-    def _get_mono_pmt_features(self, file_idxs, img_idxs, tel_ids):
-        parameters = []
+    def _get_pmt_features(self, file_idxs, img_idxs, tel_ids, dl1b_parameter_list):
+        dl1b_parameters = []
         for file_idx, img_idx, tel_id in zip(file_idxs, img_idxs, tel_ids):
             filename = list(self.files)[file_idx]
             with lock:
@@ -1391,13 +1242,15 @@ class DLDataReader:
                 child = self.files[
                     filename
                 ].root.dl1.event.telescope.parameters._f_get_child(tel_table)
-            parameter_list = list(child[img_idx][self.parameter_list])
-            parameters.append([np.stack(parameter_list)])
-        return np.stack(parameters)
+            parameters = list(child[img_idx][dl1b_parameter_list])
+            dl1b_parameters.append([np.stack(parameters)])
+        return np.array(dl1b_parameters)
 
-    def _get_mono_wvf_features(self, file_idxs, img_idxs, tel_ids):
+    def _get_wvf_features(self, file_idxs, img_idxs, tel_type_ids, tel_ids):
         waveforms = []
-        for file_idx, img_idx, tel_id in zip(file_idxs, img_idxs, tel_ids):
+        for file_idx, img_idx, tel_type_id, tel_id in zip(
+            file_idxs, img_idxs, tel_type_ids, tel_ids
+        ):
             filename = list(self.files)[file_idx]
             with lock:
                 tel_table = f"tel_{tel_id:03d}"
@@ -1419,31 +1272,30 @@ class DLDataReader:
                     dl1_cleaning_mask,
                 )
             # Apply the ImageMapper whenever the mapping method is not indexed_conv
-            if (
-                self.image_mapper.mapping_method[self._get_camera_type(self.tel_type)]
-                != "indexed_conv"
-            ):
+            camera_type = self._get_camera_type(
+                list(self.selected_telescopes.keys())[tel_type_id]
+            )
+            if self.image_mapper.mapping_method[camera_type] != "indexed_conv":
                 waveforms.append(
-                    self.image_mapper.map_image(
-                        unmapped_waveform, self._get_camera_type(self.tel_type)
-                    )
+                    self.image_mapper.map_image(unmapped_waveform, camera_type)
                 )
             else:
                 waveforms.append(unmapped_waveform)
-        return np.stack(waveforms)
+        return np.array(waveforms)
 
-    def _get_mono_trg_features(
+    def _get_trg_features(
         self,
         file_idxs,
         img_idxs,
+        tel_type_ids,
         tel_ids,
         trg_pixel_ids=None,
         trg_waveform_sample_ids=None,
     ):
         trigger_patches, true_cherenkov_photons = [], []
         random_trigger_patch = False
-        for i, (file_idx, img_idx, tel_id) in enumerate(
-            zip(file_idxs, img_idxs, tel_ids)
+        for i, (file_idx, img_idx, tel_type_id, tel_id) in enumerate(
+            zip(file_idxs, img_idxs, tel_type_ids, tel_ids)
         ):
             filename = list(self.files)[file_idx]
             trg_pixel_id, trg_waveform_sample_id = None, None
@@ -1471,12 +1323,15 @@ class DLDataReader:
                             np.array(sim_child[img_idx]["true_image"], dtype=int),
                             axis=1,
                         )
+                camera_type = self._get_camera_type(
+                    list(self.selected_telescopes.keys())[tel_type_id]
+                )
                 waveform, trigger_patch_true_image_sum = get_mapped_triggerpatch(
                     child[img_idx],
                     self.waveform_settings,
                     self.trigger_settings,
                     self.image_mapper,
-                    self._get_camera_type(self.tel_type),
+                    camera_type,
                     true_image,
                     self.process_type,
                     random_trigger_patch,
@@ -1486,75 +1341,4 @@ class DLDataReader:
             trigger_patches.append(waveform)
             if trigger_patch_true_image_sum is not None:
                 true_cherenkov_photons.append(trigger_patch_true_image_sum)
-        return np.stack(trigger_patches), true_cherenkov_photons
-
-    def _get_stereo_img_features(self, file_idxs, trigger_infos):
-        for file_idx, trigger_info in zip(
-            file_idxs, trigger_infos
-        ): 
-            # Get a list of images and/or image parameters, an array of binary trigger values
-            # for each selected telescope type
-            filename = list(self.files)[file_idx]
-            features = {}
-            for t, tel_type in enumerate(self.selected_telescopes):
-                images = []
-                for i, tel_id in enumerate(self.selected_telescopes[tel_type]):
-                    child = None
-                    with lock:
-                        tel_table = f"tel_{tel_id:03d}"
-                        if (
-                            tel_table
-                            in self.files[filename].root.dl1.event.telescope.images
-                        ):
-                            child = self.files[
-                                filename
-                            ].root.dl1.event.telescope.images._f_get_child(tel_table)
-                        unmapped_image = get_unmapped_image(
-                            child[trigger_info[t][i]],
-                            self.image_channels,
-                            self.image_transforms,
-                        )
-                    # Apply the ImageMapper whenever the mapping method is not indexed_conv
-                    if (
-                        self.image_mapper.mapping_method[self._get_camera_type(tel_type)]
-                        != "indexed_conv"
-                    ):
-                        images.append(
-                            self.image_mapper.map_image(
-                                unmapped_image, self._get_camera_type(tel_type)
-                            )
-                        )
-                    else:
-                        images.append(unmapped_image)
-
-                features[f"{tel_type}_images"] = np.stack(images)
-        return features
-
-    def _get_stereo_pmt_features(self, file_idxs, trigger_infos):
-        for file_idx, trigger_info in zip(
-            file_idxs, trigger_infos
-        ):
-            filename = list(self.files)[file_idx]
-            features = {}
-            for t, tel_type in enumerate(self.selected_telescopes):
-                parameters_lists = []
-                for i, tel_id in enumerate(self.selected_telescopes[tel_type]):
-                    child = None
-                    with lock:
-                        tel_table = f"tel_{tel_id:03d}"
-                        if (
-                            tel_table
-                            in self.files[filename].root.dl1.event.telescope.parameters
-                        ):
-                            child = self.files[
-                                filename
-                            ].root.dl1.event.telescope.parameters._f_get_child(tel_table)
-                    parameter_list = []
-                    for parameter in self.parameter_list:
-                        if trigger_info[i] != -1 and child:
-                            parameter_list.append(child[trigger_info[i]][parameter])
-                        else:
-                            parameter_list.append(np.nan)
-                    parameters_lists.append(np.array(parameter_list, dtype=np.float32))
-                features[f"{tel_type}_parameters"] = np.stack(parameters_lists)
-        return features
+        return np.array(trigger_patches), np.array(true_cherenkov_photons)
