@@ -553,14 +553,9 @@ class DLDataReader:
                 ["trg_pixel_id", "trg_waveform_sample_id"]
             )
 
-        self.simulation_info = None
+        simulation_info = []
         example_identifiers = []
         for file_idx, (filename, f) in enumerate(self.files.items()):
-            # Read simulation information from each observation needed for pyIRF
-            if self.process_type == "Simulation":
-                self.simulation_info = self._construct_simulated_info(
-                    f, self.simulation_info
-                )
             # Telescope selection
             (
                 telescopes,
@@ -572,8 +567,10 @@ class DLDataReader:
                 selected_telescope_ids,
             )
 
-            # Construct the shower simulation table
             if self.process_type == "Simulation":
+                # Read simulation information for each observation
+                simulation_info.append(read_table(f, "/configuration/simulation/run"))
+                # Construct the shower simulation table
                 simshower_table = read_table(f, "/simulation/event/subarray/shower")
 
             if self.mode == "mono":
@@ -751,26 +748,13 @@ class DLDataReader:
 
         self.example_identifiers = vstack(example_identifiers)
 
-        # Add index column to the example identifiers to later retrieve batches
-        # using the loc functionality
-        if self.mode == "mono":
-            self.example_identifiers.add_column(
-                np.arange(len(self.example_identifiers)), name="index", index=0
-            )
-            self.example_identifiers.add_index("index")
-        elif self.mode == "stereo":
-            self.unique_example_identifiers = unique(
-                self.example_identifiers, keys=["obs_id", "event_id"]
-            )
-        #    # Need this PR https://github.com/astropy/astropy/pull/15826
-        #    # waiting astropy v7.0.0
-        #    # self.example_identifiers.add_index(["obs_id", "event_id"])
-
         # Handling the particle ids automatically and class weights calculation
         # Scaling by total/2 helps keep the loss to a similar magnitude.
         # The sum of the weights of all examples stays the same.
         self.simulated_particles = {}
         if self.process_type == "Simulation":
+            # Construct simulation information for all observations
+            self.simulation_info = vstack(simulation_info)
             # Track number of events for each particle type
             self.simulated_particles["total"] = self.__len__()
             for primary_id in self.shower_primary_id_to_name:
@@ -827,6 +811,21 @@ class DLDataReader:
             self.example_identifiers = self._transform_to_log_energy(
                 self.example_identifiers
             )
+
+        # Add index column to the example identifiers to later retrieve batches
+        # using the loc functionality
+        if self.mode == "mono":
+            self.example_identifiers.add_column(
+                np.arange(len(self.example_identifiers)), name="index", index=0
+            )
+            self.example_identifiers.add_index("index")
+        elif self.mode == "stereo":
+            self.unique_example_identifiers = unique(
+                self.example_identifiers, keys=["obs_id", "event_id"]
+            )
+            # Need this PR https://github.com/astropy/astropy/pull/15826
+            # waiting astropy v7.0.0
+            # self.example_identifiers.add_index(["obs_id", "event_id"])
 
         # ImageMapper (1D charges -> 2D images or 3D waveforms)
         if self.image_channels is not None or self.waveform_type is not None:
@@ -928,63 +927,6 @@ class DLDataReader:
             return len(self.example_identifiers)
         elif self.mode == "stereo":
             return len(self.unique_example_identifiers)
-
-    def _construct_simulated_info(self, file, simulation_info):
-        """
-        Construct the simulated_info from the DL1 hdf5 file for the pyIRF SimulatedEventsInfo table & GammaBoard.
-        Parameters
-        ----------
-            file (hdf5 file): file containing the simulation information
-            simulation_info (dict): dictionary of pyIRF simulation info
-
-        Returns
-        -------
-        simulation_info (dict): updated dictionary of pyIRF simulation info
-
-        """
-
-        simulation_table = file.root.configuration.simulation
-        runs = simulation_table._f_get_child("run")
-        shower_reuse = max(np.array(runs.cols._f_col("shower_reuse")))
-        n_showers = sum(np.array(runs.cols._f_col("n_showers"))) * shower_reuse
-        energy_range_min = min(np.array(runs.cols._f_col("energy_range_min")))
-        energy_range_max = max(np.array(runs.cols._f_col("energy_range_max")))
-        max_scatter_range = max(np.array(runs.cols._f_col("max_scatter_range")))
-        spectral_index = np.array(runs.cols._f_col("spectral_index"))[0]
-        min_viewcone_radius = max(np.array(runs.cols._f_col("min_viewcone_radius")))
-        max_viewcone_radius = max(np.array(runs.cols._f_col("max_viewcone_radius")))
-        min_alt = min(np.array(runs.cols._f_col("min_alt")))
-        max_alt = max(np.array(runs.cols._f_col("max_alt")))
-
-        if simulation_info:
-            simulation_info["n_showers"] += float(n_showers)
-            if simulation_info["energy_range_min"] > energy_range_min:
-                simulation_info["energy_range_min"] = energy_range_min
-            if simulation_info["energy_range_max"] < energy_range_max:
-                simulation_info["energy_range_max"] = energy_range_max
-            if simulation_info["max_scatter_range"] < max_scatter_range:
-                simulation_info["max_scatter_range"] = max_scatter_range
-            if simulation_info["min_viewcone_radius"] > min_viewcone_radius:
-                simulation_info["min_viewcone_radius"] = min_viewcone_radius
-            if simulation_info["max_viewcone_radius"] < max_viewcone_radius:
-                simulation_info["max_viewcone_radius"] = max_viewcone_radius
-            if simulation_info["min_alt"] > min_alt:
-                simulation_info["min_alt"] = min_alt
-            if simulation_info["max_alt"] < max_alt:
-                simulation_info["max_alt"] = max_alt
-        else:
-            simulation_info = {}
-            simulation_info["n_showers"] = float(n_showers)
-            simulation_info["energy_range_min"] = energy_range_min
-            simulation_info["energy_range_max"] = energy_range_max
-            simulation_info["max_scatter_range"] = max_scatter_range
-            simulation_info["spectral_index"] = spectral_index
-            simulation_info["min_viewcone_radius"] = min_viewcone_radius
-            simulation_info["max_viewcone_radius"] = max_viewcone_radius
-            simulation_info["min_alt"] = min_alt
-            simulation_info["max_alt"] = max_alt
-
-        return simulation_info
 
     def _construct_telescopes_selection(
         self, subarray_table, selected_telescope_types, selected_telescope_ids
