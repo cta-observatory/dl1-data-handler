@@ -21,6 +21,11 @@ from ctapipe.io import read_table  # let us read full tables inside the DL1 outp
 
 __all__ = [
     "DLDataReader",
+    "DLMonoReader",
+    "DLStereoReader",
+    "DLImageReader",
+    "DLWaveformReader",
+    "DLTriggerReader",
     "get_unmapped_image",
     "get_unmapped_waveform",
     "get_mapped_triggerpatch",
