@@ -15,6 +15,7 @@ from astropy.table import (
     vstack,  # and vertically
 )
 
+from ctapipe.instrument import SubarrayDescription
 from ctapipe.io import read_table  # let us read full tables inside the DL1 output file
 
 
@@ -327,10 +328,9 @@ class DLDataReader:
     def __init__(
         self,
         file_list,
-        example_identifiers_file=None,
         mode="mono",
-        selected_telescope_types=None,
-        selected_telescope_ids=None,
+        tel_types=None,
+        tel_ids=None,
         multiplicity_selection=None,
         quality_selection=None,
         trigger_settings=None,
@@ -339,6 +339,21 @@ class DLDataReader:
         mapping_settings=None,
         parameter_settings=None,
     ):
+        # Set data loading mode
+        # Mono: single images of one telescope type
+        # Stereo: events including multiple telescope types
+        if mode in ["mono", "stereo"]:
+            self.mode = mode
+        else:
+            raise ValueError(
+                f"Invalid mode selection '{mode}'. Valid options: 'mono', 'stereo'"
+            )
+
+        if multiplicity_selection is None:
+            multiplicity_selection = {}
+
+        if mapping_settings is None:
+            mapping_settings = {}
 
         # Construct dict of filename:file_handle pairs
         self.files = OrderedDict()
@@ -348,15 +363,11 @@ class DLDataReader:
             with lock:
                 self.files[filename] = tables.open_file(filename, mode="r")
         first_file = list(self.files)[0]
-
-        # Save the user attributes and useful information retrieved from the first file
+        # Save the user attributes and useful information retrieved from the first file as a reference
         self._v_attrs = self.files[first_file].root._v_attrs
-        self.subarray_layout = self.files[
-            first_file
-        ].root.configuration.instrument.subarray.layout
-        self.tel_ids = self.subarray_layout.cols._f_col("tel_id")
         self.process_type = self._v_attrs["CTA PROCESS TYPE"]
         self.data_format_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
+        self.instrument_id = self._v_attrs["CTA INSTRUMENT ID"]
 
         # Check for the minimum ctapipe data format version (v6.0.0)
         if int(self.data_format_version.split(".")[0].replace("v", "")) < 6:
@@ -368,14 +379,54 @@ class DLDataReader:
             raise ValueError(
                 f"When processing real observational data, please provide a single file (currently: '{len(self.files)}')."
             )
-        self.subarray_shower = None
-        if self.process_type == "Simulation":
-            self.subarray_shower = self.files[
-                first_file
-            ].root.simulation.event.subarray.shower
-        self.instrument_id = self._v_attrs["CTA INSTRUMENT ID"]
-        # Set class weights to None
-        self.class_weight = None
+
+        self.subarray = SubarrayDescription.from_hdf(first_file)
+        selected_tel_ids = None
+        if tel_ids is not None:
+            selected_tel_ids = np.array(tel_ids, dtype=np.int16)
+        else:
+            if tel_types is not None:
+                selected_tel_ids = np.ravel(
+                    [
+                        np.array(self.subarray.get_tel_ids_for_type(str(tel_type)))
+                        for tel_type in tel_types
+                    ]
+                )
+
+        # Filter subarray by selected telescopes
+        if selected_tel_ids is not None:
+            self.subarray = self.subarray.select_subarray(selected_tel_ids)
+        self.tel_ids = self.subarray.tel_ids
+        self.selected_telescopes = {}
+        for tel_type in self.subarray.telescope_types:
+            # If is needed here for some sims where the same tel_type is stored twice
+            if str(tel_type) not in self.selected_telescopes:
+                self.selected_telescopes[str(tel_type)] = np.array(
+                    self.subarray.get_tel_ids_for_type(str(tel_type))
+                )
+
+        # Check if only one telescope type is selected when reading in mono mode
+        if self.mode == "mono" and len(self.selected_telescopes) > 1:
+            raise ValueError(
+                f"Mono mode selected but multiple telescope types are provided: '{self.selected_telescopes}'."
+            )
+        # Set the telescope type as class attribute for mono mode for convenience
+        self.tel_type = None
+        if self.mode == "mono":
+            self.tel_type = list(self.selected_telescopes)[0]
+        # Get the camera index for the different telescope types
+        camera2index = {}
+        for t in self.subarray.tels.values():
+            camera_index = self.subarray.camera_types.index(t.camera)
+            if f"{t.camera.name}" not in camera2index:
+                camera2index[f"{t.camera.name}"] = camera_index
+        # Retrieve the camera geometry from the file
+        pixel_positions = self._construct_pixel_positions(
+            self.files[first_file].root.configuration.instrument.telescope, camera2index
+        )
+        self.image_mapper = ImageMapper(
+            pixel_positions=pixel_positions, **mapping_settings
+        )
 
         # Translate from CORSIKA shower primary ID to the particle name
         self.shower_primary_id_to_name = {
@@ -384,34 +435,6 @@ class DLDataReader:
             1: "electron",
             404: "nsb",
         }
-
-        # Set data loading mode
-        # Mono: single images of one telescope type
-        # Stereo: events including multiple telescope types
-        if mode in ["mono", "stereo"]:
-            self.mode = mode
-        else:
-            raise ValueError(
-                f"Invalid mode selection '{mode}'. Valid options: 'mono', 'stereo'"
-            )
-
-        if selected_telescope_ids is None:
-            selected_telescope_ids = []
-        (
-            self.telescopes,
-            self.selected_telescopes,
-            self.camera2index,
-        ) = self._construct_telescopes_selection(
-            self.subarray_layout,
-            selected_telescope_types,
-            selected_telescope_ids,
-        )
-
-        if multiplicity_selection is None:
-            multiplicity_selection = {}
-
-        if mapping_settings is None:
-            mapping_settings = {}
 
         # Telescope pointings
         self.telescope_pointings = {}
@@ -548,16 +571,15 @@ class DLDataReader:
         simulation_info = []
         example_identifiers = []
         for file_idx, (filename, f) in enumerate(self.files.items()):
-            # Telescope selection
-            (
-                telescopes,
-                selected_telescopes,
-                camera2index,
-            ) = self._construct_telescopes_selection(
-                f.root.configuration.instrument.subarray.layout,
-                selected_telescope_types,
-                selected_telescope_ids,
-            )
+            # Read SubarrayDescription from the new file and 
+            subarray = SubarrayDescription.from_hdf(filename)
+            # Filter subarray by selected telescopes
+            subarray = subarray.select_subarray(self.tel_ids)
+            # Check if it matches the reference
+            if not subarray.__eq__(self.subarray):
+                raise ValueError(
+                    f"Subarray description of file '{filename}' does not match the reference subarray description."
+                )
 
             if self.process_type == "Simulation":
                 # Read simulation information for each observation
@@ -665,7 +687,6 @@ class DLDataReader:
                         keys=["obs_id", "event_id"],
                     )
                 events = []
-
                 for tel_type_id, tel_type in enumerate(self.selected_telescopes):
                     table_per_type = []
                     for tel_id in self.selected_telescopes[tel_type]:
@@ -740,10 +761,25 @@ class DLDataReader:
 
         self.example_identifiers = vstack(example_identifiers)
 
+        # Add index column to the example identifiers to later retrieve batches
+        # using the loc functionality
+        if self.mode == "mono":
+            self.example_identifiers.add_column(
+                np.arange(len(self.example_identifiers)), name="index", index=0
+            )
+            self.example_identifiers.add_index("index")
+        elif self.mode == "stereo":
+            self.unique_example_identifiers = unique(
+                self.example_identifiers, keys=["obs_id", "event_id"]
+            )
+            # Need this PR https://github.com/astropy/astropy/pull/15826
+            # waiting astropy v7.0.0
+            # self.example_identifiers.add_index(["obs_id", "event_id"])
+
         # Handling the particle ids automatically and class weights calculation
         # Scaling by total/2 helps keep the loss to a similar magnitude.
         # The sum of the weights of all examples stays the same.
-        self.simulated_particles = {}
+        self.simulated_particles, self.class_weight = {}, {}
         if self.process_type == "Simulation":
             # Construct simulation information for all observations
             self.simulation_info = vstack(simulation_info)
@@ -779,13 +815,10 @@ class DLDataReader:
                 self._shower_prob = np.around(1 - self._nsb_prob, decimals=2)
 
             self.shower_primary_id_to_class = {}
-            self.class_names = []
             for p, particle_id in enumerate(list(self.simulated_particles.keys())[1:]):
                 self.shower_primary_id_to_class[particle_id] = p
-                self.class_names.append((self.shower_primary_id_to_name[particle_id]))
             # Calculate class weights if there are more than 2 classes (particle classification task)
             if len(self.simulated_particles) > 2:
-                self.class_weight = {}
                 for particle_id, n_particles in self.simulated_particles.items():
                     if particle_id != "total":
                         self.class_weight[
@@ -804,38 +837,12 @@ class DLDataReader:
                 self.example_identifiers
             )
 
-        # Add index column to the example identifiers to later retrieve batches
-        # using the loc functionality
-        if self.mode == "mono":
-            self.example_identifiers.add_column(
-                np.arange(len(self.example_identifiers)), name="index", index=0
-            )
-            self.example_identifiers.add_index("index")
-        elif self.mode == "stereo":
-            self.unique_example_identifiers = unique(
-                self.example_identifiers, keys=["obs_id", "event_id"]
-            )
-            # Need this PR https://github.com/astropy/astropy/pull/15826
-            # waiting astropy v7.0.0
-            # self.example_identifiers.add_index(["obs_id", "event_id"])
-
         # ImageMapper (1D charges -> 2D images or 3D waveforms)
         if self.image_channels is not None or self.waveform_type is not None:
 
-            # Retrieve the camera geometry from the file
-            self.pixel_positions, self.num_pixels = self._construct_pixel_positions(
-                self.files[first_file].root.configuration.instrument.telescope
-            )
-
-            if "camera_types" not in mapping_settings:
-                mapping_settings["camera_types"] = self.pixel_positions.keys()
-            self.image_mapper = ImageMapper(
-                pixel_positions=self.pixel_positions, **mapping_settings
-            )
-
             if self.waveform_type is not None:
                 self.waveform_settings["shapes"] = {}
-                for camera_type in mapping_settings["camera_types"]:
+                for camera_type in self.image_mapper.camera_types:
                     self.image_mapper.image_shapes[camera_type] = (
                         self.image_mapper.image_shapes[camera_type][0],
                         self.image_mapper.image_shapes[camera_type][1],
@@ -904,7 +911,7 @@ class DLDataReader:
                             ]
                         )
             if self.image_channels is not None:
-                for camera_type in mapping_settings["camera_types"]:
+                for camera_type in self.image_mapper.camera_types:
                     self.image_mapper.image_shapes[camera_type] = (
                         self.image_mapper.image_shapes[camera_type][0],
                         self.image_mapper.image_shapes[camera_type][1],
@@ -920,64 +927,7 @@ class DLDataReader:
         elif self.mode == "stereo":
             return len(self.unique_example_identifiers)
 
-    def _construct_telescopes_selection(
-        self, subarray_table, selected_telescope_types, selected_telescope_ids
-    ):
-        """
-        Construct the selection of the telescopes from the args (`selected_telescope_types`, `selected_telescope_ids`).
-        Parameters
-        ----------
-            subarray_table (tables.table):
-            selected_telescope_type (array of str):
-            selected_telescope_ids (array of int):
-
-        Returns
-        -------
-        telescopes (dict): dictionary of `{: }`
-        selected_telescopes (dict): dictionary of `{: }`
-        camera2index (dict): dictionary of `{: }`
-
-        """
-
-        # Get dict of all the tel_types in the file mapped to their tel_ids
-        telescopes = {}
-        camera2index = {}
-        for row in subarray_table:
-            tel_type = row["tel_description"].decode()
-            if tel_type not in telescopes:
-                telescopes[tel_type] = []
-            camera_index = row["camera_index"]
-            if self._get_camera_type(tel_type) not in camera2index:
-                camera2index[self._get_camera_type(tel_type)] = camera_index
-            telescopes[tel_type].append(row["tel_id"])
-
-        # Enforce an automatic minimal telescope selection cut:
-        # there must be at least one triggered telescope of a
-        # selected type in the event
-        # Users can include stricter cuts in the selection string
-        if selected_telescope_types is None:
-            # Default: use the first tel type in the file
-            default = subarray_table[0]["tel_description"].decode()
-            selected_telescope_types = [default]
-        if self.mode == "mono":
-            self.tel_type = selected_telescope_types[0]
-
-        # Select which telescopes from the full dataset to include in each
-        # event by a telescope type and an optional list of telescope ids.
-        selected_telescopes = {}
-        for tel_type in selected_telescope_types:
-            available_tel_ids = telescopes[tel_type]
-            # Keep only the selected tel ids for the tel type
-            if selected_telescope_ids:
-                selected_telescopes[tel_type] = np.intersect1d(
-                    available_tel_ids, selected_telescope_ids
-                )
-            else:
-                selected_telescopes[tel_type] = available_tel_ids
-
-        return telescopes, selected_telescopes, camera2index
-
-    def _construct_pixel_positions(self, telescope_type_information):
+    def _construct_pixel_positions(self, telescope_type_information, camera2index):
         """
         Construct the pixel position of the cameras from the DL1 hdf5 file.
         Parameters
@@ -987,27 +937,25 @@ class DLDataReader:
         Returns
         -------
         pixel_positions (dict): dictionary of `{cameras: pixel_positions}`
-        num_pixels (dict): dictionary of `{cameras: num_pixels}`
 
         """
 
         pixel_positions = {}
-        num_pixels = {}
-        for camera in self.camera2index.keys():
+        for camera in camera2index.keys():
             cam_geom = telescope_type_information.camera._f_get_child(
-                f"geometry_{self.camera2index[camera]}"
+                f"geometry_{camera2index[camera]}"
             )
             pix_x = np.array(cam_geom.cols._f_col("pix_x"))
             pix_y = np.array(cam_geom.cols._f_col("pix_y"))
-            num_pixels[camera] = len(pix_x)
             pixel_positions[camera] = np.stack((pix_x, pix_y))
             # For now hardcoded, since this information is not in the h5 files.
             # The official CTA DL1 format will contain this information.
-            if camera in ["LSTCam", "LSTSiPMCam", "NectarCam", "MAGICCam"]:
+            camera_prefix = camera.split("_")[0]
+            if camera_prefix in ["LSTCam", "LSTSiPMCam", "NectarCam", "MAGICCam"]:
                 rotation_angle = -cam_geom._v_attrs["PIX_ROT"] * np.pi / 180.0
-                if camera == "MAGICCam":
+                if camera_prefix == "MAGICCam":
                     rotation_angle = -100.893 * np.pi / 180.0
-                if self.process_type == "Observation" and camera == "LSTCam":
+                if self.process_type == "Observation" and camera_prefix == "LSTCam":
                     rotation_angle = -40.89299998552154 * np.pi / 180.0
                 rotation_matrix = np.matrix(
                     [
@@ -1020,7 +968,7 @@ class DLDataReader:
                     np.asarray(np.dot(rotation_matrix, pixel_positions[camera]))
                 )
 
-        return pixel_positions, num_pixels
+        return pixel_positions
 
     def _get_tel_pointing(self, file, tel_ids):
         tel_pointing = []

@@ -14,15 +14,14 @@ logger = logging.getLogger(__name__)
 class ImageMapper:
     def __init__(
         self,
-        camera_types=None,
-        pixel_positions=None,
+        pixel_positions,
         mapping_method=None,
         padding=None,
         interpolation_image_shape=None,
         mask_interpolation=False,
     ):
 
-        # image_shapes should be a non static field to prevent problems
+        # Default image_shapes should be a non static field to prevent problems
         # when multiple instances of ImageMapper are created
         self.image_shapes = {
             "LSTCam": (110, 110, 1),
@@ -41,15 +40,7 @@ class ImageMapper:
         }
 
         # Camera types
-        if camera_types:
-            self.camera_types = []
-            for camera_type in camera_types:
-                if camera_type in self.image_shapes:
-                    self.camera_types.append(camera_type)
-                else:
-                    logger.error("Camera type {} isn't supported.".format(camera_type))
-        else:
-            self.camera_types = [cam for cam in self.image_shapes]
+        self.camera_types = list(pixel_positions.keys())
 
         # Mapping method
         if mapping_method is None:
@@ -80,40 +71,11 @@ class ImageMapper:
         self.num_pixels = {}
         self.mapping_tables = {}
         self.index_matrixes = {}
+        for camera_type in self.camera_types:
+            self.pixel_positions[camera_type] = pixel_positions[camera_type]
+            self.num_pixels[camera_type] = pixel_positions[camera_type].shape[1]
 
-        for camtype in self.camera_types:
-            # Get a corresponding pixel positions
-            if pixel_positions is None:
-                try:
-                    from ctapipe.instrument.camera import CameraGeometry
-                except ImportError:
-                    raise ImportError(
-                        "The `ctapipe.instrument.camera` python module is required, if pixel_positions is `None`."
-                    )
-                camgeo = CameraGeometry.from_name(camtype)
-                self.num_pixels[camtype] = len(camgeo.pix_id)
-                self.pixel_positions[camtype] = np.column_stack(
-                    [camgeo.pix_x.value, camgeo.pix_y.value]
-                ).T
-                if camtype in ["LSTCam", "NectarCam", "MAGICCam"]:
-                    rotation_angle = -camgeo.pix_rotation.value * np.pi / 180.0
-                    rotation_matrix = np.matrix(
-                        [
-                            [np.cos(rotation_angle), -np.sin(rotation_angle)],
-                            [np.sin(rotation_angle), np.cos(rotation_angle)],
-                        ],
-                        dtype=float,
-                    )
-                    self.pixel_positions[camtype] = np.squeeze(
-                        np.asarray(
-                            np.dot(rotation_matrix, self.pixel_positions[camtype])
-                        )
-                    )
-            else:
-                self.pixel_positions[camtype] = pixel_positions[camtype]
-                self.num_pixels[camtype] = pixel_positions[camtype].shape[1]
-
-            map_method = self.mapping_method[camtype]
+            map_method = self.mapping_method[camera_type]
             if map_method not in [
                 "oversampling",
                 "rebinning",
@@ -131,7 +93,7 @@ class ImageMapper:
                 "image_shifting",
                 "axial_addressing",
                 "indexed_conv",
-            ] and camtype in ["ASTRICam", "CHEC", "SCTCam"]:
+            ] and camera_type in ["ASTRICam", "CHEC", "SCTCam"]:
                 raise ValueError(
                     "{} (hexagonal convolution) is not available for square pixel cameras.".format(
                         map_method
@@ -144,7 +106,7 @@ class ImageMapper:
                 "bilinear_interpolation",
                 "bicubic_interpolation",
             ]:
-                self.image_shapes[camtype] = self.interpolation_image_shape[camtype]
+                self.image_shapes[camera_type] = self.interpolation_image_shape[camera_type]
 
             # At the edges of the cameras the mapping methods run into issues.
             # Therefore, we are using a default padding to ensure that the camera pixels aren't affected.
@@ -156,27 +118,27 @@ class ImageMapper:
             else:
                 self.default_pad = 2
 
-            if map_method != "oversampling" or camtype in [
+            if map_method != "oversampling" or camera_type in [
                 "ASTRICam",
                 "CHEC",
                 "SCTCam",
             ]:
-                self.image_shapes[camtype] = (
-                    self.image_shapes[camtype][0] + self.default_pad * 2,
-                    self.image_shapes[camtype][1] + self.default_pad * 2,
-                    self.image_shapes[camtype][2],
+                self.image_shapes[camera_type] = (
+                    self.image_shapes[camera_type][0] + self.default_pad * 2,
+                    self.image_shapes[camera_type][1] + self.default_pad * 2,
+                    self.image_shapes[camera_type][2],
                 )
             else:
-                self.image_shapes[camtype] = (
-                    self.image_shapes[camtype][0] + self.default_pad * 4,
-                    self.image_shapes[camtype][1] + self.default_pad * 4,
-                    self.image_shapes[camtype][2],
+                self.image_shapes[camera_type] = (
+                    self.image_shapes[camera_type][0] + self.default_pad * 4,
+                    self.image_shapes[camera_type][1] + self.default_pad * 4,
+                    self.image_shapes[camera_type][2],
                 )
 
             # Initializing the indexed matrix
-            self.index_matrixes[camtype] = None
+            self.index_matrixes[camera_type] = None
             # Calculating the mapping tables for the selected camera types
-            self.mapping_tables[camtype] = self.generate_table(camtype)
+            self.mapping_tables[camera_type] = self.generate_table(camera_type)
 
     def map_image(self, pixels, camera_type):
         """
