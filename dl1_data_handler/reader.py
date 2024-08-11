@@ -139,7 +139,6 @@ def get_mapped_triggerpatch(
     image_mapper,
     camera_type,
     true_image=None,
-    process_type="Simulation",
     random_trigger_patch=False,
     trg_pixel_id=None,
     trg_waveform_sample_id=None,
@@ -223,10 +222,6 @@ def get_mapped_triggerpatch(
     # Map the waveform snapshots through the ImageMapper
     # and transform to selected returning format
     mapped_waveform = image_mapper.map_image(vector, camera_type)
-    if process_type == "Observation" and camera_type == "LSTCam":
-        mapped_waveform = np.transpose(
-            np.flip(mapped_waveform, axis=(0, 1)), (1, 0, 2)
-        )  # x = -y & y = -x
 
     trigger_patch_center = {}
     waveform_shape_x = waveform_settings["shapes"][camera_type][0]
@@ -1399,7 +1394,6 @@ class DLTriggerReader(DLMonoReader):
                     self.image_mapper,
                     camera_type,
                     true_image,
-                    self.process_type,
                     random_trigger_patch,
                     trg_pixel_id,
                     trg_waveform_sample_id,
