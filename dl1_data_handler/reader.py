@@ -180,7 +180,7 @@ def get_mapped_triggerpatch(
     ) < 0.001:
         waveform_start = 0
         waveform_stop = nsb_sequence_length = waveform_settings["sequence_max_length"]
-        if waveform_settings["r0pedsub"] and pixped_nsb is None:
+        if trigger_settings["pedsub"] and pixped_nsb is None:
             pixped_nsb = np.sum(vector, axis=1) / nsb_sequence_length
     else:
         waveform_start = 1 + waveform_max - waveform_settings["sequence_length"] / 2
@@ -192,7 +192,7 @@ def get_mapped_triggerpatch(
         if waveform_stop > waveform_settings["sequence_max_length"]:
             waveform_start -= waveform_stop - waveform_settings["sequence_max_length"]
             waveform_stop = waveform_settings["sequence_max_length"]
-            if waveform_settings["r0pedsub"] and pixped_nsb is None:
+            if trigger_settings["pedsub"] and pixped_nsb is None:
                 pixped_nsb = (
                     np.sum(vector[:, : int(waveform_start)], axis=1)
                     / nsb_sequence_length
@@ -200,12 +200,12 @@ def get_mapped_triggerpatch(
         if waveform_start < 0:
             waveform_stop += np.abs(waveform_start)
             waveform_start = 0
-            if waveform_settings["r0pedsub"] and pixped_nsb is None:
+            if trigger_settings["pedsub"] and pixped_nsb is None:
                 pixped_nsb = (
                     np.sum(vector[:, int(waveform_stop) :], axis=1)
                     / nsb_sequence_length
                 )
-    if waveform_settings["r0pedsub"] and pixped_nsb is None:
+    if trigger_settings["pedsub"] and pixped_nsb is None:
         pixped_nsb = np.sum(vector[:, 0 : int(waveform_start)], axis=1)
         pixped_nsb += np.sum(
             vector[:, int(waveform_stop) : waveform_settings["sequence_max_length"]],
@@ -214,7 +214,7 @@ def get_mapped_triggerpatch(
         pixped_nsb = pixped_nsb / nsb_sequence_length
 
     # Subtract the pedestal per pixel if R0-pedsub selected
-    if waveform_settings["r0pedsub"]:
+    if trigger_settings["pedsub"]:
         vector = vector - pixped_nsb[:, None]
 
     # Crop the waveform
@@ -616,9 +616,11 @@ class DLDataReader:
         )
         return table
 
-    def _get_parameters(self, file_idxs, img_idxs, tel_ids, dl1b_parameter_list):
+    def _get_parameters(self, batch, dl1b_parameter_list) -> np.array:
         dl1b_parameters = []
-        for file_idx, img_idx, tel_id in zip(file_idxs, img_idxs, tel_ids):
+        for file_idx, img_idx, tel_id in zip(
+            batch["file_index"], batch["img_index"], batch["tel_id"]
+        ):
             filename = list(self.files)[file_idx]
             with lock:
                 tel_table = f"tel_{tel_id:03d}"
@@ -751,24 +753,17 @@ class DLMonoReader(DLDataReader):
         # Retrieve the batch from the example identifiers via indexing
         batch = self.example_identifiers.loc[batch_indices]
         # Retrieve the features from child classes
-        features = self._get_features(
-            batch["file_index"],
-            batch["img_index"],
-            batch["tel_type_id"],
-            batch["tel_id"],
-        )
+        features, batch = self._get_features(batch)
         # Retrieve the dl1b parameters if requested
         if dl1b_parameter_list is not None:
             features["parameters"] = DLDataReader._get_parameters(
-                batch["file_index"],
-                batch["img_index"],
-                batch["tel_id"],
+                batch,
                 dl1b_parameter_list,
             )
         return features, batch
 
     @abstractmethod
-    def _get_features(self, file_idxs, img_idxs, tel_type_ids, tel_ids) -> dict:
+    def _get_features(self, batch) -> (dict, Table):
         pass
 
 
@@ -798,7 +793,6 @@ class DLStereoReader(DLDataReader):
             "obs_id",
             "event_id",
             "tel_id",
-            "tels_with_trigger",
             "hillas_intensity",
         ]
         if self.process_type == "Simulation":
@@ -938,24 +932,17 @@ class DLStereoReader(DLDataReader):
         )
         batch.sort(["obs_id", "event_id", "tel_type_id"])
         # Retrieve the features from child classes
-        features = self._get_features(
-            batch["file_index"],
-            batch["img_index"],
-            batch["tel_type_id"],
-            batch["tel_id"],
-        )
+        features, batch = self._get_features(batch)
         # Retrieve the dl1b parameters if requested
         if dl1b_parameter_list is not None:
             features["parameters"] = DLDataReader._get_parameters(
-                batch["file_index"],
-                batch["img_index"],
-                batch["tel_id"],
+                batch,
                 dl1b_parameter_list,
             )
         return features, batch
 
     @abstractmethod
-    def _get_features(self, file_idxs, img_idxs, tel_type_ids, tel_ids) -> dict:
+    def _get_features(self, batch) -> (dict, Table):
         pass
 
 
@@ -1047,11 +1034,14 @@ class DLImageReader(DLMonoReader, DLStereoReader):
                     len(self.image_channels),  # number of channels
                 )
 
-    def _get_features(self, file_idxs, img_idxs, tel_type_ids, tel_ids) -> dict:
+    def _get_features(self, batch) -> (dict, Table):
         features = {}
         images = []
         for file_idx, img_idx, tel_type_id, tel_id in zip(
-            file_idxs, img_idxs, tel_type_ids, tel_ids
+            batch["file_index"],
+            batch["img_index"],
+            batch["tel_type_id"],
+            batch["tel_id"],
         ):
             filename = list(self.files)[file_idx]
             with lock:
@@ -1071,7 +1061,7 @@ class DLImageReader(DLMonoReader, DLStereoReader):
             else:
                 images.append(unmapped_image)
         features["images"] = np.array(images)
-        return features
+        return features, batch
 
 
 class DLWaveformReader(DLMonoReader, DLStereoReader):
@@ -1166,11 +1156,14 @@ class DLWaveformReader(DLMonoReader, DLStereoReader):
                 self.image_mapper.image_shapes[camera_type]
             )
 
-    def _get_features(self, file_idxs, img_idxs, tel_type_ids, tel_ids) -> dict:
+    def _get_features(self, batch) -> (dict, Table):
         features = {}
         waveforms = []
         for file_idx, img_idx, tel_type_id, tel_id in zip(
-            file_idxs, img_idxs, tel_type_ids, tel_ids
+            batch["file_index"],
+            batch["img_index"],
+            batch["tel_type_id"],
+            batch["tel_id"],
         ):
             filename = list(self.files)[file_idx]
             with lock:
@@ -1203,7 +1196,7 @@ class DLWaveformReader(DLMonoReader, DLStereoReader):
             else:
                 waveforms.append(unmapped_waveform)
         features["waveforms"] = np.array(waveforms)
-        return features
+        return features, batch
 
 
 class DLTriggerReader(DLMonoReader):
@@ -1219,6 +1212,11 @@ class DLTriggerReader(DLMonoReader):
 
         # Set data loading mode to mono
         self.mode = "mono"
+        # AI-based trigger system settings
+        self.trigger_settings = trigger_settings
+        self.include_nsb_patches = self.trigger_settings["include_nsb_patches"]
+        self.get_trigger_patch_from = self.trigger_settings["get_patch_from"]
+
         DLMonoReader.__init__(
             self,
             file_list=file_list,
@@ -1228,9 +1226,50 @@ class DLTriggerReader(DLMonoReader):
         )
 
         # AI-based trigger system
-        self.trigger_settings = trigger_settings
-        self.include_nsb_patches = self.trigger_settings["include_nsb_patches"]
-        self.get_trigger_patch_from = self.trigger_settings["get_patch_from"]
+        # Obtain trigger patch info from an external algorithm (i.e. DBScan)
+        # TODO: Make a better iterface to read the trigger patch info
+        # Either append the hdf5 file with the trigger patch info or implement
+        # the DBscan algorithm here in the reader.
+        if self.get_trigger_patch_from == "file":
+            trigger_patch_info = []
+            for filename in self.files:
+                try:
+                    # Read csv containing the trigger patch info
+                    import pandas as pd
+
+                    trigger_patch_info_csv_file = pd.read_csv(
+                        filename.replace("r0.dl1.h5", "npe.csv")
+                    )[
+                        [
+                            "obs_id",
+                            "event_id",
+                            "tel_id",
+                            "trg_pixel_id",
+                            "trg_waveform_sample_id",
+                        ]
+                    ].astype(
+                        int
+                    )
+                    trigger_patch_info.append(
+                        Table.from_pandas(trigger_patch_info_csv_file)
+                    )
+                except:
+                    raise IOError(
+                        f"There is a problem with '{filename.replace('r0.dl1.h5','npe.csv')}'!"
+                    )
+
+            # Join the events table ith the trigger patch info
+            self.example_identifiers = join(
+                left=vstack(trigger_patch_info),
+                right=self.example_identifiers,
+                keys=["obs_id", "event_id", "tel_id"],
+            )
+            # Remove non-trigger events from the self.example_identifiers
+            # identified by negative pixel ids
+            self.example_identifiers = self.example_identifiers[
+                self.example_identifiers["trg_pixel_id"] >= 0
+            ]
+
         # Raw waveform (R0)
         self.waveform_settings = waveform_settings
         self.waveform_type = waveform_settings["type"]
@@ -1307,24 +1346,26 @@ class DLTriggerReader(DLMonoReader):
                 [patch["y"] for patch in trigger_settings["patches"][camera_type]]
             )
 
-    def _get_features(
-        self,
-        file_idxs,
-        img_idxs,
-        tel_type_ids,
-        tel_ids,
-        trg_pixel_ids=None,
-        trg_waveform_sample_ids=None,
-    ):
+    def _get_features(self, batch) -> (dict, Table):
         features = {}
+
+        # Get the trigger patches from
+        trg_pixel_id, trg_waveform_sample_id = None, None
+        if self.get_trigger_patch_from == "file":
+            trg_pixel_ids = batch["trg_pixel_id"]
+            trg_waveform_sample_ids = batch["trg_waveform_sample_id"]
         trigger_patches, true_cherenkov_photons = [], []
         random_trigger_patch = False
         for i, (file_idx, img_idx, tel_type_id, tel_id) in enumerate(
-            zip(file_idxs, img_idxs, tel_type_ids, tel_ids)
+            zip(
+                batch["file_index"],
+                batch["img_index"],
+                batch["tel_type_id"],
+                batch["tel_id"],
+            )
         ):
             filename = list(self.files)[file_idx]
-            trg_pixel_id, trg_waveform_sample_id = None, None
-            if trg_pixel_ids is not None:
+            if self.get_trigger_patch_from == "file":
                 trg_pixel_id = trg_pixel_ids[i]
                 trg_waveform_sample_id = trg_waveform_sample_ids[i]
             with lock:
@@ -1367,6 +1408,8 @@ class DLTriggerReader(DLMonoReader):
             if trigger_patch_true_image_sum is not None:
                 true_cherenkov_photons.append(trigger_patch_true_image_sum)
         features["waveforms"] = np.array(trigger_patches)
+        # Add the true cherenkov photons to the batch if available
+        if len(true_cherenkov_photons) > 0:
+            batch.add_column(true_cherenkov_photons, name="true_cherenkov_photons")
 
-        # batch.add_column(true_cherenkov_photons, name="true_cherenkov_photons")
-        return features, np.array(true_cherenkov_photons)
+        return features, batch
