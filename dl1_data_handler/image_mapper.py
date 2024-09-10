@@ -134,17 +134,17 @@ class ImageMapper(TelescopeComponent):
         :param raw_vector: a numpy array of values for each pixel, in order of pixel index.
         :return: a numpy array of shape [img_width, img_length, N_channels]
         """
-
-        # We reshape each channel and then stack the result
-        result = []
-        for channel in range(raw_vector.shape[1]):
-            vector = raw_vector[:, channel]
-            image_2d = (vector.T @ self.mapping_table).reshape(
-                self.image_shape, self.image_shape, 1
-            )
-            result.append(image_2d)
-        telescope_image = np.concatenate(result, axis=-1)
-        return telescope_image
+        # Reshape each channel and stack the result
+        images = np.concatenate(
+            [
+                (raw_vector[:, channel].T @ self.mapping_table).reshape(
+                    self.image_shape, self.image_shape, 1
+                )
+                for channel in range(raw_vector.shape[1])
+            ],
+            axis=-1,
+        )
+        return images
 
     def _get_virtual_pixels(self, x_ticks, y_ticks, pix_x, pix_y):
         gridpoints = np.array(np.meshgrid(x_ticks, y_ticks)).T.reshape(-1, 2)
