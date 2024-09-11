@@ -1,342 +1,229 @@
+"""
+This module defines the ``DLDataReader`` and ``TableQualityQuery`` classes, which holds the basic reading and processing functionality for Deep Learning (DL) analyses.
+"""
+
+__all__ = [
+    "TableQualityQuery",
+    "DLDataReader",
+    "DLImageReader",
+    "get_unmapped_image",
+    "DLWaveformReader",
+    "get_unmapped_waveform",
+]
+
 from abc import abstractmethod
 from collections import OrderedDict
-import threading
 import numpy as np
 import tables
+import threading
 
-from dl1_data_handler.image_mapper import ImageMapper
-
-import astropy.units as u
 from astropy.coordinates import SkyCoord
 from astropy.table import (
     Table,
     unique,
-    join,  # let us merge tables horizontally
-    vstack,  # and vertically
+    join,
+    vstack,
 )
 
+from ctapipe.core import Component, QualityQuery
+from ctapipe.core.traits import (
+    Bool,
+    CInt,
+    Int,
+    IntTelescopeParameter,
+    Set,
+    List,
+    Path,
+    CaselessStrEnum,
+    Unicode,
+    TelescopeParameter,
+)
 from ctapipe.instrument import SubarrayDescription
-from ctapipe.io import read_table  # let us read full tables inside the DL1 output file
-
-
-__all__ = [
-    "DLDataReader",
-    "DLMonoReader",
-    "DLStereoReader",
-    "DLImageReader",
-    "DLWaveformReader",
-    "DLTriggerReader",
-    "get_unmapped_image",
-    "get_unmapped_waveform",
-    "get_mapped_triggerpatch",
-]
-
-
-# Get a single telescope image from a particular event, uniquely
-# identified by the filename, tel_type, and image table index.
-# First extract a raw 1D vector and transform it into a 2D image using a
-# mapping table. When 'indexed_conv' is selected this function should
-# return the unmapped vector.
-def get_unmapped_image(dl1_event, image_channels, image_transforms):
-    unmapped_image = np.zeros(
-        shape=(
-            len(dl1_event["image"]),
-            len(image_channels),
-        ),
-        dtype=np.float32,
-    )
-    for i, channel in enumerate(image_channels):
-        mask = dl1_event["image_mask"]
-        if "image" in channel:
-            unmapped_image[:, i] = dl1_event["image"]
-        if "time" in channel:
-            cleaned_peak_times = dl1_event["peak_time"] * mask
-            unmapped_image[:, i] = (
-                dl1_event["peak_time"]
-                - cleaned_peak_times[np.nonzero(cleaned_peak_times)].mean()
-            )
-        if "clean" in channel or "mask" in channel:
-            unmapped_image[:, i] *= mask
-        # Apply the transform to recover orginal floating point values if the file were compressed
-        if "image" in channel:
-            if image_transforms["image_scale"] > 0.0:
-                unmapped_image[:, i] /= image_transforms["image_scale"]
-            if image_transforms["image_offset"] > 0:
-                unmapped_image[:, i] -= image_transforms["image_offset"]
-        if "time" in channel:
-            if image_transforms["peak_time_scale"] > 0.0:
-                unmapped_image[:, i] /= image_transforms["peak_time_scale"]
-            if image_transforms["peak_time_offset"] > 0:
-                unmapped_image[:, i] -= image_transforms["peak_time_offset"]
-    return unmapped_image
-
-
-# Get a single telescope waveform from a particular event, uniquely
-# identified by the filename, tel_type, and waveform table index.
-# First extract a raw 2D vector and transform it into a 3D waveform using a
-# mapping table. When 'indexed_conv' is selected this function should
-# return the unmapped vector.
-def get_unmapped_waveform(
-    r1_event,
-    waveform_settings,
-    dl1_cleaning_mask=None,
-):
-
-    unmapped_waveform = np.float32(r1_event["waveform"])
-    # Check if camera has one or two gain(s) and apply selection
-    if unmapped_waveform.shape[0] == 1:
-        unmapped_waveform = unmapped_waveform[0]
-    else:
-        selected_gain_channel = r1_event["selected_gain_channel"][:, np.newaxis]
-        unmapped_waveform = np.where(
-            selected_gain_channel == 0, unmapped_waveform[0], unmapped_waveform[1]
-        )
-    if waveform_settings["waveform_scale"] > 0.0:
-        unmapped_waveform /= waveform_settings["waveform_scale"]
-    if waveform_settings["waveform_offset"] > 0:
-        unmapped_waveform -= waveform_settings["waveform_offset"]
-    waveform_max = np.argmax(np.sum(unmapped_waveform, axis=0))
-    if dl1_cleaning_mask is not None:
-        waveform_max = np.argmax(
-            np.sum(unmapped_waveform * dl1_cleaning_mask[:, None], axis=0)
-        )
-    if waveform_settings["max_from_simulation"]:
-        waveform_max = int((len(unmapped_waveform) / 2) - 1)
-
-    # Retrieve the sequence around the shower maximum
-    if (
-        waveform_settings["sequence_max_length"] - waveform_settings["sequence_length"]
-    ) < 0.001:
-        waveform_start = 0
-        waveform_stop = waveform_settings["sequence_max_length"]
-    else:
-        waveform_start = 1 + waveform_max - waveform_settings["sequence_length"] / 2
-        waveform_stop = 1 + waveform_max + waveform_settings["sequence_length"] / 2
-        if waveform_stop > waveform_settings["sequence_max_length"]:
-            waveform_start -= waveform_stop - waveform_settings["sequence_max_length"]
-            waveform_stop = waveform_settings["sequence_max_length"]
-        if waveform_start < 0:
-            waveform_stop += np.abs(waveform_start)
-            waveform_start = 0
-
-    # Apply the DL1 cleaning mask if selected
-    if "clean" in waveform_settings["type"] or "mask" in waveform_settings["type"]:
-        unmapped_waveform *= dl1_cleaning_mask[:, None]
-
-    # Crop the unmapped waveform in samples
-    return unmapped_waveform[:, int(waveform_start) : int(waveform_stop)]
-
-
-# Get a single telescope waveform from a particular event, uniquely
-# identified by the filename, tel_type, and waveform table index.
-# First extract a raw 2D vector and transform it into a 3D waveform using a
-# mapping table. When 'indexed_conv' is selected this function should
-# return the unmapped vector.
-def get_mapped_triggerpatch(
-    r0_event,
-    waveform_settings,
-    trigger_settings,
-    image_mapper,
-    camera_type,
-    true_image=None,
-    random_trigger_patch=False,
-    trg_pixel_id=None,
-    trg_waveform_sample_id=None,
-):
-    waveform = np.zeros(
-        shape=(
-            waveform_settings["shapes"][camera_type][0],
-            waveform_settings["shapes"][camera_type][1],
-            waveform_settings["sequence_length"],
-        ),
-        dtype=np.float16,
-    )
-
-    # Retrieve the true image if the child of the simulated images are provided
-    mapped_true_image, trigger_patch_true_image_sum = None, None
-    if true_image is not None:
-        mapped_true_image = image_mapper.map_image(true_image, camera_type)
-
-    vector = r0_event["waveform"][0]
-
-    waveform_max = np.argmax(np.sum(vector, axis=0))
-
-    if waveform_settings["max_from_simulation"]:
-        waveform_max = int((len(vector) / 2) - 1)
-    if trg_waveform_sample_id is not None:
-        waveform_max = trg_waveform_sample_id
-
-    # Retrieve the sequence around the shower maximum and calculate the pedestal
-    # level per pixel outside that sequence if R0-pedsub is selected and FADC
-    # offset is not provided from the simulation.
-    pixped_nsb, nsb_sequence_length = None, None
-    if "FADC_offset" in waveform_settings:
-        pixped_nsb = np.full(
-            (vector.shape[0],), waveform_settings["FADC_offset"], dtype=int
-        )
-    if (
-        waveform_settings["sequence_max_length"] - waveform_settings["sequence_length"]
-    ) < 0.001:
-        waveform_start = 0
-        waveform_stop = nsb_sequence_length = waveform_settings["sequence_max_length"]
-        if trigger_settings["pedsub"] and pixped_nsb is None:
-            pixped_nsb = np.sum(vector, axis=1) / nsb_sequence_length
-    else:
-        waveform_start = 1 + waveform_max - waveform_settings["sequence_length"] / 2
-        waveform_stop = 1 + waveform_max + waveform_settings["sequence_length"] / 2
-        nsb_sequence_length = (
-            waveform_settings["sequence_max_length"]
-            - waveform_settings["sequence_length"]
-        )
-        if waveform_stop > waveform_settings["sequence_max_length"]:
-            waveform_start -= waveform_stop - waveform_settings["sequence_max_length"]
-            waveform_stop = waveform_settings["sequence_max_length"]
-            if trigger_settings["pedsub"] and pixped_nsb is None:
-                pixped_nsb = (
-                    np.sum(vector[:, : int(waveform_start)], axis=1)
-                    / nsb_sequence_length
-                )
-        if waveform_start < 0:
-            waveform_stop += np.abs(waveform_start)
-            waveform_start = 0
-            if trigger_settings["pedsub"] and pixped_nsb is None:
-                pixped_nsb = (
-                    np.sum(vector[:, int(waveform_stop) :], axis=1)
-                    / nsb_sequence_length
-                )
-    if trigger_settings["pedsub"] and pixped_nsb is None:
-        pixped_nsb = np.sum(vector[:, 0 : int(waveform_start)], axis=1)
-        pixped_nsb += np.sum(
-            vector[:, int(waveform_stop) : waveform_settings["sequence_max_length"]],
-            axis=1,
-        )
-        pixped_nsb = pixped_nsb / nsb_sequence_length
-
-    # Subtract the pedestal per pixel if R0-pedsub selected
-    if trigger_settings["pedsub"]:
-        vector = vector - pixped_nsb[:, None]
-
-    # Crop the waveform
-    vector = vector[:, int(waveform_start) : int(waveform_stop)]
-
-    # Map the waveform snapshots through the ImageMapper
-    # and transform to selected returning format
-    mapped_waveform = image_mapper.map_image(vector, camera_type)
-
-    trigger_patch_center = {}
-    waveform_shape_x = waveform_settings["shapes"][camera_type][0]
-    waveform_shape_y = waveform_settings["shapes"][camera_type][1]
-
-    # There are three different ways of retrieving the trigger patches.
-    # In case an external algorithm (i.e. DBScan) is used, the trigger patch
-    # is found by the pixel id provided in a csv file. Otherwise, we search
-    # for a hot spot, which can either be the pixel with the highest intensity
-    # of the true Cherenkov image or the integrated waveform.
-    if trigger_settings["get_patch_from"] == "file":
-        pixid_vector = np.zeros(vector.shape)
-        pixid_vector[trg_pixel_id, :] = 1
-        mapped_pixid = image_mapper.map_image(pixid_vector, camera_type)
-        hot_spot = np.unravel_index(
-            np.argmax(mapped_pixid, axis=None),
-            mapped_pixid.shape,
-        )
-    elif trigger_settings["get_patch_from"] == "simulation":
-        hot_spot = np.unravel_index(
-            np.argmax(mapped_true_image, axis=None),
-            mapped_true_image.shape,
-        )
-    else:
-        integrated_waveform = np.sum(mapped_waveform, axis=2)
-        hot_spot = np.unravel_index(
-            np.argmax(integrated_waveform, axis=None),
-            integrated_waveform.shape,
-        )
-    # Detect in which trigger patch the hot spot is located
-    trigger_patch_center["x"] = trigger_settings["patches_xpos"][camera_type][
-        np.argmin(np.abs(trigger_settings["patches_xpos"][camera_type] - hot_spot[0]))
-    ]
-    trigger_patch_center["y"] = trigger_settings["patches_ypos"][camera_type][
-        np.argmin(np.abs(trigger_settings["patches_ypos"][camera_type] - hot_spot[1]))
-    ]
-    # Select randomly if a trigger patch with (guaranteed) cherenkov signal
-    # or a random trigger patch are processed
-    if random_trigger_patch and mapped_true_image is not None:
-        counter = 0
-        while True:
-            counter += 1
-            n_trigger_patches = 0
-            if counter < 10:
-                n_trigger_patches = np.random.randint(
-                    len(trigger_settings["patches"][camera_type])
-                )
-            random_trigger_patch_center = trigger_settings["patches"][camera_type][
-                n_trigger_patches
-            ]
-
-            # Get the number of cherenkov photons in the trigger patch
-            trigger_patch_true_image_sum = np.sum(
-                mapped_true_image[
-                    int(random_trigger_patch_center["x"] - waveform_shape_x / 2) : int(
-                        random_trigger_patch_center["x"] + waveform_shape_x / 2
-                    ),
-                    int(random_trigger_patch_center["y"] - waveform_shape_y / 2) : int(
-                        random_trigger_patch_center["y"] + waveform_shape_y / 2
-                    ),
-                    :,
-                ],
-                dtype=int,
-            )
-            if trigger_patch_true_image_sum < 1.0 or counter >= 10:
-                break
-        trigger_patch_center = random_trigger_patch_center
-    else:
-        # Get the number of cherenkov photons in the trigger patch
-        trigger_patch_true_image_sum = np.sum(
-            mapped_true_image[
-                int(trigger_patch_center["x"] - waveform_shape_x / 2) : int(
-                    trigger_patch_center["x"] + waveform_shape_x / 2
-                ),
-                int(trigger_patch_center["y"] - waveform_shape_y / 2) : int(
-                    trigger_patch_center["y"] + waveform_shape_y / 2
-                ),
-                :,
-            ],
-            dtype=int,
-        )
-    # Crop the waveform according to the trigger patch
-    mapped_waveform = mapped_waveform[
-        int(trigger_patch_center["x"] - waveform_shape_x / 2) : int(
-            trigger_patch_center["x"] + waveform_shape_x / 2
-        ),
-        int(trigger_patch_center["y"] - waveform_shape_y / 2) : int(
-            trigger_patch_center["y"] + waveform_shape_y / 2
-        ),
-        :,
-    ]
-    waveform = mapped_waveform
-
-    # If 'indexed_conv' is selected, we only need the unmapped vector.
-    if image_mapper.mapping_method[camera_type] == "indexed_conv":
-        return vector, trigger_patch_true_image_sum
-    return waveform, trigger_patch_true_image_sum
+from ctapipe.io import read_table
+from dl1_data_handler.image_mapper import ImageMapper
 
 
 lock = threading.Lock()
 
 
-class DLDataReader:
+class TableQualityQuery(QualityQuery):
+    """Quality criteria for table-wise dl1b parameters."""
+
+    quality_criteria = List(
+        default_value=[
+            ("> 50 phe", "hillas_intensity > 50"),
+            ("Positive width", "hillas_width > 0"),
+            ("> 3 pixels", "morphology_n_pixels > 3"),
+        ],
+        allow_none=True,
+        help=QualityQuery.quality_criteria.help,
+    ).tag(config=True)
+
+
+class DLDataReader(Component):
+    """
+    Base component for reading and processing data from ctapipe HDF5 files for Deep Learning (DL) analyses.
+
+    This class handles the initialization and configuration of the data reader, including setting up quality criteria,
+    managing input files, and extracting relevant information from the data files. It supports both observational and
+    simulation data, and can operate in ``mono`` and ``stereo`` modes.
+
+    Attributes
+    ----------
+    quality_query : TableQualityQuery
+        An instance of TableQualityQuery to apply quality criteria to the data.
+    files : OrderedDict
+        A dictionary of filename:file_handle pairs for the input files.
+    first_file : str
+        The first file in the list of input files, which is used as reference.
+    _v_attrs : dict
+        Attributes and useful information retrieved from the first file.
+    process_type : str
+        The type of data processing (i.e. ``Observation`` or ``Simulation``).
+    data_format_version : str
+        The version of the ctapipe data format.
+    instrument_id : str
+        The ID of the instrument.
+    subarray : SubarrayDescription
+        The description of the subarray.
+    tel_ids : list
+        List of telescope IDs in the subarray.
+    selected_telescopes : dict
+        Dictionary of selected telescopes by type.
+    tel_type : str
+        The type of telescope (used in mono mode).
+    image_mappers : dict
+        Dictionary of ImageMapper instances for different telescope types.
+    telescope_pointings : dict
+        Dictionary of telescope pointings.
+    tel_trigger_table : Table
+        Table of telescope triggers.
+    dl1b_parameter_colnames : list
+        List of all column names for the DL1b parameter table.
+    example_identifiers : list
+        List of example identifiers for the dataset.
+    class_weight : dict
+        Dictionary of class weights for balancing the dataset.
+
+    Parameters
+    ----------
+    config : traitlets.loader.Config, optional
+        Configuration specified by config file or cmdline arguments.
+        Used to set traitlet values.
+        This is mutually exclusive with passing a ``parent``.
+    parent : ctapipe.core.Component or ctapipe.core.Tool, optional
+        Parent of this component in the configuration hierarchy,
+        this is mutually exclusive with passing ``config``.
+    **kwargs : dict
+        Additional keyword arguments.
+
+    Methods
+    -------
+    mono_batch_generation(batch_indices, dl1b_parameter_list=None)
+        Generate a batch of mono events from list of indices.
+    stereo_batch_generation(batch_indices, dl1b_parameter_list=None)
+        Generate a batch of stereo events from list of indices.
+    """
+
+    signal_input_files = List(
+        trait=Path(exists=True, directory_ok=False),
+        allow_none=False,
+        help="Required input CTA HDF5 files for signal events",
+    ).tag(config=True)
+
+    bkg_input_files = List(
+        trait=Path(exists=True, directory_ok=False),
+        default_value=None,
+        allow_none=True,
+        help="Optional input CTA HDF5 files for background events.",
+    ).tag(config=True)
+
+    mode = CaselessStrEnum(
+        ["mono", "stereo"],
+        default_value="mono",
+        help=(
+            "Set data loading mode. "
+            "``mono``: single images of one telescope type "
+            "``stereo``: events including multiple telescope types "
+        ),
+    ).tag(config=True)
+
+    skip_incompatible_files = Bool(
+        default_value=False,
+        help="Skip files that are not compatible to the reference instead of raising an error",
+    ).tag(config=True)
+
+    allowed_tel_types = List(
+        default_value=None,
+        allow_none=True,
+        help=(
+            "List of allowed tel_types, others will be ignored. "
+            "If None, all telescope types in the input stream "
+            "will be included restricted by trait ``allowed_tels``"
+        ),
+    ).tag(config=True)
+
+    allowed_tels = Set(
+        trait=CInt(),
+        default_value=None,
+        allow_none=True,
+        help=(
+            "List of allowed tel_ids, others will be ignored. "
+            "If None, all telescopes in the input stream "
+            "will be included restricted by trait ``allowed_tel_types``"
+        ),
+    ).tag(config=True)
+
+    image_mapper_type = TelescopeParameter(
+        trait=Unicode(),
+        default_value="OversamplingMapper",
+        help=(
+            "Instances of ``ImageMapper`` transforming a raw 1D vector into a 2D image. "
+            "Different mapping methods can be selected for each telescope type."
+        ),
+    ).tag(config=True)
+
+    min_telescopes = Int(
+        default_value=4,
+        help=(
+            "Minimum number of telescopes required globally after ``TableQualityQuery``. "
+            "Events with fewer telescopes will be filtered out completely. "
+            "Requires mode to be ``stereo``."
+        ),
+    ).tag(config=True)
+
+    min_telescopes_of_type = IntTelescopeParameter(
+        default_value=0,
+        help=(
+            "Minimum number of telescopes required for a specific type after ``TableQualityQuery``. "
+            "In events with fewer telescopes of that type, "
+            "those telescopes will be removed from the array event. "
+            "This might result in the event not fulfilling ``min_telescopes`` anymore "
+            "and thus being filtered completely. "
+            "Requires mode to be ``stereo``. "
+        ),
+    ).tag(config=True)
+
     def __init__(
         self,
-        file_list,
-        tel_types=None,
-        tel_ids=None,
-        mapping_settings=None,
+        config=None,
+        parent=None,
+        **kwargs,
     ):
-        # Construct dict of filename:file_handle pairs
+
+        super().__init__(config=config, parent=parent, **kwargs)
+
+        # Initialize the Table data quality query
+        self.quality_query = TableQualityQuery(parent=self)
+
+        # Construct dict of filename:file_handle pairs of an ordered file list
         self.files = OrderedDict()
-        # Order the file_list
-        file_list = np.sort(file_list)
-        for filename in file_list:
+        file_list = (
+            self.signal_input_files
+            if self.bkg_input_files is None
+            else self.signal_input_files + self.bkg_input_files
+        )
+        for filename in np.sort(file_list):
             with lock:
                 self.files[filename] = tables.open_file(filename, mode="r")
         self.first_file = list(self.files)[0]
@@ -357,16 +244,17 @@ class DLDataReader:
                 f"When processing real observational data, please provide a single file (currently: '{len(self.files)}')."
             )
 
+        # Set up the subarray
         self.subarray = SubarrayDescription.from_hdf(self.first_file)
         selected_tel_ids = None
-        if tel_ids is not None:
-            selected_tel_ids = np.array(tel_ids, dtype=np.int16)
+        if self.allowed_tels is not None:
+            selected_tel_ids = np.array(self.allowed_tels, dtype=np.int16)
         else:
-            if tel_types is not None:
+            if self.allowed_tel_types is not None:
                 selected_tel_ids = np.ravel(
                     [
                         np.array(self.subarray.get_tel_ids_for_type(str(tel_type)))
-                        for tel_type in tel_types
+                        for tel_type in self.allowed_tel_types
                     ]
                 )
 
@@ -391,49 +279,44 @@ class DLDataReader:
         for filename in self.files:
             # Read SubarrayDescription from the new file and
             subarray = SubarrayDescription.from_hdf(filename)
+
             # Filter subarray by selected telescopes
-            subarray = subarray.select_subarray(self.tel_ids)
+            if selected_tel_ids is not None:
+                subarray = subarray.select_subarray(self.tel_ids)
+        
             # Check if it matches the reference
             if not subarray.__eq__(self.subarray):
-                raise ValueError(
-                    f"Subarray description of file '{filename}' does not match the reference subarray description."
-                )
+                if self.skip_incompatible_files:
+                    self.log.warning(
+                        f"Skipping '{filename}'. Subarray description does not match the reference subarray description."
+                    )
+                    del self.files[filename]
+                else:
+                    raise ValueError(
+                        f"Subarray description of file '{filename}' does not match the reference subarray description."
+                    )
 
         # Set the telescope type as class attribute for mono mode for convenience
         self.tel_type = None
         if self.mode == "mono":
             self.tel_type = list(self.selected_telescopes)[0]
+
         # Get the camera index for the different telescope types
-        camera2index = {}
-        for t in self.subarray.tels.values():
-            camera_index = self.subarray.camera_types.index(t.camera)
-            if f"{t.camera.name}" not in camera2index:
-                camera2index[f"{t.camera.name}"] = camera_index
-        # Retrieve the camera geometry from the file
-        pixel_positions = self._construct_pixel_positions(
-            self.files[self.first_file].root.configuration.instrument.telescope,
-            camera2index,
-        )
+        cam_geom = {}
+        for camera_type in self.subarray.camera_types:
+            if f"{camera_type.name}" not in cam_geom:
+                cam_geom[f"{camera_type.name}"] = camera_type.geometry
 
         # Initialize the ImageMapper with the pixel positions and mapping settings
-        if mapping_settings is None:
-            mapping_settings = {}
-        self.image_mapper = ImageMapper(
-            pixel_positions=pixel_positions, **mapping_settings
-        )
-
-        # Translate from CORSIKA shower primary ID to the particle name
-        self.shower_primary_id_to_name = {
-            0: "gamma",
-            101: "proton",
-            1: "electron",
-            404: "nsb",
-        }
+        self.image_mappers = {}
+        for _, tel_type, name in self.image_mapper_type:
+            camera_type = self._get_camera_type(tel_type)
+            self.image_mappers[camera_type] = ImageMapper.from_name(
+                name, geometry=cam_geom[camera_type], subarray=self.subarray, parent=self
+            )
 
         # Telescope pointings
         self.telescope_pointings = {}
-        self.fix_pointing = None
-        tel_id = None
         self.tel_trigger_table = None
         if self.process_type == "Observation":
             for tel_id in self.tel_ids:
@@ -456,205 +339,52 @@ class DLDataReader:
                 f"/dl1/event/telescope/parameters/tel_{self.tel_ids[0]:03d}",
             ).colnames
 
+        # Construct the example identifiers
+        if self.mode == "mono":
+            self._construct_mono_example_identifiers()
+        elif self.mode == "stereo":
+            self._construct_stereo_example_identifiers()
+
+        # Transform true energy into the log space
+        self.example_identifiers = self._transform_to_log_energy(
+            self.example_identifiers
+        )
+
+        # Handling the class weights calculation.
+        # Scaling by total/2 helps keep the loss to a similar magnitude.
+        # The sum of the weights of all examples stays the same.
+        self.class_weight = None
+        if self.process_type == "Simulation":
+            if self.bkg_input_files is not None:
+                self.class_weight = {
+                    0: (1 / self.n_bkg_events) * (self._get_n_events() / 2.0),
+                    1: (1 / self.n_signal_events) * (self._get_n_events() / 2.0),
+                }
+
     def _get_camera_type(self, tel_type):
+        """Extract the camera type from the telescope type string."""
         return tel_type.split("_")[-1]
 
-    def __len__(self):
+    def _get_n_events(self):
+        """Return the number of events in the dataset."""
         if self.mode == "mono":
             return len(self.example_identifiers)
         elif self.mode == "stereo":
             return len(self.unique_example_identifiers)
 
-    def _construct_pixel_positions(self, telescope_type_information, camera2index):
+    def _construct_mono_example_identifiers(self):
         """
-        Construct the pixel position of the cameras from the DL1 hdf5 file.
+        Construct example identifiers for mono mode.
 
-        # TODO: Converge further with ctapipe
-        Parameters
-        ----------
-            telescope_type_information (tables.Table):
-
-        Returns
-        -------
-        pixel_positions (dict): dictionary of `{cameras: pixel_positions}`
-
+        This method generates a list of example identifiers for the mono mode
+        of operation. It processes the DL1b parameter tables for each telescope
+        and constructs identifiers based on the event and telescope IDs. These
+        identifiers are used to uniquely reference each example in the dataset.
         """
-
-        pixel_positions = {}
-        for camera in camera2index.keys():
-            cam_geom = telescope_type_information.camera._f_get_child(
-                f"geometry_{camera2index[camera]}"
-            )
-            pix_x = np.array(cam_geom.cols._f_col("pix_x"))
-            pix_y = np.array(cam_geom.cols._f_col("pix_y"))
-            pixel_positions[camera] = np.stack((pix_x, pix_y))
-            # For now hardcoded, since this information is not in the h5 files.
-            # The official CTA DL1 format will contain this information.
-            camera_prefix = camera.split("_")[0]
-            if camera_prefix in ["LSTCam", "LSTSiPMCam", "NectarCam", "MAGICCam"]:
-                rotation_angle = -cam_geom._v_attrs["PIX_ROT"] * np.pi / 180.0
-                if camera_prefix == "MAGICCam":
-                    rotation_angle = -100.893 * np.pi / 180.0
-                if self.process_type == "Observation" and camera_prefix == "LSTCam":
-                    rotation_angle = -40.89299998552154 * np.pi / 180.0
-                rotation_matrix = np.matrix(
-                    [
-                        [np.cos(rotation_angle), -np.sin(rotation_angle)],
-                        [np.sin(rotation_angle), np.cos(rotation_angle)],
-                    ],
-                    dtype=float,
-                )
-                pixel_positions[camera] = np.squeeze(
-                    np.asarray(np.dot(rotation_matrix, pixel_positions[camera]))
-                )
-
-        return pixel_positions
-
-    def _get_tel_pointing(self, file, tel_ids):
-        tel_pointing = []
-        for tel_id in tel_ids:
-            with lock:
-                tel_pointing.append(
-                    read_table(
-                        file,
-                        f"/configuration/telescope/pointing/tel_{tel_id:03d}",
-                    )
-                )
-        return vstack(tel_pointing)
-
-    def _transform_to_primary_class(self, table):
-        # Handling the particle ids automatically and class weights calculation
-        # Scaling by total/2 helps keep the loss to a similar magnitude.
-        # The sum of the weights of all examples stays the same.
-        self.simulated_particles, self.class_weight = {}, {}
-        if self.process_type == "Simulation":
-            # Track number of events for each particle type
-            self.simulated_particles["total"] = self.__len__()
-            for primary_id in self.shower_primary_id_to_name:
-                if self.mode == "mono":
-                    n_particles = np.count_nonzero(
-                        self.example_identifiers["true_shower_primary_id"] == primary_id
-                    )
-                elif self.mode == "stereo":
-                    n_particles = np.count_nonzero(
-                        self.unique_example_identifiers["true_shower_primary_id"]
-                        == primary_id
-                    )
-                # Store the number of events for each particle type if there are any
-                if n_particles > 0 and primary_id != 404:
-                    self.simulated_particles[primary_id] = n_particles
-            self.n_classes = len(self.simulated_particles) - 1
-            # Include NSB patches is selected
-            if self.include_nsb_patches == "auto":
-                for particle_id in list(self.simulated_particles.keys())[1:]:
-                    self.simulated_particles[particle_id] = int(
-                        self.simulated_particles[particle_id]
-                        * self.n_classes
-                        / (self.n_classes + 1)
-                    )
-                self.simulated_particles[404] = int(
-                    self.simulated_particles["total"] / (self.n_classes + 1)
-                )
-                self.n_classes += 1
-                self._nsb_prob = np.around(1 / self.n_classes, decimals=2)
-                self._shower_prob = np.around(1 - self._nsb_prob, decimals=2)
-
-            self.shower_primary_id_to_class = {}
-            for p, particle_id in enumerate(list(self.simulated_particles.keys())[1:]):
-                self.shower_primary_id_to_class[particle_id] = p
-            # Calculate class weights if there are more than 2 classes (particle classification task)
-            if len(self.simulated_particles) > 2:
-                for particle_id, n_particles in self.simulated_particles.items():
-                    if particle_id != "total":
-                        self.class_weight[
-                            self.shower_primary_id_to_class[particle_id]
-                        ] = (1 / n_particles) * (
-                            self.simulated_particles["total"] / 2.0
-                        )
-
-        # Transform shower primary id to class
-        # Create a vectorized function to map the values
-        vectorized_map = np.vectorize(self.shower_primary_id_to_class.get)
-        # Apply the mapping to the astropy column
-        true_shower_primary_class = vectorized_map(table["true_shower_primary_id"])
-        table.add_column(true_shower_primary_class, name="true_shower_primary_class")
-        return table
-
-    def _transform_to_log_energy(self, table):
-        # Transform true energy into the log space
-        table.add_column(np.log10(table["true_energy"]), name="log_true_energy")
-        return table
-
-    def _transform_to_spherical_offsets(self, table):
-        # Transform alt and az into spherical offsets
-        # Set the telescope pointing of the SkyOffsetSeparation tranform to the fix pointing
-        fix_pointing = SkyCoord(
-            table["telescope_pointing_azimuth"],
-            table["telescope_pointing_altitude"],
-            frame="altaz",
-        )
-        true_direction = SkyCoord(
-            table["true_az"],
-            table["true_alt"],
-            frame="altaz",
-        )
-        sky_offset = fix_pointing.spherical_offsets_to(true_direction)
-        angular_separation = fix_pointing.separation(true_direction)
-        table.add_column(sky_offset[0], name="spherical_offset_az")
-        table.add_column(sky_offset[1], name="spherical_offset_alt")
-        table.add_column(angular_separation, name="angular_separation")
-        table.remove_columns(
-            [
-                "telescope_pointing_azimuth",
-                "telescope_pointing_altitude",
-            ]
-        )
-        return table
-
-    def _get_parameters(self, batch, dl1b_parameter_list) -> np.array:
-        dl1b_parameters = []
-        for file_idx, img_idx, tel_id in zip(
-            batch["file_index"], batch["img_index"], batch["tel_id"]
-        ):
-            filename = list(self.files)[file_idx]
-            with lock:
-                tel_table = f"tel_{tel_id:03d}"
-                child = self.files[
-                    filename
-                ].root.dl1.event.telescope.parameters._f_get_child(tel_table)
-            parameters = list(child[img_idx][dl1b_parameter_list])
-            dl1b_parameters.append([np.stack(parameters)])
-        return np.array(dl1b_parameters)
-
-    @abstractmethod
-    def batch_generation(
-        self, batch_indices, dl1b_parameter_list=None
-    ) -> (dict, Table):
-        pass
-
-
-class DLMonoReader(DLDataReader):
-    def __init__(
-        self,
-        file_list,
-        tel_types=None,
-        tel_ids=None,
-        mapping_settings=None,
-        quality_selection=None,
-    ):
-
-        DLDataReader.__init__(
-            self,
-            file_list=file_list,
-            tel_types=tel_types,
-            tel_ids=tel_ids,
-            mapping_settings=mapping_settings,
-        )
-
         # Columns to keep in the the example identifiers
         # This are the basic columns one need to do a
         # conventional IACT analysis with CNNs
-        self.example_ids_keep_columns = ["img_index", "obs_id", "event_id", "tel_id"]
+        self.example_ids_keep_columns = ["table_index", "obs_id", "event_id", "tel_id"]
         if self.process_type == "Simulation":
             self.example_ids_keep_columns.extend(
                 ["true_energy", "true_alt", "true_az", "true_shower_primary_id"]
@@ -678,7 +408,7 @@ class DLMonoReader(DLDataReader):
                     f, f"/dl1/event/telescope/parameters/tel_{tel_id:03d}"
                 )
                 tel_table.add_column(
-                    np.arange(len(tel_table)), name="img_index", index=0
+                    np.arange(len(tel_table)), name="table_index", index=0
                 )
                 if self.process_type == "Simulation":
                     tel_table = join(
@@ -690,22 +420,15 @@ class DLMonoReader(DLDataReader):
             events = vstack(tel_tables)
 
             # Initialize a boolean mask to True for all events
-            self.quality_mask = np.ones(len(events), dtype=bool)
+            # Todo: Does not have to be class attribute. This needed at the momment
+            # for real data which is processed per file.
+            self.passes_quality_checks = np.ones(len(events), dtype=bool)
             # Quality selection based on the dl1b parameter and MC shower simulation tables
-            if quality_selection:
-                for filter in quality_selection:
-                    # Update the mask for the minimum value condition
-                    if "min_value" in filter:
-                        self.quality_mask &= (
-                            events[filter["col_name"]] >= filter["min_value"]
-                        )
-                    # Update the mask for the maximum value condition
-                    if "max_value" in filter:
-                        self.quality_mask &= (
-                            events[filter["col_name"]] < filter["max_value"]
-                        )
-            # Apply the updated mask to filter events
-            events = events[self.quality_mask]
+            if self.quality_query:
+                self.passes_quality_checks = self.quality_query.get_table_mask(events)
+
+            # Apply the mask to filter events that are not fufilling the quality criteria
+            events = events[self.passes_quality_checks]
 
             # Construct the example identifiers
             events.keep_columns(self.example_ids_keep_columns)
@@ -715,11 +438,18 @@ class DLMonoReader(DLDataReader):
                 right=tel_pointing,
                 keys=["obs_id", "tel_id"],
             )
-            events = DLDataReader._transform_to_spherical_offsets(self, table=events)
+            events = self._transform_to_spherical_offsets(events)
             # Add telescope type id which is always 0 in mono mode
-            # Needed to share code with stereo reading mode
+            # This is needed to share code with stereo reading mode later on
             events.add_column(file_idx, name="file_index", index=0)
             events.add_column(0, name="tel_type_id", index=3)
+            # Add the true shower primary class to the table based on the filename is
+            # signal or background input file list
+            true_shower_primary_class = 1 if filename in self.signal_input_files else 0
+            events.add_column(
+                true_shower_primary_class, name="true_shower_primary_class"
+            )
+            # Appending the events to the list of example identifiers
             example_identifiers.append(events)
 
         # Constrcut the example identifiers for all files
@@ -727,64 +457,35 @@ class DLMonoReader(DLDataReader):
         # Construct simulation information for all files
         if self.process_type == "Simulation":
             self.simulation_info = vstack(simulation_info)
+            self.n_signal_events = np.count_nonzero(
+                self.example_identifiers["true_shower_primary_class"] == 1
+            )
+            if self.bkg_input_files is not None:
+                self.n_bkg_events = np.count_nonzero(
+                    self.example_identifiers["true_shower_primary_class"] == 0
+                )
         # Add index column to the example identifiers to later retrieve batches
         # using the loc functionality
         self.example_identifiers.add_column(
             np.arange(len(self.example_identifiers)), name="index", index=0
         )
         self.example_identifiers.add_index("index")
-        # Apply common transformation of MC data
-        # Transform shower primary id to class
-        self.example_identifiers = DLDataReader._transform_to_primary_class(
-            self, table=self.example_identifiers
-        )
-        # Transform true energy into the log space
-        self.example_identifiers = DLDataReader._transform_to_log_energy(
-            self, table=self.example_identifiers
-        )
 
-    def batch_generation(self, batch_indices, dl1b_parameter_list=None):
-        "Generates data containing batch_size samples"
-        # Retrieve the batch from the example identifiers via indexing
-        batch = self.example_identifiers.loc[batch_indices]
-        # Retrieve the features from child classes
-        features, batch = self._get_features(batch)
-        # Retrieve the dl1b parameters if requested
-        if dl1b_parameter_list is not None:
-            features["parameters"] = DLDataReader._get_parameters(
-                batch,
-                dl1b_parameter_list,
-            )
-        return features, batch
+    def _construct_stereo_example_identifiers(self):
+        """
+        Construct example identifiers for stereo mode.
 
-    @abstractmethod
-    def _get_features(self, batch) -> (dict, Table):
-        pass
-
-
-class DLStereoReader(DLDataReader):
-    def __init__(
-        self,
-        file_list,
-        tel_types=None,
-        tel_ids=None,
-        mapping_settings=None,
-        quality_selection=None,
-        multiplicity_selection=None,
-    ):
-        DLDataReader.__init__(
-            self,
-            file_list=file_list,
-            tel_types=tel_types,
-            tel_ids=tel_ids,
-            mapping_settings=mapping_settings,
-        )
-
+        This method generates a list of example identifiers for the stereo mode
+        of operation. It processes the DL1b parameter tables for each event and constructs
+        identifiers based on the event ID and the combination of telescope IDs that participated
+        (triggered and passed quality cuts) in the event. These identifiers are used to uniquely
+        reference each example in the dataset.
+        """
         # Columns to keep in the the example identifiers
         # This are the basic columns one need to do a
         # conventional IACT analysis with CNNs
         self.example_ids_keep_columns = [
-            "img_index",
+            "table_index",
             "obs_id",
             "event_id",
             "tel_id",
@@ -824,31 +525,24 @@ class DLStereoReader(DLDataReader):
                         f"/dl1/event/telescope/parameters/tel_{tel_id:03d}",
                     )
                     tel_table.add_column(
-                        np.arange(len(tel_table)), name="img_index", index=0
+                        np.arange(len(tel_table)), name="table_index", index=0
                     )
                     # Initialize a boolean mask to True for all events
-                    quality_mask = np.ones(len(tel_table), dtype=bool)
+                    passes_quality_checks = np.ones(len(tel_table), dtype=bool)
                     # Quality selection based on the dl1b parameter and MC shower simulation tables
-                    if quality_selection:
-                        for filter in quality_selection:
-                            # Update the mask for the minimum value condition
-                            if "min_value" in filter:
-                                quality_mask &= (
-                                    tel_table[filter["col_name"]] >= filter["min_value"]
-                                )
-                            # Update the mask for the maximum value condition
-                            if "max_value" in filter:
-                                quality_mask &= (
-                                    tel_table[filter["col_name"]] < filter["max_value"]
-                                )
+                    if self.quality_query:
+                        passes_quality_checks = self.quality_query.get_table_mask(
+                            tel_table
+                        )
                     # Merge the telescope table with the trigger table
                     merged_table = join(
-                        left=tel_table[quality_mask],
+                        left=tel_table[passes_quality_checks],
                         right=trigger_table,
                         keys=["obs_id", "event_id"],
                     )
                     table_per_type.append(merged_table)
                 table_per_type = vstack(table_per_type)
+
                 table_per_type = table_per_type.group_by(["obs_id", "event_id"])
                 table_per_type.keep_columns(self.example_ids_keep_columns)
                 if self.process_type == "Simulation":
@@ -858,65 +552,204 @@ class DLStereoReader(DLDataReader):
                         right=tel_pointing,
                         keys=["obs_id", "tel_id"],
                     )
-                    table_per_type = self._transform_to_spherical_offsets(
-                        self, table=table_per_type
-                    )
+                    table_per_type = self._transform_to_spherical_offsets(table_per_type)
                 # Apply the multiplicity cut based on the telescope type
-                if tel_type in multiplicity_selection:
-                    table_per_type = table_per_type.group_by(["obs_id", "event_id"])
+                table_per_type = table_per_type.group_by(["obs_id", "event_id"])
 
-                    def _multiplicity_cut_tel_type(table, key_colnames):
-                        return len(table) >= multiplicity_selection[tel_type]
+                def _multiplicity_cut_tel_type(table, key_colnames):
+                    self.min_telescopes_of_type.attach_subarray(self.subarray)
+                    return len(table) >= self.min_telescopes_of_type.tel[tel_type]
 
-                    table_per_type = table_per_type.groups.filter(
-                        _multiplicity_cut_tel_type
-                    )
+                table_per_type = table_per_type.groups.filter(
+                    _multiplicity_cut_tel_type
+                )
+
                 table_per_type.add_column(tel_type_id, name="tel_type_id", index=3)
                 events.append(table_per_type)
             events = vstack(events)
             # Apply the multiplicity cut based on the subarray
-            if "Subarray" in multiplicity_selection:
-                events = events.group_by(["obs_id", "event_id"])
+            events = events.group_by(["obs_id", "event_id"])
 
-                def _multiplicity_cut_subarray(table, key_colnames):
-                    return len(table) >= multiplicity_selection["Subarray"]
+            def _multiplicity_cut_subarray(table, key_colnames):
+                return len(table) >= self.min_telescopes
 
-                events = events.groups.filter(_multiplicity_cut_subarray)
+            events = events.groups.filter(_multiplicity_cut_subarray)
             events.add_column(file_idx, name="file_index", index=0)
+            # Add the true shower primary class to the table based on the filename is
+            # signal or background input file list
+            true_shower_primary_class = 1 if filename in self.signal_input_files else 0
+            events.add_column(
+                true_shower_primary_class, name="true_shower_primary_class"
+            )
+            # Appending the events to the list of example identifiers
             example_identifiers.append(events)
 
         # Constrcut the example identifiers for all files
         self.example_identifiers = vstack(example_identifiers)
-        # Construct simulation information for all files
-        if self.process_type == "Simulation":
-            self.simulation_info = vstack(simulation_info)
         # Unique example identifiers by events
         self.unique_example_identifiers = unique(
             self.example_identifiers, keys=["obs_id", "event_id"]
         )
+        # Construct simulation information for all files
+        if self.process_type == "Simulation":
+            self.simulation_info = vstack(simulation_info)
+            self.n_signal_events = np.count_nonzero(
+                self.unique_example_identifiers["true_shower_primary_class"] == 1
+            )
+            if self.bkg_input_files is not None:
+                self.n_bkg_events = np.count_nonzero(
+                    self.unique_example_identifiers["true_shower_primary_class"] == 0
+                )
         # Workaround for the missing multicolumn indexing in astropy:
         # Need this PR https://github.com/astropy/astropy/pull/15826
         # waiting astropy v7.0.0
         # self.example_identifiers.add_index(["obs_id", "event_id"])
 
-        # Apply common transformation of MC data
-        # Transform shower primary id to class
-        self.simulated_particles, self.class_weight = {}, {}
-        self.example_identifiers = DLDataReader._transform_to_primary_class(
-            self, table=self.example_identifiers
-        )
-        # Transform true energy into the log space
-        self.example_identifiers = DLDataReader._transform_to_log_energy(
-            self, table=self.example_identifiers
-        )
+    def _get_tel_pointing(self, file, tel_ids):
+        """Retrieve the telescope pointing information for the specified telescope IDs."""
+        tel_pointing = []
+        for tel_id in tel_ids:
+            with lock:
+                tel_pointing.append(
+                    read_table(
+                        file,
+                        f"/configuration/telescope/pointing/tel_{tel_id:03d}",
+                    )
+                )
+        return vstack(tel_pointing)
 
-    def batch_generation(self, batch_indices, dl1b_parameter_list=None):
+    def _transform_to_log_energy(self, table):
+        """
+        Transform true energy values in the given table to logarithmic space.
+        """
+        table.add_column(np.log10(table["true_energy"]), name="log_true_energy")
+        return table
+
+    def _transform_to_spherical_offsets(self, table):
+        """Transform Alt/Az coordinates to spherical offsets."""
+        # Set the telescope pointing of the SkyOffsetSeparation tranform to the fix pointing
+        fix_pointing = SkyCoord(
+            table["telescope_pointing_azimuth"],
+            table["telescope_pointing_altitude"],
+            frame="altaz",
+        )
+        true_direction = SkyCoord(
+            table["true_az"],
+            table["true_alt"],
+            frame="altaz",
+        )
+        sky_offset = fix_pointing.spherical_offsets_to(true_direction)
+        angular_separation = fix_pointing.separation(true_direction)
+        table.add_column(sky_offset[0], name="spherical_offset_az")
+        table.add_column(sky_offset[1], name="spherical_offset_alt")
+        table.add_column(angular_separation, name="angular_separation")
+        table.remove_columns(
+            [
+                "telescope_pointing_azimuth",
+                "telescope_pointing_altitude",
+            ]
+        )
+        return table
+
+    def _get_parameters(self, batch, dl1b_parameter_list) -> np.array:
+        """Retrieve DL1b parameters for a given batch of events."""
+        dl1b_parameters = []
+        for file_idx, table_idx, tel_id in zip(
+            batch["file_index"], batch["table_index"], batch["tel_id"]
+        ):
+            filename = list(self.files)[file_idx]
+            with lock:
+                tel_table = f"tel_{tel_id:03d}"
+                child = self.files[
+                    filename
+                ].root.dl1.event.telescope.parameters._f_get_child(tel_table)
+            parameters = list(child[table_idx][dl1b_parameter_list])
+            dl1b_parameters.append([np.stack(parameters)])
+        return np.array(dl1b_parameters)
+
+    def mono_batch_generation(
+        self, batch_indices, dl1b_parameter_list=None
+    ) -> (dict, Table):
+        """
+        Generate a batch of events for mono mode.
+
+        This method generates a batch of examples for the mono mode of operation.
+        It retrieves the DL1b parameters and other relevant data for the specified
+        batch indices and constructs a dictionary of input features optionally with
+        a table of DL1b parameters.
+
+        Parameters
+        ----------
+        batch_indices : list of int
+            List of indices specifying the examples to include in the batch.
+        dl1b_parameter_list : list of str, optional
+            List of DL1b parameter names to include in the output table. If ``None``,
+            no DL1b parameters are included.
+
+        Returns
+        -------
+        dict
+            Dictionary containing the input features for the batch. The keys are
+            the feature names and the values are the corresponding data arrays.
+        Table
+            Table containing the DL1b parameters for the batch. The columns are
+            the specified DL1b parameters and the rows correspond to the examples
+            in the batch.
+        """
         "Generates data containing batch_size samples"
+        # Check that the batch generation call is consistent with the mode
+        if self.mode != "mono":
+            raise ValueError(
+                "Mono batch generation is not supported in stereo mode."
+            )
+        # Retrieve the batch from the example identifiers via indexing
+        batch = self.example_identifiers.loc[batch_indices]
+        # Retrieve the features from child classes
+        features = self._get_features(batch)
+        # Retrieve the dl1b parameters if requested
+        if dl1b_parameter_list is not None:
+            features["parameters"] = self._get_parameters(
+                batch,
+                dl1b_parameter_list,
+            )
+        return features, batch
+
+    def stereo_batch_generation(
+        self, batch_indices, dl1b_parameter_list=None
+    ) -> (dict, Table):
+        """
+        Generate a batch of events for stereo mode.
+
+        This method generates a batch of stereo examples based on the provided batch indices.
+        It retrieves the DL1b parameters for the selected events and telescopes, and constructs
+        the input data and labels for the batch.
+
+        Parameters
+        ----------
+        batch_indices : list of int
+            List of indices specifying the examples to include in the batch.
+        dl1b_parameter_list : list of str, optional
+            List of DL1b parameter names to include in the feature dictionary. If ``None``,
+            no DL1b parameters are included.
+
+        Returns
+        -------
+        dict
+            Dictionary containing the feature for the batch. The keys are the parameter names
+            and the values are the corresponding data arrays.
+        Table
+            Table containing the labels and additional infor for the batch examples.
+        """
+        # Check that the batch generation call is consistent with the mode
+        if self.mode != "stereo":
+            raise ValueError(
+                "Stereo batch generation is not supported in mono mode."
+            )
         # Retrieve the batch from the example identifiers via groupd by
         # Workaround for the missing multicolumn indexing in astropy:
         # Need this PR https://github.com/astropy/astropy/pull/15826
         # waiting astropy v7.0.0
-        # Once available, the batch_gereration can be shared with "mono subclass"
+        # Once available, the batch_generation can be shared with "mono"
         example_identifiers_grouped = self.example_identifiers.group_by(
             ["obs_id", "event_id"]
         )
@@ -927,79 +760,142 @@ class DLStereoReader(DLDataReader):
         )
         batch.sort(["obs_id", "event_id", "tel_type_id"])
         # Retrieve the features from child classes
-        features, batch = self._get_features(batch)
+        features = self._get_features(batch)
         # Retrieve the dl1b parameters if requested
         if dl1b_parameter_list is not None:
-            features["parameters"] = DLDataReader._get_parameters(
+            features["parameters"] = self._get_parameters(
                 batch,
                 dl1b_parameter_list,
             )
         return features, batch
 
     @abstractmethod
-    def _get_features(self, batch) -> (dict, Table):
+    def _get_features(self, batch) -> dict:
         pass
 
 
-class DLImageReader(DLMonoReader, DLStereoReader):
+def get_unmapped_image(dl1_event, channels, transforms):
+    """
+    Generate unmapped image from a DL1 event.
+
+    This function processes the DL1 event data to generate an image array
+    based on the specified channels and transformation parameters. It handles
+    different types of channels such as 'image', 'time', and 'cleaned', and 
+    applies the necessary transformations to recover the original floating 
+    point values if the file was compressed.
+
+    Parameters
+    ----------
+    dl1_event : astropy.table.Table
+        A table containing DL1 event data, including ``image``, ``image_mask``, 
+        and ``peak_time``.
+    channels : list of str
+        A list of channels to be processed, such as ``image`` and ``time`` with optional ``cleaned_``-prefix.
+    transforms : dict
+        A dictionary containing scaling and offset values for image and peak time 
+        transformations.
+
+    Returns
+    -------
+    np.ndarray
+        The processed image data image for the specific channels.
+    """
+    image = np.zeros(
+        shape=(
+            len(dl1_event["image"]),
+            len(channels),
+        ),
+        dtype=np.float32,
+    )
+    for i, channel in enumerate(channels):
+        mask = dl1_event["image_mask"]
+        if "image" in channel:
+            image[:, i] = dl1_event["image"]
+        if "time" in channel:
+            cleaned_peak_times = dl1_event["peak_time"] * mask
+            image[:, i] = (
+                dl1_event["peak_time"]
+                - cleaned_peak_times[np.nonzero(cleaned_peak_times)].mean()
+            )
+        if "cleaned" in channel:
+            image[:, i] *= mask
+        # Apply the transform to recover orginal floating point values if the file were compressed
+        if "image" in channel:
+            if transforms["image_scale"] > 0.0:
+                image[:, i] /= transforms["image_scale"]
+            if transforms["image_offset"] > 0:
+                image[:, i] -= transforms["image_offset"]
+        if "time" in channel:
+            if transforms["peak_time_scale"] > 0.0:
+                image[:, i] /= transforms["peak_time_scale"]
+            if transforms["peak_time_offset"] > 0:
+                image[:, i] -= transforms["peak_time_offset"]
+    return image
+
+
+lock = threading.Lock()
+
+class DLImageReader(DLDataReader):
+    """
+    A data reader class for handling DL1 image data from telescopes.
+
+    This class extends the ``DLDataReader`` to specifically handle the reading,
+    transformation, and mapping of DL1 image data, including integrated charges
+    and peak arrival times. It supports both ``mono`` and ``stereo`` data loading modes
+    and can apply DL1 cleaning masks to the images if specified.
+
+    Attributes
+    ----------
+    channels : list of str
+        Specifies the data channels to be loaded, such as ``image`` and/or ``peak_time``.
+    clean : bool
+        Indicates whether to apply the DL1 cleaning mask to the integrated images.
+    transforms : dict
+        Contains scaling and offset values for image and peak time transformations.
+    """
+
+    channels = List(
+        trait=CaselessStrEnum(["image", "peak_time"]),
+        default_value=["image", "peak_time"],
+        allow_none=False, 
+        help=(
+            "Set data loading mode. "
+            "Mono: single images of one telescope type "
+            "Stereo: events including multiple telescope types "
+        )
+
+    ).tag(config=True)
+
+    clean = Bool(
+        default_value=False,
+        allow_none=False,
+        help="Set whether to apply the DL1 cleaning mask to the integrated images.",
+    ).tag(config=True)
+
     def __init__(
         self,
-        file_list,
-        image_settings,
-        tel_types=None,
-        tel_ids=None,
-        mapping_settings=None,
-        mode=None,
-        quality_selection=None,
-        multiplicity_selection=None,
+        config=None,
+        parent=None,
+        **kwargs,
     ):
 
-        # Set data loading mode
-        # Mono: single images of one telescope type
-        # Stereo: events including multiple telescope types
-        if mode in ["mono", "stereo"]:
-            self.mode = mode
-        else:
-            raise ValueError(
-                f"Invalid mode selection '{mode}'. Valid options: 'mono', 'stereo'"
-            )
-
-        # temp fix
-        self.include_nsb_patches = "off"
-        if self.mode == "mono":
-            DLMonoReader.__init__(
-                self,
-                file_list=file_list,
-                tel_types=tel_types,
-                tel_ids=tel_ids,
-                quality_selection=quality_selection,
-                mapping_settings=mapping_settings,
-            )
-        elif self.mode == "stereo":
-            DLStereoReader.__init__(
-                self,
-                file_list=file_list,
-                tel_types=tel_types,
-                tel_ids=tel_ids,
-                mapping_settings=mapping_settings,
-                quality_selection=quality_selection,
-                multiplicity_selection=multiplicity_selection,
-            )
-
+        super().__init__(config=config, parent=parent, **kwargs)
+ 
         # Integrated charges and peak arrival times (DL1a)
-        self.image_channels = image_settings["image_channels"]
-        for camera_type in self.image_mapper.camera_types:
-            self.image_mapper.image_shapes[camera_type] = (
-                self.image_mapper.image_shapes[camera_type][0],
-                self.image_mapper.image_shapes[camera_type][1],
-                len(self.image_channels),  # number of channels
-            )
+        if self.clean:
+            self.img_channels = [
+                "cleaned_" + channel
+                for channel in self.channels
+            ]
+        else:
+            self.img_channels = self.channels
+
         # Get offset and scaling of images
-        self.image_transforms = {}
-        self.image_transforms["image_scale"] = 0.0
-        self.image_transforms["image_offset"] = 0
-        self.image_transforms["peak_time_scale"] = 0.0
-        self.image_transforms["peak_time_offset"] = 0
+        self.transforms = {}
+        self.transforms["image_scale"] = 0.0
+        self.transforms["image_offset"] = 0
+        self.transforms["peak_time_scale"] = 0.0
+        self.transforms["peak_time_offset"] = 0
         first_tel_table = f"tel_{self.tel_ids[0]:03d}"
         with lock:
             img_table_v_attrs = (
@@ -1009,32 +905,47 @@ class DLImageReader(DLMonoReader, DLStereoReader):
             )
         # Check the transform value used for the file compression
         if "CTAFIELD_3_TRANSFORM_SCALE" in img_table_v_attrs:
-            self.image_transforms["image_scale"] = img_table_v_attrs[
+            self.transforms["image_scale"] = img_table_v_attrs[
                 "CTAFIELD_3_TRANSFORM_SCALE"
             ]
-            self.image_transforms["image_offset"] = img_table_v_attrs[
+            self.transforms["image_offset"] = img_table_v_attrs[
                 "CTAFIELD_3_TRANSFORM_OFFSET"
             ]
         if "CTAFIELD_4_TRANSFORM_SCALE" in img_table_v_attrs:
-            self.image_transforms["peak_time_scale"] = img_table_v_attrs[
+            self.transforms["peak_time_scale"] = img_table_v_attrs[
                 "CTAFIELD_4_TRANSFORM_SCALE"
             ]
-            self.image_transforms["peak_time_offset"] = img_table_v_attrs[
+            self.transforms["peak_time_offset"] = img_table_v_attrs[
                 "CTAFIELD_4_TRANSFORM_OFFSET"
             ]
-            for camera_type in self.image_mapper.camera_types:
-                self.image_mapper.image_shapes[camera_type] = (
-                    self.image_mapper.image_shapes[camera_type][0],
-                    self.image_mapper.image_shapes[camera_type][1],
-                    len(self.image_channels),  # number of channels
-                )
 
-    def _get_features(self, batch) -> (dict, Table):
-        features = {}
+    def _get_features(self, batch) -> dict:
+        """
+        Retrieve images of a given batch as features.
+
+        This method processes a batch of events to retrieve images as input features for the neural networks.
+        It reads the image data from the specified files, applies any necessary transformations, and maps
+        the images using the appropriate ``ImageMapper``.
+
+        Parameters
+        ----------
+        batch : Table
+            A table containing information at minimum the following columns:
+            - "file_index": List of indices corresponding to the files.
+            - "table_index": List of indices corresponding to the event tables.
+            - "tel_type_id": List of telescope type IDs.
+            - "tel_id": List of telescope IDs.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the extracted features with the key ``images``,
+            which maps to a numpy array of the processed images.
+        """
         images = []
-        for file_idx, img_idx, tel_type_id, tel_id in zip(
+        for file_idx, table_idx, tel_type_id, tel_id in zip(
             batch["file_index"],
-            batch["img_index"],
+            batch["table_index"],
             batch["tel_type_id"],
             batch["tel_id"],
         ):
@@ -1045,85 +956,188 @@ class DLImageReader(DLMonoReader, DLStereoReader):
                     filename
                 ].root.dl1.event.telescope.images._f_get_child(tel_table)
                 unmapped_image = get_unmapped_image(
-                    child[img_idx], self.image_channels, self.image_transforms
+                    child[table_idx], self.img_channels, self.transforms
                 )
-            # Apply the ImageMapper whenever the mapping method is not indexed_conv
+            # Apply the 'ImageMapper' whenever the index matrix is not None.
+            # Otherwise, return the unmapped image for the 'IndexedConv' package.
             camera_type = self._get_camera_type(
                 list(self.selected_telescopes.keys())[tel_type_id]
             )
-            if self.image_mapper.mapping_method[camera_type] != "indexed_conv":
-                images.append(self.image_mapper.map_image(unmapped_image, camera_type))
+            if self.image_mappers[camera_type].index_matrix is None:
+                images.append(self.image_mappers[camera_type].map_image(unmapped_image))
             else:
                 images.append(unmapped_image)
-        features["images"] = np.array(images)
-        return features, batch
+        return {"images": np.array(images)}
 
 
-class DLWaveformReader(DLMonoReader, DLStereoReader):
+def get_unmapped_waveform(
+    r1_event,
+    settings,
+    dl1_cleaning_mask=None,
+):
+    """
+    Retrieve and process the unmapped waveform from an R1 event.
+
+    This function extracts the waveform data from an R1 event, applies necessary transformations
+    based on the provided settings, and optionally applies a DL1 cleaning mask. The function
+    supports handling waveforms with one or two gain channels and can crop the waveform sequence
+    based on the specified sequence length and position.
+
+    Parameters
+    ----------
+    r1_event : astropy.table.Table
+        A table containing the R1 event data, including ``waveform`` and ``selected_gain_channel``.
+    settings : dict
+        Dictionary containing settings for waveform processing, including:
+        - ``waveform_scale`` (float): Scale factor for waveform values.
+        - ``waveform_offset`` (int): Offset value for waveform values.
+        - ``type`` (str): Type of waveform processing (``calibrated`` or ``cleaned_calibrated``).
+        - ``seq_length`` (int): Length of the waveform sequence to be extracted.
+        - ``readout_length`` (int): Total length of the readout window.
+        - ``seq_position`` (str): Position of the sequence within the readout window (``center`` or ``maximum``).
+    dl1_cleaning_mask : numpy.ndarray, optional
+        Array containing the DL1 cleaning mask to be applied to the waveform to find the shower maximum
+        to center the sequence. Default is ``None``.
+
+    Returns
+    -------
+    numpy.ndarray
+        The processed and optionally cropped waveform data.
+    """
+
+    waveform = np.float32(r1_event["waveform"])
+    # Check if camera has one or two gain(s) and apply selection
+    if waveform.shape[0] == 1:
+        waveform = waveform[0]
+    else:
+        selected_gain_channel = r1_event["selected_gain_channel"][:, np.newaxis]
+        waveform = np.where(
+            selected_gain_channel == 0, waveform[0], waveform[1]
+        )
+    # Apply the transform to recover orginal floating point values if the file were compressed
+    if settings["waveform_scale"] > 0.0:
+        waveform /= settings["waveform_scale"]
+    if settings["waveform_offset"] > 0:
+        waveform -= settings["waveform_offset"]
+    # Apply the DL1 cleaning mask if selected
+    if settings["type"] == "cleaned_calibrated":
+        waveform *= dl1_cleaning_mask[:, None]
+    # Retrieve the sequence around the center of the readout window or the shower maximum
+    if settings["seq_length"] < settings["readout_length"]:
+        if settings["seq_position"] == "center":
+            sequence_position = waveform.shape[1] // 2 - 1
+        elif settings["seq_position"] == "maximum":
+            if dl1_cleaning_mask is None:
+                sequence_position = np.argmax(np.sum(waveform, axis=0))
+            else:
+                sequence_position = np.argmax(
+                    np.sum(waveform * dl1_cleaning_mask[:, None], axis=0)
+                )
+        # Calculate start and stop positions
+        start = max(0, int(1 + sequence_position - settings["seq_length"] / 2))
+        stop = min(settings["readout_length"], int(1 + sequence_position + settings["seq_length"] / 2))
+        # Adjust the start and stop if bound overflows
+        if stop > settings["readout_length"]:
+            start -= stop - settings["readout_length"]
+            stop = settings["readout_length"]
+        # Crop the unmapped waveform in samples
+        waveform = waveform[:, int(start) : int(stop)]
+
+    return waveform
+
+lock = threading.Lock()
+
+
+class DLWaveformReader(DLDataReader):
+    """
+    A data reader class for handling R1 calibrated waveform data from telescopes.
+
+    This class extends the ``DLDataReader`` to specifically handle the reading,
+    transformation, and mapping of R1 calibrated waveform data. It supports both ``mono``
+    and ``stereo`` data loading modes and can apply DL1 cleaning masks to the waveforms
+    if specified.
+
+    Attributes
+    ----------
+    sequence_length : int or None
+        Number of waveform samples considered in the selected sequence. If None,
+        the sequence length is set to the readout length.
+    sequence_position : str
+        Position of the sequence within the readout window. Can be ``center`` or ``maximum``.
+    clean : bool
+        Indicates whether to apply the DL1 cleaning mask to the calibrated waveforms.
+    waveform_settings : dict
+        Contains settings for waveform processing, including type, sequence length,
+        readout length, sequence position, scale, and offset.
+    """
+
+    sequence_length = Int(
+        default_value=None,
+        allow_none=True,
+        help="Number of waveform samples considered in the selected sequence.",
+    ).tag(config=True)
+
+    sequence_position = CaselessStrEnum(
+        ["center", "maximum"],
+        default_value="center",
+        help=(
+            "Set where to position the sequence if ``sequence_length`` is selected. "
+            "``center``: sequence is extracted around the center of the readout window. "
+            "``maximum``: sequence is extracted around the shower maximum. "
+        ),
+    ).tag(config=True)
+
+    clean = Bool(
+        default_value=False,
+        allow_none=False,
+        help="Set whether to apply the DL1 cleaning mask to the calibrated waveforms.",
+    ).tag(config=True)
+
     def __init__(
         self,
-        file_list,
-        waveform_settings,
-        tel_types=None,
-        tel_ids=None,
-        mapping_settings=None,
-        mode=None,
-        multiplicity_selection=None,
-        quality_selection=None,
+        config=None,
+        parent=None,
+        **kwargs,
     ):
 
-        # Set data loading mode
-        # Mono: single images of one telescope type
-        # Stereo: events including multiple telescope types
-        if mode in ["mono", "stereo"]:
-            self.mode = mode
-        else:
-            raise ValueError(
-                f"Invalid mode selection '{mode}'. Valid options: 'mono', 'stereo'"
-            )
+        super().__init__(config=config, parent=parent, **kwargs)
 
-        # temp fix
-        self.include_nsb_patches = "off"
-        if self.mode == "mono":
-            DLMonoReader.__init__(
-                self,
-                file_list=file_list,
-                tel_types=tel_types,
-                tel_ids=tel_ids,
-                mapping_settings=mapping_settings,
-                quality_selection=quality_selection,
-            )
-        elif self.mode == "stereo":
-            DLStereoReader.__init__(
-                self,
-                file_list=file_list,
-                tel_types=tel_types,
-                tel_ids=tel_ids,
-                mapping_settings=mapping_settings,
-                quality_selection=quality_selection,
-                multiplicity_selection=multiplicity_selection,
-            )
-
-        # Calibrated waveform (R1)
-        self.waveform_settings = waveform_settings
-        self.waveform_type = waveform_settings["type"]
-
-        first_tel_table = f"tel_{self.tel_ids[0]:03d}"
-        with lock:
-            wvf_table_v_attrs = (
-                self.files[self.first_file]
-                .root.r1.event.telescope._f_get_child(first_tel_table)
-                ._v_attrs
-            )
-        self.waveform_settings["sequence_max_length"] = (
+        # Read the readout length from the first file
+        self.readout_length = int(
             self.files[self.first_file]
-            .root.r1.event.telescope._f_get_child(first_tel_table)
+            .root.r1.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
             .coldescrs["waveform"]
             .shape[-1]
         )
+
+        # Set the sequence length to the readout length if not selected
+        if self.sequence_length is None:
+            self.sequence_length = self.readout_length
+        else:
+            # Check that the waveform sequence length is valid
+            if self.sequence_length > self.readout_length:
+                raise ValueError(
+                    f"Invalid sequence length '{self.sequence_length}' (must be <= '{self.readout_length}')."
+                )
+
+        # Construct settings dict for the calibrated waveforms
+        self.waveform_type = "cleaned_calibrated" if self.clean else "calibrated"
+        self.waveform_settings = {
+            "type": self.waveform_type,
+            "seq_length": self.sequence_length,
+            "readout_length": self.readout_length,
+            "seq_position": self.sequence_position,
+        }
+
+        # Check the transform value used for the file compression
         self.waveform_settings["waveform_scale"] = 0.0
         self.waveform_settings["waveform_offset"] = 0
-        # Check the transform value used for the file compression
+        with lock:
+            wvf_table_v_attrs = (
+                self.files[self.first_file]
+                .root.r1.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
+                ._v_attrs
+            )
         if "CTAFIELD_5_TRANSFORM_SCALE" in wvf_table_v_attrs:
             self.waveform_settings["waveform_scale"] = wvf_table_v_attrs[
                 "CTAFIELD_5_TRANSFORM_SCALE"
@@ -1131,32 +1145,34 @@ class DLWaveformReader(DLMonoReader, DLStereoReader):
             self.waveform_settings["waveform_offset"] = wvf_table_v_attrs[
                 "CTAFIELD_5_TRANSFORM_OFFSET"
             ]
-        # Check that the waveform sequence length is valid
-        if (
-            self.waveform_settings["sequence_length"]
-            > self.waveform_settings["sequence_max_length"]
-        ):
-            raise ValueError(
-                f"Invalid sequence length '{self.waveform_settings['sequence_length']}' (must be <= '{self.waveform_settings['sequence_max_length']}')."
-            )
-        # Set the shapes of the waveforms
-        self.waveform_settings["shapes"] = {}
-        for camera_type in self.image_mapper.camera_types:
-            self.image_mapper.image_shapes[camera_type] = (
-                self.image_mapper.image_shapes[camera_type][0],
-                self.image_mapper.image_shapes[camera_type][1],
-                self.waveform_settings["sequence_length"],
-            )
-            self.waveform_settings["shapes"][camera_type] = (
-                self.image_mapper.image_shapes[camera_type]
-            )
 
-    def _get_features(self, batch) -> (dict, Table):
-        features = {}
+    def _get_features(self, batch) -> dict:
+        """
+        Retrieve waveforms of a given batch as features.
+
+        This method processes a batch of events to retrieve waveforms as input features for the neural networks.
+        It reads the waveform data from the specified files, applies any necessary transformations, and maps
+        the waveforms using the appropriate ``ImageMapper``.
+
+        Parameters
+        ----------
+        batch : astropy.table.Table
+            A table containing information at minimum the following columns:
+            - ``file_index``: List of indices corresponding to the files.
+            - ``table_index``: List of indices corresponding to the event tables.
+            - ``tel_type_id``: List of telescope type IDs.
+            - ``tel_id``: List of telescope IDs.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the extracted features with the key ``waveforms``,
+            which maps to a numpy array of the processed waveforms.
+        """
         waveforms = []
-        for file_idx, img_idx, tel_type_id, tel_id in zip(
+        for file_idx, table_idx, tel_type_id, tel_id in zip(
             batch["file_index"],
-            batch["img_index"],
+            batch["table_index"],
             batch["tel_type_id"],
             batch["tel_id"],
         ):
@@ -1173,237 +1189,20 @@ class DLWaveformReader(DLMonoReader, DLStereoReader):
                             filename
                         ].root.dl1.event.telescope.images._f_get_child(tel_table)
                         dl1_cleaning_mask = np.array(
-                            img_child[img_idx]["image_mask"], dtype=int
+                            img_child[table_idx]["image_mask"], dtype=int
                         )
                 unmapped_waveform = get_unmapped_waveform(
-                    child[img_idx],
+                    child[table_idx],
                     self.waveform_settings,
                     dl1_cleaning_mask,
                 )
-            # Apply the ImageMapper whenever the mapping method is not indexed_conv
+            # Apply the 'ImageMapper' whenever the index matrix is not None.
+            # Otherwise, return the unmapped image for the 'IndexedConv' package.
             camera_type = self._get_camera_type(
                 list(self.selected_telescopes.keys())[tel_type_id]
             )
-            if self.image_mapper.mapping_method[camera_type] != "indexed_conv":
-                waveforms.append(
-                    self.image_mapper.map_image(unmapped_waveform, camera_type)
-                )
+            if self.image_mappers[camera_type].index_matrix is None:
+                waveforms.append(self.image_mappers[camera_type].map_image(unmapped_waveform))
             else:
                 waveforms.append(unmapped_waveform)
-        features["waveforms"] = np.array(waveforms)
-        return features, batch
-
-
-class DLTriggerReader(DLMonoReader):
-    def __init__(
-        self,
-        file_list,
-        waveform_settings,
-        trigger_settings,
-        tel_types=None,
-        tel_ids=None,
-        mapping_settings=None,
-    ):
-
-        # Set data loading mode to mono
-        self.mode = "mono"
-        # AI-based trigger system settings
-        self.trigger_settings = trigger_settings
-        self.include_nsb_patches = self.trigger_settings["include_nsb_patches"]
-        self.get_trigger_patch_from = self.trigger_settings["get_patch_from"]
-
-        DLMonoReader.__init__(
-            self,
-            file_list=file_list,
-            tel_types=tel_types,
-            tel_ids=tel_ids,
-            mapping_settings=mapping_settings,
-        )
-
-        # AI-based trigger system
-        # Obtain trigger patch info from an external algorithm (i.e. DBScan)
-        # TODO: Make a better iterface to read the trigger patch info
-        # Either append the hdf5 file with the trigger patch info or implement
-        # the DBscan algorithm here in the reader.
-        if self.get_trigger_patch_from == "file":
-            trigger_patch_info = []
-            for filename in self.files:
-                try:
-                    # Read csv containing the trigger patch info
-                    import pandas as pd
-
-                    trigger_patch_info_csv_file = pd.read_csv(
-                        filename.replace("r0.dl1.h5", "npe.csv")
-                    )[
-                        [
-                            "obs_id",
-                            "event_id",
-                            "tel_id",
-                            "trg_pixel_id",
-                            "trg_waveform_sample_id",
-                        ]
-                    ].astype(
-                        int
-                    )
-                    trigger_patch_info.append(
-                        Table.from_pandas(trigger_patch_info_csv_file)
-                    )
-                except:
-                    raise IOError(
-                        f"There is a problem with '{filename.replace('r0.dl1.h5','npe.csv')}'!"
-                    )
-
-            # Join the events table ith the trigger patch info
-            self.example_identifiers = join(
-                left=vstack(trigger_patch_info),
-                right=self.example_identifiers,
-                keys=["obs_id", "event_id", "tel_id"],
-            )
-            # Remove non-trigger events from the self.example_identifiers
-            # identified by negative pixel ids
-            self.example_identifiers = self.example_identifiers[
-                self.example_identifiers["trg_pixel_id"] >= 0
-            ]
-
-        # Raw waveform (R0)
-        self.waveform_settings = waveform_settings
-        self.waveform_type = waveform_settings["type"]
-        first_tel_table = f"tel_{self.tel_ids[0]:03d}"
-        self.waveform_settings["sequence_max_length"] = (
-            self.files[self.first_file]
-            .root.r0.event.telescope._f_get_child(first_tel_table)
-            .coldescrs["waveform"]
-            .shape[-1]
-        )
-        # Check that the waveform sequence length is valid
-        if (
-            self.waveform_settings["sequence_length"]
-            > self.waveform_settings["sequence_max_length"]
-        ):
-            raise ValueError(
-                f"Invalid sequence length '{self.waveform_settings['sequence_length']}' (must be <= '{self.waveform_settings['sequence_max_length']}')."
-            )
-        self.waveform_settings["shapes"] = {}
-        for camera_type in self.image_mapper.camera_types:
-            self.image_mapper.image_shapes[camera_type] = (
-                self.image_mapper.image_shapes[camera_type][0],
-                self.image_mapper.image_shapes[camera_type][1],
-                self.waveform_settings["sequence_length"],
-            )
-            self.waveform_settings["shapes"][camera_type] = (
-                self.image_mapper.image_shapes[camera_type]
-            )
-            self.trigger_settings["patches_xpos"] = {}
-            self.trigger_settings["patches_ypos"] = {}
-            # Autoset the trigger patches
-            if (
-                "patch_size" not in self.trigger_settings
-                or "patches" not in self.trigger_settings
-            ):
-                trigger_patches_xpos = np.linspace(
-                    0,
-                    self.image_mapper.image_shapes[camera_type][0],
-                    num=self.trigger_settings["number_of_patches"][0] + 1,
-                    endpoint=False,
-                    dtype=int,
-                )[1:]
-                trigger_patches_ypos = np.linspace(
-                    0,
-                    self.image_mapper.image_shapes[camera_type][1],
-                    num=self.trigger_settings["number_of_patches"][0] + 1,
-                    endpoint=False,
-                    dtype=int,
-                )[1:]
-                self.trigger_settings["patch_size"] = {
-                    camera_type: [
-                        trigger_patches_xpos[0] * 2,
-                        trigger_patches_ypos[0] * 2,
-                    ]
-                }
-                self.trigger_settings["patches"] = {camera_type: []}
-                for patches in np.array(
-                    np.meshgrid(trigger_patches_xpos, trigger_patches_ypos)
-                ).T:
-                    for patch in patches:
-                        self.trigger_settings["patches"][camera_type].append(
-                            {"x": patch[0], "y": patch[1]}
-                        )
-
-            self.waveform_settings["shapes"][camera_type] = (
-                self.trigger_settings["patch_size"][camera_type][0],
-                self.trigger_settings["patch_size"][camera_type][1],
-                self.waveform_settings["sequence_length"],
-            )
-            self.trigger_settings["patches_xpos"][camera_type] = np.unique(
-                [patch["x"] for patch in trigger_settings["patches"][camera_type]]
-            )
-            self.trigger_settings["patches_ypos"][camera_type] = np.unique(
-                [patch["y"] for patch in trigger_settings["patches"][camera_type]]
-            )
-
-    def _get_features(self, batch) -> (dict, Table):
-        features = {}
-
-        # Get the trigger patches from
-        trg_pixel_id, trg_waveform_sample_id = None, None
-        if self.get_trigger_patch_from == "file":
-            trg_pixel_ids = batch["trg_pixel_id"]
-            trg_waveform_sample_ids = batch["trg_waveform_sample_id"]
-        trigger_patches, true_cherenkov_photons = [], []
-        random_trigger_patch = False
-        for i, (file_idx, img_idx, tel_type_id, tel_id) in enumerate(
-            zip(
-                batch["file_index"],
-                batch["img_index"],
-                batch["tel_type_id"],
-                batch["tel_id"],
-            )
-        ):
-            filename = list(self.files)[file_idx]
-            if self.get_trigger_patch_from == "file":
-                trg_pixel_id = trg_pixel_ids[i]
-                trg_waveform_sample_id = trg_waveform_sample_ids[i]
-            with lock:
-                tel_table = f"tel_{tel_id:03d}"
-                child = self.files[filename].root.r0.event.telescope._f_get_child(
-                    tel_table
-                )
-                true_image = None
-                if self.process_type == "Simulation":
-                    if self.include_nsb_patches == "auto":
-                        random_trigger_patch = np.random.choice(
-                            [False, True], p=[self._shower_prob, self._nsb_prob]
-                        )
-                    elif self.include_nsb_patches == "all":
-                        random_trigger_patch = True
-                    if "images" in self.files[filename].root.simulation.event.telescope:
-                        sim_child = self.files[
-                            filename
-                        ].root.simulation.event.telescope.images._f_get_child(tel_table)
-                        true_image = np.expand_dims(
-                            np.array(sim_child[img_idx]["true_image"], dtype=int),
-                            axis=1,
-                        )
-                camera_type = self._get_camera_type(
-                    list(self.selected_telescopes.keys())[tel_type_id]
-                )
-                waveform, trigger_patch_true_image_sum = get_mapped_triggerpatch(
-                    child[img_idx],
-                    self.waveform_settings,
-                    self.trigger_settings,
-                    self.image_mapper,
-                    camera_type,
-                    true_image,
-                    random_trigger_patch,
-                    trg_pixel_id,
-                    trg_waveform_sample_id,
-                )
-            trigger_patches.append(waveform)
-            if trigger_patch_true_image_sum is not None:
-                true_cherenkov_photons.append(trigger_patch_true_image_sum)
-        features["waveforms"] = np.array(trigger_patches)
-        # Add the true cherenkov photons to the batch if available
-        if len(true_cherenkov_photons) > 0:
-            batch.add_column(true_cherenkov_photons, name="true_cherenkov_photons")
-
-        return features, batch
+        return {"waveforms": np.array(waveforms)}
