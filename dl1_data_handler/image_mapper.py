@@ -1,3 +1,7 @@
+"""
+This module defines the ``ImageMapper`` classes, which holds the basic functionality for mapping raw 1D vectors into 2D mapped images.
+"""
+
 import numpy as np
 from scipy import spatial
 from scipy.sparse import csr_matrix
@@ -131,8 +135,17 @@ class ImageMapper(TelescopeComponent):
 
     def map_image(self, raw_vector):
         """
-        :param raw_vector: a numpy array of values for each pixel, in order of pixel index.
-        :return: a numpy array of shape [img_width, img_length, N_channels]
+        Map the raw pixel data to a 2D image.
+
+        Parameters
+        ----------
+        raw_vector : numpy.ndarray
+            A numpy array of values for each pixel, in order of pixel index.
+
+        Returns
+        -------
+        numpy.ndarray
+            A numpy array of shape [img_width, img_length, N_channels].
         """
         # Reshape each channel and stack the result
         images = np.concatenate(
@@ -147,6 +160,7 @@ class ImageMapper(TelescopeComponent):
         return images
 
     def _get_virtual_pixels(self, x_ticks, y_ticks, pix_x, pix_y):
+        """Get the virtual pixels outside of the camera."""
         gridpoints = np.array(np.meshgrid(x_ticks, y_ticks)).T.reshape(-1, 2)
         gridpoints = [tuple(l) for l in gridpoints.tolist()]
         virtual_pixels = set(gridpoints) - set(zip(pix_x, pix_y))
@@ -156,6 +170,7 @@ class ImageMapper(TelescopeComponent):
     def _create_virtual_hex_pixels(
         self, first_ticks, second_ticks, first_pos, second_pos
     ):
+        """Create virtual hexagonal pixels outside of the camera."""
         dist_first = np.around(abs(first_ticks[0] - first_ticks[1]), decimals=3)
         dist_second = np.around(abs(second_ticks[0] - second_ticks[1]), decimals=3)
 
@@ -200,6 +215,7 @@ class ImageMapper(TelescopeComponent):
         return first_pos, second_pos, dist_first, dist_second
 
     def _generate_nearestneighbor_table(self, input_grid, output_grid, pixel_weight):
+        """Generate a nearest neighbor table for mapping."""
         # Finding the nearest point in the hexagonal input grid
         # for each point in the square utü grid
         tree = spatial.cKDTree(input_grid)
@@ -217,6 +233,7 @@ class ImageMapper(TelescopeComponent):
         return self._get_sparse_mapping_matrix(mapping_matrix)
 
     def _get_sparse_mapping_matrix(self, mapping_matrix, normalize=False):
+        """Get a sparse mapping matrix from the given mapping matrix."""
         # Cutting the mapping table after n_pixels, since the virtual pixels have intensity zero.
         mapping_matrix = mapping_matrix[: self.n_pixels]
         # Normalization (approximation) of the mapping table
@@ -240,17 +257,25 @@ class ImageMapper(TelescopeComponent):
         )
         return sparse_mapping_matrix
 
-    def _get_weights(self, p, target):
+    def _get_weights(self, points, target):
         """
         Calculate barycentric weights for multiple triangles and target points.
 
-        :param p: a numpy array of shape (i, 3, 2) for three points (one triangle). The index i means that one can calculate the weights for multiple triangles with one function call.
-        :param target: a numpy array of shape (i, 2) for one target 2D point.
-        :return: a numpy array of shape (i, 3) containing the three weights.
+        Parameters
+        ----------
+        points : numpy.ndarray
+            A numpy array of shape (i, 3, 2) for three points (one triangle).
+        target : numpy.ndarray
+            A numpy array of shape (i, 2) for one target 2D point.
+
+        Returns
+        -------
+        numpy.ndarray
+            A numpy array of shape (i, 3) containing the three weights.
         """
-        x1, y1 = p[:, 0, 0], p[:, 0, 1]
-        x2, y2 = p[:, 1, 0], p[:, 1, 1]
-        x3, y3 = p[:, 2, 0], p[:, 2, 1]
+        x1, y1 = points[:, 0, 0], points[:, 0, 1]
+        x2, y2 = points[:, 1, 0], points[:, 1, 1]
+        x3, y3 = points[:, 2, 0], points[:, 2, 1]
         xt, yt = target[:, 0], target[:, 1]
 
         divisor = (y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3)
@@ -264,9 +289,7 @@ class ImageMapper(TelescopeComponent):
     def _get_grids_for_interpolation(
         self,
     ):
-        """
-        :return: two 2D numpy arrays (hexagonal input grid and squared output grid)
-        """
+        """Get the grids for interpolation."""
 
         # Check orientation of the hexagonal pixels
         first_ticks, first_pos, second_ticks, second_pos = (
@@ -310,6 +333,7 @@ class ImageMapper(TelescopeComponent):
         return input_grid, output_grid
 
     def _smooth_ticks(self, pix_pos, ticks):
+        """Smooth the ticks needed for the 'DigiCam' and 'CHEC' cameras."""
         remove_val, change_val = [], []
         for i in range(len(ticks) - 1):
             if abs(ticks[i] - ticks[i + 1]) <= 0.002:
@@ -325,6 +349,14 @@ class ImageMapper(TelescopeComponent):
 
 
 class SquareMapper(ImageMapper):
+    """
+    SquareMapper maps images to a square pixel grid without any modifications.
+
+    This class extends the functionality of ImageMapper by implementing 
+    methods to generate a direct mapping table and perform the transformation. 
+    It is particularly useful for applications where a direct one-to-one 
+    mapping is sufficient for converting pixel data.for square pixel cameras
+    """
     def __init__(
         self,
         geometry,
@@ -382,6 +414,16 @@ class SquareMapper(ImageMapper):
 
 
 class AxialMapper(ImageMapper):
+    """
+    AxialMapper applies a transformation to axial coordinates to map images 
+    from a hexagonal pixel grid to a square pixel grid.
+
+    This class extends the functionality of ImageMapper by implementing 
+    methods to generate an axial mapping table and perform the transformation. 
+    It is particularly useful for applications where axial coordinate 
+    transformations are required for mapping pixel data.
+    """
+
     set_index_matrix = Bool(
         default_value=False,
         help=(
@@ -499,6 +541,16 @@ class AxialMapper(ImageMapper):
 
 
 class ShiftingMapper(ImageMapper):
+    """
+    ShiftingMapper applies a shifting transformation to map images
+    from a hexagonal pixel grid to a square pixel grid.
+   
+    This class extends the functionality of ImageMapper by implementing 
+    methods to generate a shifting mapping table and perform the transformation. 
+    It is particularly useful for applications where a simple shift-based 
+    transformation is sufficient for mapping hexagonal pixel data.
+    """
+
     def __init__(
         self,
         geometry,
@@ -581,6 +633,18 @@ class ShiftingMapper(ImageMapper):
 
 
 class OversamplingMapper(ImageMapper):
+    """
+    OversamplingMapper maps images from a hexagonal pixel grid to
+    a square pixel grid using oversampling techniques.
+
+    This class extends the functionality of ImageMapper by implementing 
+    methods to generate an oversampling mapping table and perform the transformation.
+    One hexganoal pixel is split into four square pixels, which are then weighted
+    by one quarter of the intensity of the hexagonal pixel. The resulting
+    image is stretched in one direction. It is particularly useful for applications
+    where interpolation effects want to be surpressed.
+    """
+
     def __init__(
         self,
         geometry,
@@ -668,6 +732,16 @@ class OversamplingMapper(ImageMapper):
 
 
 class NearestNeighborMapper(ImageMapper):
+    """
+    NearestNeighborMapper maps images from a hexagonal pixel grid to
+    a square pixel grid using the nearest neighbor assignment technique.
+
+    This class extends the functionality of ImageMapper by implementing 
+    methods to generate a nearest neighbor mapping table and perform the 
+    interpolation. It is particularly useful for applications where simplicity
+    and computational efficiency is prioritized over interpolation accuracy.
+    """
+
     interpolation_image_shape = Int(
         default_value=None,
         allow_none=True,
@@ -709,6 +783,18 @@ class NearestNeighborMapper(ImageMapper):
 
 
 class BilinearMapper(ImageMapper):
+    """
+    BilinearMapper maps images from a hexagonal pixel grid to
+    a square pixel grid using bilinear interpolation.
+
+    This class extends the functionality of ImageMapper by implementing 
+    methods to generate a bilinear interpolation mapping table and perform the transformation. 
+    It leverages Delaunay triangulation to find the nearest neighbors for the interpolation process.
+    The mapping table is normalized to ensure that the intensity of the pixels is preserved.
+    It is particularly useful for applications where smooth and continuous mapping 
+    of pixel data is required. Recommended to use as default for hexagonal pixel cameras.
+    """
+
     interpolation_image_shape = Int(
         default_value=None,
         allow_none=True,
@@ -768,13 +854,14 @@ class BilinearMapper(ImageMapper):
 
 class BicubicMapper(ImageMapper):
     """
-    BicubicMapper is a class that extends the ImageMapper class to provide
-    bicubic interpolation mapping functionality.
+    BicubicMapper maps images from a hexagonal pixel grid to
+    a square pixel grid using bicubic interpolation.
 
     This class is used to generate a mapping table that maps input grid points
-    to output grid points using bicubic interpolation. It leverages Delaunay
-    triangulation to find the nearest neighbors and second nearest neighbors
-    for the interpolation process.
+    to output grid points using bicubic interpolation. The mapping table is
+    normalized to ensure that the intensity of the pixels is preserved. It
+    leverages Delaunay triangulation to find the nearest neighbors and second
+    nearest neighbors for the interpolation process.
     """
 
     interpolation_image_shape = Int(
@@ -983,6 +1070,17 @@ class BicubicMapper(ImageMapper):
 
 
 class RebinMapper(ImageMapper):
+    """
+    RebinMapper maps images from a hexagonal pixel grid to
+    a square pixel grid using a rebinning technique.
+
+    This class extends the functionality of ImageMapper by implementing 
+    methods to generate a rebinning mapping table and perform the transformation.
+    Hexagonal pixels are rebinned or reshaped to square pixels, which preserve
+    the intensity of the pixels. It is particularly useful for
+    applications where a simple and efficient rebinning of pixel data is required.
+    """
+
     interpolation_image_shape = Int(
         default_value=None,
         allow_none=True,
