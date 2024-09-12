@@ -831,8 +831,6 @@ def get_unmapped_image(dl1_event, channels, transforms):
     return image
 
 
-lock = threading.Lock()
-
 class DLImageReader(DLDataReader):
     """
     A data reader class for handling DL1 image data from telescopes.
@@ -1042,8 +1040,6 @@ def get_unmapped_waveform(
         waveform = waveform[:, int(start) : int(stop)]
 
     return waveform
-
-lock = threading.Lock()
 
 
 class DLWaveformReader(DLDataReader):
