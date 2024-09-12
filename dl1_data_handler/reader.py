@@ -184,7 +184,7 @@ class DLDataReader(Component):
     ).tag(config=True)
 
     min_telescopes = Int(
-        default_value=4,
+        default_value=1,
         help=(
             "Minimum number of telescopes required globally after ``TableQualityQuery``. "
             "Events with fewer telescopes will be filtered out completely. "
@@ -619,9 +619,7 @@ class DLDataReader(Component):
         return vstack(tel_pointing)
 
     def _transform_to_log_energy(self, table):
-        """
-        Transform true energy values in the given table to logarithmic space.
-        """
+        """Transform true energy values in the given table to logarithmic space."""
         table.add_column(np.log10(table["true_energy"]), name="log_true_energy")
         return table
 
