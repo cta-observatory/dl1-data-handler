@@ -357,8 +357,8 @@ class DLDataReader(Component):
         if self.process_type == "Simulation":
             if self.bkg_input_files is not None:
                 self.class_weight = {
-                    0: (1 / self.n_bkg_events) * (self._get_n_events() / 2.0),
-                    1: (1 / self.n_signal_events) * (self._get_n_events() / 2.0),
+                    0: (1.0 / self.n_bkg_events) * (self._get_n_events() / 2.0),
+                    1: (1.0 / self.n_signal_events) * (self._get_n_events() / 2.0),
                 }
 
     def _get_camera_type(self, tel_type):
