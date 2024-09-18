@@ -86,28 +86,9 @@ class ImageMapper(TelescopeComponent):
             this is mutually exclusive with passing ``config``
         """
 
-        # Default image_shapes should be a non static field to prevent problems
-        # when multiple instances of ImageMapper are created
-        self.default_image_shapes = {
-            "LSTCam": 110,
-            "LSTSiPMCam": 234,
-            "FlashCam": 112,
-            "NectarCam": 110,
-            "SCTCam": 120,
-            "DigiCam": 96,
-            "CHEC": 48,
-            "ASTRICam": 56,
-            "VERITAS": 54,
-            "MAGICCam": 78,
-            "FACT": 92,
-            "HESS-I": 72,
-            "HESS-II": 104,
-        }
-
         # Camera types
         self.geometry = geometry
         self.camera_type = self.geometry.name
-        self.image_shape = self.default_image_shapes[self.camera_type]
         self.n_pixels = self.geometry.n_pixels
         # Rotate the pixel positions by the pixel to align
         self.geometry.rotate(self.geometry.pix_rotation)
@@ -129,10 +110,14 @@ class ImageMapper(TelescopeComponent):
             self.pix_x, self.x_ticks = self._smooth_ticks(self.pix_x, self.x_ticks)
             self.pix_y, self.y_ticks = self._smooth_ticks(self.pix_y, self.y_ticks)
 
-        # At the edges of the cameras the mapping methods run into issues.
+        # At the edges of the cameras some mapping methods run into issues.
         # Therefore, we are using a default padding to ensure that the camera pixels aren't affected.
         # The default padding is removed after the conversion is finished.
-        self.internal_pad = 3
+        self.internal_pad = 0
+        # Retrieve default shape of the image from the oversampling method.
+        _, output_grid = self._get_grids_for_oversampling()    
+        # This value can be overwritten by the subclass
+        self.image_shape = int(len(output_grid) ** 0.5)
 
         # Only needed for rebinnig
         self.rebinning_mult_factor = 1
@@ -322,6 +307,75 @@ class ImageMapper(TelescopeComponent):
         weights = np.stack((w1, w2, w3), axis=-1)
         return weights.astype(np.float32)
 
+
+    def _get_grids_for_oversampling(
+        self,
+    ):
+        """Get the grids for oversampling."""
+
+        # Check orientation of the hexagonal pixels
+        first_ticks, first_pos, second_ticks, second_pos = (
+            (self.x_ticks, self.pix_x, self.y_ticks, self.pix_y)
+            if len(self.x_ticks) < len(self.y_ticks)
+            else (self.y_ticks, self.pix_y, self.x_ticks, self.pix_x)
+        )
+        # Create the virtual pixels outside of the camera with hexagonal pixels
+        (
+            first_pos,
+            second_pos,
+            dist_first,
+            dist_second,
+        ) = self._create_virtual_hex_pixels(
+            first_ticks, second_ticks, first_pos, second_pos
+        )
+
+        # Create the output grid
+        grid_first = []
+        for i in first_ticks:
+            grid_first.append(i - dist_first / 4.0)
+            grid_first.append(i + dist_first / 4.0)
+        grid_second = [second_ticks[0] - dist_second / 2.0]
+        for j in second_ticks:
+            grid_second.append(j + dist_second / 2.0)
+
+        tick_diff = (len(grid_first) - len(grid_second)) // 2
+        # Extend second_ticks
+        for _ in range(tick_diff):
+            grid_second = (
+                [
+                    np.around(
+                        grid_second[0] - dist_second,
+                        decimals=constants.decimal_precision,
+                    )
+                ]
+                + grid_second
+                + [
+                    np.around(
+                        grid_second[-1] + dist_second,
+                        decimals=constants.decimal_precision,
+                    )
+                ]
+            )
+        # Adjust for odd tick_diff
+        # TODO: Check why MAGICCam and VERITAS do not need this adjustment
+        if tick_diff % 2 != 0 and self.camera_type not in ["MAGICCam", "VERITAS"]:
+            grid_second.insert(
+                0,
+                np.around(
+                    grid_second[0] - dist_second, decimals=constants.decimal_precision
+                ),
+            )
+
+        if len(self.x_ticks) < len(self.y_ticks):
+            input_grid = np.column_stack([first_pos, second_pos])
+            x_grid, y_grid = np.meshgrid(grid_first, grid_second)
+        else:
+            input_grid = np.column_stack([second_pos, first_pos])
+            x_grid, y_grid = np.meshgrid(grid_second, grid_first)
+        output_grid = np.column_stack([x_grid.ravel(), y_grid.ravel()])
+
+        return input_grid, output_grid
+
     def _get_grids_for_interpolation(
         self,
     ):
@@ -413,8 +467,8 @@ class SquareMapper(ImageMapper):
                 "SquareMapper is only available for square pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
 
-        # Set shape and padding for the square camera
-        self.internal_pad = 0
+        # Set shape of the image for the square camera
+        self.image_shape //= 2
         self.internal_shape = self.image_shape
 
         # Create square grid
@@ -494,7 +548,6 @@ class AxialMapper(ImageMapper):
             output_grid,
         ) = self._get_grids()
         # Set shape and padding for the axial addressing method
-        self.internal_pad = 0
         self.internal_shape = self.image_shape
         # Calculate the mapping table
         self.mapping_table = super()._generate_nearestneighbor_table(
@@ -624,7 +677,7 @@ class ShiftingMapper(ImageMapper):
             raise ValueError(
                 "ShiftingMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
-        self.internal_pad = 0
+
         # Creating the hexagonal and the output grid for the conversion methods.
         input_grid, output_grid = self._get_grids()
         # Set shape for the axial addressing method
@@ -732,87 +785,15 @@ class OversamplingMapper(ImageMapper):
             raise ValueError(
                 "OversamplingMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
-        self.internal_pad = 0
+
         self.internal_shape = self.image_shape
         # Creating the hexagonal and the output grid for the conversion methods.
-        input_grid, output_grid = self._get_grids()
+        input_grid, output_grid = super()._get_grids_for_oversampling()
         # Calculate the mapping table
         self.mapping_table = super()._generate_nearestneighbor_table(
             input_grid, output_grid, pixel_weight=0.25
         )
 
-    def _get_grids(
-        self,
-    ):
-        """
-        :param pos: a 2D numpy array of pixel positions, which were taken from the CTApipe.
-        :param camera_type: a string specifying the camera type
-        :param grid_size_factor: a number specifying the grid size of the output grid. Only if 'rebinning' is selected, this factor differs from 1.
-        :return: two 2D numpy arrays (hexagonal grid and squared output grid)
-        """
-
-        # Check orientation of the hexagonal pixels
-        first_ticks, first_pos, second_ticks, second_pos = (
-            (self.x_ticks, self.pix_x, self.y_ticks, self.pix_y)
-            if len(self.x_ticks) < len(self.y_ticks)
-            else (self.y_ticks, self.pix_y, self.x_ticks, self.pix_x)
-        )
-        # Create the virtual pixels outside of the camera with hexagonal pixels
-        (
-            first_pos,
-            second_pos,
-            dist_first,
-            dist_second,
-        ) = super()._create_virtual_hex_pixels(
-            first_ticks, second_ticks, first_pos, second_pos
-        )
-
-        # Create the output grid
-        grid_first = []
-        for i in first_ticks:
-            grid_first.append(i - dist_first / 4.0)
-            grid_first.append(i + dist_first / 4.0)
-        grid_second = [second_ticks[0] - dist_second / 2.0]
-        for j in second_ticks:
-            grid_second.append(j + dist_second / 2.0)
-
-        tick_diff = (len(grid_first) - len(grid_second)) // 2
-        # Extend second_ticks
-        for _ in range(tick_diff):
-            grid_second = (
-                [
-                    np.around(
-                        grid_second[0] - dist_second,
-                        decimals=constants.decimal_precision,
-                    )
-                ]
-                + grid_second
-                + [
-                    np.around(
-                        grid_second[-1] + dist_second,
-                        decimals=constants.decimal_precision,
-                    )
-                ]
-            )
-        # Adjust for odd tick_diff
-        # TODO: Check why MAGICCam and VERITAS do not need this adjustment
-        if tick_diff % 2 != 0 and self.camera_type not in ["MAGICCam", "VERITAS"]:
-            grid_second.insert(
-                0,
-                np.around(
-                    grid_second[0] - dist_second, decimals=constants.decimal_precision
-                ),
-            )
-
-        if len(self.x_ticks) < len(self.y_ticks):
-            input_grid = np.column_stack([first_pos, second_pos])
-            x_grid, y_grid = np.meshgrid(grid_first, grid_second)
-        else:
-            input_grid = np.column_stack([second_pos, first_pos])
-            x_grid, y_grid = np.meshgrid(grid_second, grid_first)
-        output_grid = np.column_stack([x_grid.ravel(), y_grid.ravel()])
-
-        return input_grid, output_grid
 
 
 class NearestNeighborMapper(ImageMapper):
@@ -854,6 +835,9 @@ class NearestNeighborMapper(ImageMapper):
                 "NearestNeighborMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
 
+        # At the edges of the cameras the mapping methods run into issues.
+        # Therefore, we are using a default padding to ensure that the camera pixels aren't affected.
+        # The default padding is removed after the conversion is finished.
         self.internal_pad = 3
         if self.interpolation_image_shape is not None:
             self.image_shape = self.interpolation_image_shape
@@ -906,6 +890,10 @@ class BilinearMapper(ImageMapper):
             raise ValueError(
                 "BilinearMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
+
+        # At the edges of the cameras the mapping methods run into issues.
+        # Therefore, we are using a default padding to ensure that the camera pixels aren't affected.
+        # The default padding is removed after the conversion is finished.
         self.internal_pad = 3
         if self.interpolation_image_shape is not None:
             self.image_shape = self.interpolation_image_shape
@@ -975,6 +963,10 @@ class BicubicMapper(ImageMapper):
             raise ValueError(
                 "BicubicMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
+
+        # At the edges of the cameras the mapping methods run into issues.
+        # Therefore, we are using a default padding to ensure that the camera pixels aren't affected.
+        # The default padding is removed after the conversion is finished.
         self.internal_pad = 3
         if self.interpolation_image_shape is not None:
             self.image_shape = self.interpolation_image_shape
@@ -1204,6 +1196,10 @@ class RebinMapper(ImageMapper):
             raise ValueError(
                 "RebinMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
+
+        # At the edges of the cameras the mapping methods run into issues.
+        # Therefore, we are using a default padding to ensure that the camera pixels aren't affected.
+        # The default padding is removed after the conversion is finished.
         self.internal_pad = 3
         if self.interpolation_image_shape is not None:
             self.image_shape = self.interpolation_image_shape
