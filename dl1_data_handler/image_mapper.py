@@ -464,7 +464,7 @@ class SquareMapper(ImageMapper):
 
         if geometry.pix_type != PixelShape.SQUARE:
             raise ValueError(
-                "SquareMapper is only available for square pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
+                f"SquareMapper is only available for square pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
 
         # Set shape of the image for the square camera
@@ -540,7 +540,7 @@ class AxialMapper(ImageMapper):
 
         if geometry.pix_type != PixelShape.HEXAGON:
             raise ValueError(
-                "AxialMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
+                f"AxialMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
         # Creating the hexagonal and the output grid for the conversion methods.
         (
@@ -675,7 +675,7 @@ class ShiftingMapper(ImageMapper):
 
         if geometry.pix_type != PixelShape.HEXAGON:
             raise ValueError(
-                "ShiftingMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
+                f"ShiftingMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
 
         # Creating the hexagonal and the output grid for the conversion methods.
@@ -783,7 +783,7 @@ class OversamplingMapper(ImageMapper):
 
         if geometry.pix_type != PixelShape.HEXAGON:
             raise ValueError(
-                "OversamplingMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
+                f"OversamplingMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
 
         self.internal_shape = self.image_shape
@@ -832,7 +832,7 @@ class NearestNeighborMapper(ImageMapper):
 
         if geometry.pix_type != PixelShape.HEXAGON:
             raise ValueError(
-                "NearestNeighborMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
+                f"NearestNeighborMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
 
         # At the edges of the cameras the mapping methods run into issues.
@@ -888,7 +888,7 @@ class BilinearMapper(ImageMapper):
 
         if geometry.pix_type != PixelShape.HEXAGON:
             raise ValueError(
-                "BilinearMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
+                f"BilinearMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
 
         # At the edges of the cameras the mapping methods run into issues.
@@ -961,7 +961,7 @@ class BicubicMapper(ImageMapper):
 
         if geometry.pix_type != PixelShape.HEXAGON:
             raise ValueError(
-                "BicubicMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
+                f"BicubicMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
 
         # At the edges of the cameras the mapping methods run into issues.
@@ -1194,7 +1194,7 @@ class RebinMapper(ImageMapper):
 
         if geometry.pix_type != PixelShape.HEXAGON:
             raise ValueError(
-                "RebinMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
+                f"RebinMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
             )
 
         # At the edges of the cameras the mapping methods run into issues.
