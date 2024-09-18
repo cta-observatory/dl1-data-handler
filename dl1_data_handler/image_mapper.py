@@ -5,7 +5,7 @@ This module defines the ``ImageMapper`` classes, which holds the basic functiona
 import numpy as np
 from scipy import spatial
 from scipy.sparse import csr_matrix
-from collections import Counter
+from collections import Counter, namedtuple
 
 from ctapipe.instrument.camera import PixelShape
 from ctapipe.core import TelescopeComponent
@@ -23,6 +23,9 @@ __all__ = [
     "SquareMapper",
 ]
 
+# Constants for the ImageMapper classes
+Constants = namedtuple("Constants", ["decimal_precision", "tick_interval_limit"])
+constants = Constants(3, 0.002)
 
 class ImageMapper(TelescopeComponent):
     """
@@ -109,8 +112,12 @@ class ImageMapper(TelescopeComponent):
         # Rotate the pixel positions by the pixel to align
         self.geometry.rotate(self.geometry.pix_rotation)
 
-        self.pix_x = np.around(self.geometry.pix_x.value, decimals=3)
-        self.pix_y = np.around(self.geometry.pix_y.value, decimals=3)
+        self.pix_x = np.around(
+            self.geometry.pix_x.value, decimals=constants.decimal_precision
+        )
+        self.pix_y = np.around(
+            self.geometry.pix_y.value, decimals=constants.decimal_precision
+        )
 
         self.x_ticks = np.unique(self.pix_x).tolist()
         self.y_ticks = np.unique(self.pix_y).tolist()
@@ -133,7 +140,7 @@ class ImageMapper(TelescopeComponent):
         # Set the indexed matrix to None
         self.index_matrix = None
 
-    def map_image(self, raw_vector):
+    def map_image(self, raw_vector: np.array) -> np.array:
         """
         Map the raw pixel data to a 2D image.
 
@@ -171,28 +178,57 @@ class ImageMapper(TelescopeComponent):
         self, first_ticks, second_ticks, first_pos, second_pos
     ):
         """Create virtual hexagonal pixels outside of the camera."""
-        dist_first = np.around(abs(first_ticks[0] - first_ticks[1]), decimals=3)
-        dist_second = np.around(abs(second_ticks[0] - second_ticks[1]), decimals=3)
+        dist_first = np.around(
+            abs(first_ticks[0] - first_ticks[1]), decimals=constants.decimal_precision
+        )
+        dist_second = np.around(
+            abs(second_ticks[0] - second_ticks[1]), decimals=constants.decimal_precision
+        )
 
         tick_diff = len(first_ticks) * 2 - len(second_ticks)
         tick_diff_each_side = tick_diff // 2
         # Extend second_ticks
         for _ in range(tick_diff_each_side + self.internal_pad * 2):
             second_ticks = (
-                [np.around(second_ticks[0] - dist_second, decimals=3)]
+                [
+                    np.around(
+                        second_ticks[0] - dist_second,
+                        decimals=constants.decimal_precision,
+                    )
+                ]
                 + second_ticks
-                + [np.around(second_ticks[-1] + dist_second, decimals=3)]
+                + [
+                    np.around(
+                        second_ticks[-1] + dist_second,
+                        decimals=constants.decimal_precision,
+                    )
+                ]
             )
         # Extend first_ticks
         for _ in range(self.internal_pad):
             first_ticks = (
-                [np.around(first_ticks[0] - dist_first, decimals=3)]
+                [
+                    np.around(
+                        first_ticks[0] - dist_first,
+                        decimals=constants.decimal_precision,
+                    )
+                ]
                 + first_ticks
-                + [np.around(first_ticks[-1] + dist_first, decimals=3)]
+                + [
+                    np.around(
+                        first_ticks[-1] + dist_first,
+                        decimals=constants.decimal_precision,
+                    )
+                ]
             )
         # Adjust for odd tick_diff
         if tick_diff % 2 != 0:
-            second_ticks.insert(0, np.around(second_ticks[0] - dist_second, decimals=3))
+            second_ticks.insert(
+                0,
+                np.around(
+                    second_ticks[0] - dist_second, decimals=constants.decimal_precision
+                ),
+            )
 
         # Create the virtual pixels outside of the camera
         virtual_pixels = []
@@ -336,7 +372,7 @@ class ImageMapper(TelescopeComponent):
         """Smooth the ticks needed for the 'DigiCam' and 'CHEC' cameras."""
         remove_val, change_val = [], []
         for i in range(len(ticks) - 1):
-            if abs(ticks[i] - ticks[i + 1]) <= 0.002:
+            if abs(ticks[i] - ticks[i + 1]) <= constants.tick_interval_limit:
                 remove_val.append(ticks[i])
                 change_val.append(ticks[i + 1])
 
@@ -352,11 +388,12 @@ class SquareMapper(ImageMapper):
     """
     SquareMapper maps images to a square pixel grid without any modifications.
 
-    This class extends the functionality of ImageMapper by implementing 
-    methods to generate a direct mapping table and perform the transformation. 
-    It is particularly useful for applications where a direct one-to-one 
+    This class extends the functionality of ImageMapper by implementing
+    methods to generate a direct mapping table and perform the transformation.
+    It is particularly useful for applications where a direct one-to-one
     mapping is sufficient for converting pixel data.for square pixel cameras
     """
+
     def __init__(
         self,
         geometry,
@@ -415,12 +452,12 @@ class SquareMapper(ImageMapper):
 
 class AxialMapper(ImageMapper):
     """
-    AxialMapper applies a transformation to axial coordinates to map images 
+    AxialMapper applies a transformation to axial coordinates to map images
     from a hexagonal pixel grid to a square pixel grid.
 
-    This class extends the functionality of ImageMapper by implementing 
-    methods to generate an axial mapping table and perform the transformation. 
-    It is particularly useful for applications where axial coordinate 
+    This class extends the functionality of ImageMapper by implementing
+    methods to generate an axial mapping table and perform the transformation.
+    It is particularly useful for applications where axial coordinate
     transformations are required for mapping pixel data.
     """
 
@@ -489,13 +526,21 @@ class AxialMapper(ImageMapper):
             else (self.y_ticks, self.pix_y, self.x_ticks, self.pix_x)
         )
 
-        dist_first = np.around(abs(first_ticks[0] - first_ticks[1]), decimals=3)
-        dist_second = np.around(abs(second_ticks[0] - second_ticks[1]), decimals=3)
+        dist_first = np.around(
+            abs(first_ticks[0] - first_ticks[1]), decimals=constants.decimal_precision
+        )
+        dist_second = np.around(
+            abs(second_ticks[0] - second_ticks[1]), decimals=constants.decimal_precision
+        )
 
         # manipulate y ticks with extra ticks
         num_extra_ticks = len(self.y_ticks)
         for i in np.arange(num_extra_ticks):
-            second_ticks.append(np.around(second_ticks[-1] + dist_second, decimals=3))
+            second_ticks.append(
+                np.around(
+                    second_ticks[-1] + dist_second, decimals=constants.decimal_precision
+                )
+            )
         first_ticks = reversed(first_ticks)
         for shift, ticks in enumerate(first_ticks):
             for i in np.arange(len(second_pos)):
@@ -510,10 +555,20 @@ class AxialMapper(ImageMapper):
         # Squaring the output image if grid axes have not the same length.
         if len(grid_first) > len(grid_second):
             for i in np.arange(len(grid_first) - len(grid_second)):
-                grid_second.append(np.around(grid_second[-1] + dist_second, decimals=3))
+                grid_second.append(
+                    np.around(
+                        grid_second[-1] + dist_second,
+                        decimals=constants.decimal_precision,
+                    )
+                )
         elif len(grid_first) < len(grid_second):
             for i in np.arange(len(grid_second) - len(grid_first)):
-                grid_first.append(np.around(grid_first[-1] + dist_first, decimals=3))
+                grid_first.append(
+                    np.around(
+                        grid_first[-1] + dist_first,
+                        decimals=constants.decimal_precision,
+                    )
+                )
 
         # Overwrite image_shape with the new shape of axial addressing
         self.image_shape = len(grid_first)
@@ -544,10 +599,10 @@ class ShiftingMapper(ImageMapper):
     """
     ShiftingMapper applies a shifting transformation to map images
     from a hexagonal pixel grid to a square pixel grid.
-   
-    This class extends the functionality of ImageMapper by implementing 
-    methods to generate a shifting mapping table and perform the transformation. 
-    It is particularly useful for applications where a simple shift-based 
+
+    This class extends the functionality of ImageMapper by implementing
+    methods to generate a shifting mapping table and perform the transformation.
+    It is particularly useful for applications where a simple shift-based
     transformation is sufficient for mapping hexagonal pixel data.
     """
 
@@ -609,11 +664,25 @@ class ShiftingMapper(ImageMapper):
         tick_diff_each_side = tick_diff // 2
         # Extend second_ticks on both sides
         for _ in np.arange(tick_diff_each_side):
-            second_ticks.append(np.around(second_ticks[-1] + dist_second, decimals=3))
-            second_ticks.insert(0, np.around(second_ticks[0] - dist_second, decimals=3))
+            second_ticks.append(
+                np.around(
+                    second_ticks[-1] + dist_second, decimals=constants.decimal_precision
+                )
+            )
+            second_ticks.insert(
+                0,
+                np.around(
+                    second_ticks[0] - dist_second, decimals=constants.decimal_precision
+                ),
+            )
         # If tick_diff is odd, add one more tick to the beginning
         if tick_diff % 2 != 0:
-            second_ticks.insert(0, np.around(second_ticks[0] - dist_second, decimals=3))
+            second_ticks.insert(
+                0,
+                np.around(
+                    second_ticks[0] - dist_second, decimals=constants.decimal_precision
+                ),
+            )
         # Create the input and output grid
         for i in np.arange(len(second_pos)):
             if second_pos[i] in second_ticks[::2]:
@@ -637,7 +706,7 @@ class OversamplingMapper(ImageMapper):
     OversamplingMapper maps images from a hexagonal pixel grid to
     a square pixel grid using oversampling techniques.
 
-    This class extends the functionality of ImageMapper by implementing 
+    This class extends the functionality of ImageMapper by implementing
     methods to generate an oversampling mapping table and perform the transformation.
     One hexganoal pixel is split into four square pixels, which are then weighted
     by one quarter of the intensity of the hexagonal pixel. The resulting
@@ -711,14 +780,29 @@ class OversamplingMapper(ImageMapper):
         # Extend second_ticks
         for _ in range(tick_diff):
             grid_second = (
-                [np.around(grid_second[0] - dist_second, decimals=3)]
+                [
+                    np.around(
+                        grid_second[0] - dist_second,
+                        decimals=constants.decimal_precision,
+                    )
+                ]
                 + grid_second
-                + [np.around(grid_second[-1] + dist_second, decimals=3)]
+                + [
+                    np.around(
+                        grid_second[-1] + dist_second,
+                        decimals=constants.decimal_precision,
+                    )
+                ]
             )
         # Adjust for odd tick_diff
         # TODO: Check why MAGICCam and VERITAS do not need this adjustment
         if tick_diff % 2 != 0 and self.camera_type not in ["MAGICCam", "VERITAS"]:
-            grid_second.insert(0, np.around(grid_second[0] - dist_second, decimals=3))
+            grid_second.insert(
+                0,
+                np.around(
+                    grid_second[0] - dist_second, decimals=constants.decimal_precision
+                ),
+            )
 
         if len(self.x_ticks) < len(self.y_ticks):
             input_grid = np.column_stack([first_pos, second_pos])
@@ -736,8 +820,8 @@ class NearestNeighborMapper(ImageMapper):
     NearestNeighborMapper maps images from a hexagonal pixel grid to
     a square pixel grid using the nearest neighbor assignment technique.
 
-    This class extends the functionality of ImageMapper by implementing 
-    methods to generate a nearest neighbor mapping table and perform the 
+    This class extends the functionality of ImageMapper by implementing
+    methods to generate a nearest neighbor mapping table and perform the
     interpolation. It is particularly useful for applications where simplicity
     and computational efficiency is prioritized over interpolation accuracy.
     """
@@ -787,11 +871,11 @@ class BilinearMapper(ImageMapper):
     BilinearMapper maps images from a hexagonal pixel grid to
     a square pixel grid using bilinear interpolation.
 
-    This class extends the functionality of ImageMapper by implementing 
-    methods to generate a bilinear interpolation mapping table and perform the transformation. 
+    This class extends the functionality of ImageMapper by implementing
+    methods to generate a bilinear interpolation mapping table and perform the transformation.
     It leverages Delaunay triangulation to find the nearest neighbors for the interpolation process.
     The mapping table is normalized to ensure that the intensity of the pixels is preserved.
-    It is particularly useful for applications where smooth and continuous mapping 
+    It is particularly useful for applications where smooth and continuous mapping
     of pixel data is required. Recommended to use as default for hexagonal pixel cameras.
     """
 
@@ -1074,7 +1158,7 @@ class RebinMapper(ImageMapper):
     RebinMapper maps images from a hexagonal pixel grid to
     a square pixel grid using a rebinning technique.
 
-    This class extends the functionality of ImageMapper by implementing 
+    This class extends the functionality of ImageMapper by implementing
     methods to generate a rebinning mapping table and perform the transformation.
     Hexagonal pixels are rebinned or reshaped to square pixels, which preserve
     the intensity of the pixels. It is particularly useful for
