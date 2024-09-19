@@ -939,7 +939,7 @@ class DLImageReader(DLDataReader):
         Returns
         -------
         dict
-            A dictionary containing the extracted features with the key ``images``,
+            A dictionary containing the extracted features with the key ``input``,
             which maps to a numpy array of the processed images.
         """
         images = []
@@ -967,7 +967,7 @@ class DLImageReader(DLDataReader):
                 images.append(self.image_mappers[camera_type].map_image(unmapped_image))
             else:
                 images.append(unmapped_image)
-        return {"images": np.array(images)}
+        return {"input": np.array(images)}
 
 
 def get_unmapped_waveform(
@@ -1164,7 +1164,7 @@ class DLWaveformReader(DLDataReader):
         Returns
         -------
         dict
-            A dictionary containing the extracted features with the key ``waveforms``,
+            A dictionary containing the extracted features with the key ``input``,
             which maps to a numpy array of the processed waveforms.
         """
         waveforms = []
@@ -1203,4 +1203,4 @@ class DLWaveformReader(DLDataReader):
                 waveforms.append(self.image_mappers[camera_type].map_image(unmapped_waveform))
             else:
                 waveforms.append(unmapped_waveform)
-        return {"waveforms": np.array(waveforms)}
+        return {"input": np.array(waveforms)}
