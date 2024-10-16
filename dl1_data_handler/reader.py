@@ -129,19 +129,6 @@ class DLDataReader(Component):
         Generate a batch of stereo events from list of indices.
     """
 
-    signal_input_files = List(
-        trait=Path(exists=True, directory_ok=False),
-        allow_none=False,
-        help="Required input CTA HDF5 files for signal events",
-    ).tag(config=True)
-
-    bkg_input_files = List(
-        trait=Path(exists=True, directory_ok=False),
-        default_value=None,
-        allow_none=True,
-        help="Optional input CTA HDF5 files for background events.",
-    ).tag(config=True)
-
     mode = CaselessStrEnum(
         ["mono", "stereo"],
         default_value="mono",
@@ -210,6 +197,8 @@ class DLDataReader(Component):
 
     def __init__(
         self,
+        input_url_signal,
+        input_url_background=[],
         config=None,
         parent=None,
         **kwargs,
@@ -221,11 +210,13 @@ class DLDataReader(Component):
         self.quality_query = TableQualityQuery(parent=self)
 
         # Construct dict of filename:file_handle pairs of an ordered file list
+        self.input_url_signal = input_url_signal
+        self.input_url_background = input_url_background
         self.files = OrderedDict()
         file_list = (
-            self.signal_input_files
-            if self.bkg_input_files is None
-            else self.signal_input_files + self.bkg_input_files
+            self.input_url_signal + self.input_url_background
+            if self.input_url_background
+            else self.input_url_signal
         )
         for filename in np.sort(file_list):
             with lock:
@@ -300,24 +291,30 @@ class DLDataReader(Component):
                         f"Subarray description of file '{filename}' does not match the reference subarray description."
                     )
 
-        # Set the telescope type as class attribute for mono mode for convenience
+        # Set the telescope type and camera name as class attributes for mono mode for convenience
         self.tel_type = None
+        self.cam_name = None
         if self.mode == "mono":
             self.tel_type = list(self.selected_telescopes)[0]
-
-        # Get the camera index for the different telescope types
-        cam_geom = {}
-        for camera_type in self.subarray.camera_types:
-            if f"{camera_type.name}" not in cam_geom:
-                cam_geom[f"{camera_type.name}"] = camera_type.geometry
+            self.cam_name = self._get_camera_type(self.tel_type)
 
         # Initialize the ImageMapper with the pixel positions and mapping settings
+        # TODO: Find a better way for passing the configuration
         self.image_mappers = {}
-        for _, tel_type, name in self.image_mapper_type:
-            camera_type = self._get_camera_type(tel_type)
-            self.image_mappers[camera_type] = ImageMapper.from_name(
-                name, geometry=cam_geom[camera_type], subarray=self.subarray, parent=self
-            )
+        cam_geom = {}
+        for camera_type in self.subarray.camera_types:
+            camera_name = self._get_camera_type(camera_type.name)
+            if camera_name not in cam_geom:
+                cam_geom[camera_name] = camera_type.geometry
+                for scope, tel_type, name in self.image_mapper_type:
+                    if scope == "type" and camera_name in tel_type:
+                        self.image_mappers[camera_name] = ImageMapper.from_name(
+                            name, geometry=cam_geom[camera_name], subarray=self.subarray, parent=self
+                        )
+                    if tel_type == "*" and camera_name not in self.image_mappers:
+                        self.image_mappers[camera_name] = ImageMapper.from_name(
+                            name, geometry=cam_geom[camera_name], subarray=self.subarray, parent=self
+                        )
 
         # Telescope pointings
         self.telescope_pointings = {}
@@ -359,7 +356,7 @@ class DLDataReader(Component):
         # The sum of the weights of all examples stays the same.
         self.class_weight = None
         if self.process_type == ProcessType.Simulation:
-            if self.bkg_input_files is not None:
+            if self.input_url_background:
                 self.class_weight = {
                     0: (1.0 / self.n_bkg_events) * (self._get_n_events() / 2.0),
                     1: (1.0 / self.n_signal_events) * (self._get_n_events() / 2.0),
@@ -449,7 +446,7 @@ class DLDataReader(Component):
             events.add_column(0, name="tel_type_id", index=3)
             # Add the true shower primary class to the table based on the filename is
             # signal or background input file list
-            true_shower_primary_class = 1 if filename in self.signal_input_files else 0
+            true_shower_primary_class = 1 if filename in self.input_url_signal else 0
             events.add_column(
                 true_shower_primary_class, name="true_shower_primary_class"
             )
@@ -464,7 +461,7 @@ class DLDataReader(Component):
             self.n_signal_events = np.count_nonzero(
                 self.example_identifiers["true_shower_primary_class"] == 1
             )
-            if self.bkg_input_files is not None:
+            if self.input_url_background:
                 self.n_bkg_events = np.count_nonzero(
                     self.example_identifiers["true_shower_primary_class"] == 0
                 )
@@ -581,7 +578,7 @@ class DLDataReader(Component):
             events.add_column(file_idx, name="file_index", index=0)
             # Add the true shower primary class to the table based on the filename is
             # signal or background input file list
-            true_shower_primary_class = 1 if filename in self.signal_input_files else 0
+            true_shower_primary_class = 1 if filename in self.input_url_signal else 0
             events.add_column(
                 true_shower_primary_class, name="true_shower_primary_class"
             )
@@ -600,7 +597,7 @@ class DLDataReader(Component):
             self.n_signal_events = np.count_nonzero(
                 self.unique_example_identifiers["true_shower_primary_class"] == 1
             )
-            if self.bkg_input_files is not None:
+            if self.input_url_background:
                 self.n_bkg_events = np.count_nonzero(
                     self.unique_example_identifiers["true_shower_primary_class"] == 0
                 )
@@ -874,12 +871,14 @@ class DLImageReader(DLDataReader):
 
     def __init__(
         self,
+        input_url_signal,
+        input_url_background=[],
         config=None,
         parent=None,
         **kwargs,
     ):
 
-        super().__init__(config=config, parent=parent, **kwargs)
+        super().__init__(input_url_signal=input_url_signal, input_url_background=input_url_background, config=config, parent=parent, **kwargs)
  
         # Integrated charges and peak arrival times (DL1a)
         if self.clean:
@@ -1093,12 +1092,14 @@ class DLWaveformReader(DLDataReader):
 
     def __init__(
         self,
+        input_url_signal,
+        input_url_background=[],
         config=None,
         parent=None,
         **kwargs,
     ):
 
-        super().__init__(config=config, parent=parent, **kwargs)
+        super().__init__(input_url_signal=input_url_signal, input_url_background=input_url_background, config=config, parent=parent, **kwargs)
 
         # Read the readout length from the first file
         self.readout_length = int(
