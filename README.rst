@@ -60,7 +60,7 @@ The main dependencies are:
 
 * PyTables >= 3.8
 * NumPy >= 1.20.0
-* ctapipe == 0.21.2
+* ctapipe == 0.22.0
 
 Also see setup.py.
 
