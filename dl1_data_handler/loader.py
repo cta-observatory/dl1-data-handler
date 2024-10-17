@@ -58,16 +58,20 @@ class DLDataLoader(Sequence):
                 batch_indices=batch_indices,
             )
         # Generate the labels for each task
-        label = {}
+        labels = {}
         if "type" in self.tasks:
-            label["type"] = to_categorical(
+            labels["type"] = to_categorical(
+                batch["true_shower_primary_class"].data,
+                num_classes=2,
+            )
+            label = to_categorical(
                 batch["true_shower_primary_class"].data,
                 num_classes=2,
             )
         if "energy" in self.tasks:
-            label["energy"] = batch["log_true_energy"].data
+            labels["energy"] = batch["log_true_energy"].data
         if "direction" in self.tasks:
-            label["direction"] = np.stack(
+            labels["direction"] = np.stack(
                 (
                     batch["spherical_offset_az"].data,
                     batch["spherical_offset_alt"].data,
@@ -75,4 +79,8 @@ class DLDataLoader(Sequence):
                 ),
                 axis=1,
             )
-        return features, label
+        # Temp fix till keras support class weights for multiple outputs or I wrote custom loss
+        # https://github.com/keras-team/keras/issues/11735
+        if len(labels) == 1 and labels[0] == "type":
+            labels = label
+        return features, labels
