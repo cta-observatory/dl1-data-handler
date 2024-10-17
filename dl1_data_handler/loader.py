@@ -64,10 +64,13 @@ class DLDataLoader(Sequence):
                 batch["true_shower_primary_class"].data,
                 num_classes=2,
             )
-            label = to_categorical(
-                batch["true_shower_primary_class"].data,
-                num_classes=2,
-            )
+            # Temp fix till keras support class weights for multiple outputs or I wrote custom loss
+            # https://github.com/keras-team/keras/issues/11735
+            if len(self.tasks) == 1:
+                labels = to_categorical(
+                    batch["true_shower_primary_class"].data,
+                    num_classes=2,
+                )
         if "energy" in self.tasks:
             labels["energy"] = batch["log_true_energy"].data
         if "direction" in self.tasks:
@@ -79,8 +82,4 @@ class DLDataLoader(Sequence):
                 ),
                 axis=1,
             )
-        # Temp fix till keras support class weights for multiple outputs or I wrote custom loss
-        # https://github.com/keras-team/keras/issues/11735
-        if len(labels) == 1 and labels[0] == "type":
-            labels = label
         return features, labels
