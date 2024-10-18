@@ -13,7 +13,9 @@ class DLDataLoader(Sequence):
         tasks,
         batch_size=64,
         random_seed=0,
+        **kwargs,
     ):
+        super().__init__(**kwargs)
         "Initialization"
         self.DLDataReader = DLDataReader
         self.indices = indices
@@ -82,4 +84,7 @@ class DLDataLoader(Sequence):
                 ),
                 axis=1,
             )
+        # Temp fix for supporting keras2 & keras3
+        if int(keras.__version__.split(".")[0]) >= 3:
+            features = features["input"]
         return features, labels
