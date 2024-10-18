@@ -1,5 +1,6 @@
 import numpy as np
 import astropy.units as u
+import keras
 from keras.utils import Sequence, to_categorical
 
 
