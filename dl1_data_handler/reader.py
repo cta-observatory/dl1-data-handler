@@ -169,7 +169,7 @@ class DLDataReader(Component):
 
     image_mapper_type = TelescopeParameter(
         trait=Unicode(),
-        default_value="OversamplingMapper",
+        default_value="BilinearMapper",
         help=(
             "Instances of ``ImageMapper`` transforming a raw 1D vector into a 2D image. "
             "Different mapping methods can be selected for each telescope type."
