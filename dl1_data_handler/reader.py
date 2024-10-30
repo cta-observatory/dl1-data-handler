@@ -58,8 +58,8 @@ class TableQualityQuery(QualityQuery):
     quality_criteria = List(
         default_value=[
             ("> 50 phe", "hillas_intensity > 50"),
-            ("Positive width", "hillas_width > 0"),
-            ("> 3 pixels", "morphology_n_pixels > 3"),
+            #("Positive width", "hillas_width > 0"),
+            #("> 3 pixels", "morphology_n_pixels > 3"),
         ],
         allow_none=True,
         help=QualityQuery.quality_criteria.help,
