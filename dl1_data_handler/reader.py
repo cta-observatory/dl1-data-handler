@@ -359,6 +359,9 @@ class DLDataReader(Component):
         self.class_weight = None
         if self.process_type == ProcessType.Simulation:
             if self.input_url_background:
+                self.log.info("  Total number of events: %d", self._get_n_events())
+                self.log.info("  Number of signal events: %d", self.n_signal_events())
+                self.log.info("  Number of background events: %d", self.n_bkg_events())
                 self.class_weight = {
                     0: (1.0 / self.n_bkg_events) * (self._get_n_events() / 2.0),
                     1: (1.0 / self.n_signal_events) * (self._get_n_events() / 2.0),
