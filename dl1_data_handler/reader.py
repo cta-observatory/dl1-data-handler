@@ -460,6 +460,7 @@ class DLDataReader(Component):
 
         # Constrcut the example identifiers for all files
         self.example_identifiers = vstack(example_identifiers)
+        self.example_identifiers.sort(["obs_id", "event_id", "tel_type_id"])
         # Construct simulation information for all files
         if self.process_type == ProcessType.Simulation:
             self.simulation_info = vstack(simulation_info)
@@ -592,6 +593,7 @@ class DLDataReader(Component):
 
         # Constrcut the example identifiers for all files
         self.example_identifiers = vstack(example_identifiers)
+        self.example_identifiers.sort(["obs_id", "event_id", "tel_type_id"])
         # Unique example identifiers by events
         self.unique_example_identifiers = unique(
             self.example_identifiers, keys=["obs_id", "event_id"]
