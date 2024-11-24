@@ -13,7 +13,7 @@ class DLDataLoader(Sequence):
         indices,
         tasks,
         batch_size=64,
-        random_seed=0,
+        random_seed=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -23,7 +23,8 @@ class DLDataLoader(Sequence):
         self.tasks = tasks
         self.batch_size = batch_size
         self.random_seed = random_seed
-        self.on_epoch_end()
+        if self.random_seed is not None:
+            self.on_epoch_end()
 
         # Get the input shape for the convolutional neural network
         self.image_shape = self.DLDataReader.image_mappers[self.DLDataReader.cam_name].image_shape
