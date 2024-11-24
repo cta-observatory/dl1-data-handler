@@ -894,7 +894,7 @@ class DLImageReader(DLDataReader):
             "peak_time: extracted peak arrival times, "
             "relative_peak_time: extracted relative peak arrival times, "
             "cleaned_peak_time: extracted peak arrival times cleaned with the DL1 cleaning mask,"
-            "cleaned_peak_time: extracted relative peak arrival times cleaned with the DL1 cleaning mask."
+            "cleaned_relative_peak_time: extracted relative peak arrival times cleaned with the DL1 cleaning mask."
         ),
     ).tag(config=True)
 
