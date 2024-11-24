@@ -820,7 +820,7 @@ def get_unmapped_image(dl1_event, channels, transforms):
     for i, channel in enumerate(channels):
         # Save the cleaning mask to be applied to the channels in various cases
         mask = dl1_event["image_mask"]
-        # TODO: Check here if the mask is valid 
+        # TODO: Check here if the mask is valid
         # and return NaNs if not and cleaned is requested
         # Process the integrated charges if specified
         if "image" in channel:
