@@ -786,7 +786,7 @@ def get_unmapped_image(dl1_event, channels, transforms):
 
     This function processes the DL1 event data to generate an image array
     based on the specified channels and transformation parameters. It handles
-    different types of channels such as 'image', 'time', and 'cleaned', and 
+    different types of channels such as 'image' and 'peak_time', and
     applies the necessary transformations to recover the original floating 
     point values if the file was compressed.
 
@@ -796,7 +796,9 @@ def get_unmapped_image(dl1_event, channels, transforms):
         A table containing DL1 event data, including ``image``, ``image_mask``, 
         and ``peak_time``.
     channels : list of str
-        A list of channels to be processed, such as ``image`` and ``time`` with optional ``cleaned_``-prefix.
+        A list of channels to be processed, such as ``image`` and ``peak_time``
+        with optional ``cleaned_``-prefix for for the cleaned versions of the channels
+        and ``relative_``-prefix for the relative peak arrival times.
     transforms : dict
         A dictionary containing scaling and offset values for image and peak time 
         transformations.
@@ -806,6 +808,7 @@ def get_unmapped_image(dl1_event, channels, transforms):
     np.ndarray
         The processed image data image for the specific channels.
     """
+    # Initialize the image array
     image = np.zeros(
         shape=(
             len(dl1_event["image"]),
@@ -813,16 +816,29 @@ def get_unmapped_image(dl1_event, channels, transforms):
         ),
         dtype=np.float32,
     )
+    # Process the channels and apply the necessary transformations
     for i, channel in enumerate(channels):
+        # Save the cleaning mask to be applied to the channels in various cases
         mask = dl1_event["image_mask"]
+        # TODO: Check here if the mask is valid 
+        # and return NaNs if not and cleaned is requested
+        # Process the integrated charges if specified
         if "image" in channel:
             image[:, i] = dl1_event["image"]
-        if "time" in channel:
-            cleaned_peak_times = dl1_event["peak_time"] * mask
-            image[:, i] = (
-                dl1_event["peak_time"]
-                - cleaned_peak_times[np.nonzero(cleaned_peak_times)].mean()
-            )
+        # Process the peak arrival times if specified
+        if "peak_time" in channel:
+            # Calculate the relative peak arrival times if specified
+            if "relative" in channel:
+                peak_times = dl1_event["peak_time"]
+                # Apply the cleaning mask to the peak times if specified
+                if "cleaned" in channel: peak_times *= mask
+                image[:, i] = (
+                    dl1_event["peak_time"]
+                    - peak_times[np.nonzero(peak_times)].mean()
+                )
+            else:
+                image[:, i] = dl1_event["peak_time"]
+        # Apply the cleaning mask to the image if specified
         if "cleaned" in channel:
             image[:, i] *= mask
         # Apply the transform to recover orginal floating point values if the file were compressed
@@ -831,7 +847,7 @@ def get_unmapped_image(dl1_event, channels, transforms):
                 image[:, i] /= transforms["image_scale"]
             if transforms["image_offset"] > 0:
                 image[:, i] -= transforms["image_offset"]
-        if "time" in channel:
+        if "peak_time" in channel:
             if transforms["peak_time_scale"] > 0.0:
                 image[:, i] /= transforms["peak_time_scale"]
             if transforms["peak_time_offset"] > 0:
@@ -851,29 +867,35 @@ class DLImageReader(DLDataReader):
     Attributes
     ----------
     channels : list of str
-        Specifies the data channels to be loaded, such as ``image`` and/or ``peak_time``.
-    clean : bool
-        Indicates whether to apply the DL1 cleaning mask to the integrated images.
+        Specifies the input channels to be loaded, such as ``image`` and/or ``peak_time``.
+        Also supports ``cleaned_``-prefix for the cleaned versions of the channels and
+        ``relative_``-prefix for the relative peak arrival times.
     transforms : dict
         Contains scaling and offset values for image and peak time transformations.
     """
 
     channels = List(
-        trait=CaselessStrEnum(["image", "peak_time"]),
+        trait=CaselessStrEnum(
+            [
+                "image",
+                "cleaned_image",
+                "peak_time",
+                "relative_peak_time",
+                "cleaned_peak_time",
+                "cleaned_relative_peak_time"
+            ]
+        ),
         default_value=["image", "peak_time"],
         allow_none=False, 
         help=(
-            "Set data loading mode. "
-            "Mono: single images of one telescope type "
-            "Stereo: events including multiple telescope types "
-        )
-
-    ).tag(config=True)
-
-    clean = Bool(
-        default_value=False,
-        allow_none=False,
-        help="Set whether to apply the DL1 cleaning mask to the integrated images.",
+            "Set the input channels to be loaded from the DL1 event data. "
+            "image: integrated charges, "
+            "cleaned_image: integrated charges cleaned with the DL1 cleaning mask, "
+            "peak_time: extracted peak arrival times, "
+            "relative_peak_time: extracted relative peak arrival times, "
+            "cleaned_peak_time: extracted peak arrival times cleaned with the DL1 cleaning mask,"
+            "cleaned_peak_time: extracted relative peak arrival times cleaned with the DL1 cleaning mask."
+        ),
     ).tag(config=True)
 
     def __init__(
@@ -887,15 +909,6 @@ class DLImageReader(DLDataReader):
 
         super().__init__(input_url_signal=input_url_signal, input_url_background=input_url_background, config=config, parent=parent, **kwargs)
  
-        # Integrated charges and peak arrival times (DL1a)
-        if self.clean:
-            self.img_channels = [
-                "cleaned_" + channel
-                for channel in self.channels
-            ]
-        else:
-            self.img_channels = self.channels
-
         # Get offset and scaling of images
         self.transforms = {}
         self.transforms["image_scale"] = 0.0
@@ -962,7 +975,7 @@ class DLImageReader(DLDataReader):
                     filename
                 ].root.dl1.event.telescope.images._f_get_child(tel_table)
                 unmapped_image = get_unmapped_image(
-                    child[table_idx], self.img_channels, self.transforms
+                    child[table_idx], self.channels, self.transforms
                 )
             # Apply the 'ImageMapper' whenever the index matrix is not None.
             # Otherwise, return the unmapped image for the 'IndexedConv' package.
