@@ -29,7 +29,7 @@ class DLDataLoader(Sequence):
         # Get the input shape for the convolutional neural network
         self.image_shape = self.DLDataReader.image_mappers[self.DLDataReader.cam_name].image_shape
         if self.DLDataReader.__class__.__name__ == "DLImageReader":
-            self.channel_shape = len(self.DLDataReader.img_channels)
+            self.channel_shape = len(self.DLDataReader.channels)
         elif self.DLDataReader.__class__.__name__ == "DLWaveformReader":
             self.channel_shape = self.DLDataReader.sequence_length
 
