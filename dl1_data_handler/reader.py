@@ -328,11 +328,11 @@ class DLDataReader(Component):
                         self.files[self.first_file],
                         f"/dl0/monitoring/telescope/pointing/tel_{tel_id:03d}",
                     )
-            with lock:
-                self.tel_trigger_table = read_table(
-                    self.files[self.first_file],
-                    "/dl1/event/telescope/trigger",
-                )
+        with lock:
+            self.tel_trigger_table = read_table(
+                self.files[self.first_file],
+                "/dl1/event/telescope/trigger",
+            )
 
         # Image parameters (DL1b)
         # Retrieve the column names for the DL1b parameter table
