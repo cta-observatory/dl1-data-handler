@@ -349,9 +349,10 @@ class DLDataReader(Component):
             self._construct_stereo_example_identifiers()
 
         # Transform true energy into the log space
-        self.example_identifiers = self._transform_to_log_energy(
-            self.example_identifiers
-        )
+        if self.process_type == ProcessType.Simulation:
+            self.example_identifiers = self._transform_to_log_energy(
+                self.example_identifiers
+            )
 
         # Handling the class weights calculation.
         # Scaling by total/2 helps keep the loss to a similar magnitude.
@@ -438,23 +439,24 @@ class DLDataReader(Component):
 
             # Construct the example identifiers
             events.keep_columns(self.example_ids_keep_columns)
-            tel_pointing = self._get_tel_pointing(f, self.tel_ids)
-            events = join(
-                left=events,
-                right=tel_pointing,
-                keys=["obs_id", "tel_id"],
-            )
-            events = self._transform_to_spherical_offsets(events)
+            if self.process_type == ProcessType.Simulation:
+                tel_pointing = self._get_tel_pointing(f, self.tel_ids)
+                events = join(
+                    left=events,
+                    right=tel_pointing,
+                    keys=["obs_id", "tel_id"],
+                )
+                events = self._transform_to_spherical_offsets(events)
+                # Add the true shower primary class to the table based on the filename is
+                # signal or background input file list
+                true_shower_primary_class = 1 if filename in self.input_url_signal else 0
+                events.add_column(
+                    true_shower_primary_class, name="true_shower_primary_class"
+                )
             # Add telescope type id which is always 0 in mono mode
             # This is needed to share code with stereo reading mode later on
             events.add_column(file_idx, name="file_index", index=0)
             events.add_column(0, name="tel_type_id", index=3)
-            # Add the true shower primary class to the table based on the filename is
-            # signal or background input file list
-            true_shower_primary_class = 1 if filename in self.input_url_signal else 0
-            events.add_column(
-                true_shower_primary_class, name="true_shower_primary_class"
-            )
             # Appending the events to the list of example identifiers
             example_identifiers.append(events)
 
@@ -584,10 +586,11 @@ class DLDataReader(Component):
             events.add_column(file_idx, name="file_index", index=0)
             # Add the true shower primary class to the table based on the filename is
             # signal or background input file list
-            true_shower_primary_class = 1 if filename in self.input_url_signal else 0
-            events.add_column(
-                true_shower_primary_class, name="true_shower_primary_class"
-            )
+            if self.process_type == ProcessType.Simulation:
+                true_shower_primary_class = 1 if filename in self.input_url_signal else 0
+                events.add_column(
+                    true_shower_primary_class, name="true_shower_primary_class"
+                )
             # Appending the events to the list of example identifiers
             example_identifiers.append(events)
 
