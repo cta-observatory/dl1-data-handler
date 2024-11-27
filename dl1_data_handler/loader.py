@@ -23,8 +23,7 @@ class DLDataLoader(Sequence):
         self.tasks = tasks
         self.batch_size = batch_size
         self.random_seed = random_seed
-        if self.random_seed is not None:
-            self.on_epoch_end()
+        self.on_epoch_end()
 
         # Get the input shape for the convolutional neural network
         self.image_shape = self.DLDataReader.image_mappers[self.DLDataReader.cam_name].image_shape
@@ -44,9 +43,10 @@ class DLDataLoader(Sequence):
         return int(np.floor(len(self.indices) / self.batch_size))
 
     def on_epoch_end(self):
-        "Updates indexes after each epoch"
-        np.random.seed(self.random_seed)
-        np.random.shuffle(self.indices)
+        "Updates indexes after each epoch if random seed is set"
+        if self.random_seed is not None:
+            np.random.seed(self.random_seed)
+            np.random.shuffle(self.indices)
 
     def __getitem__(self, index):
         "Generate one batch of data"
