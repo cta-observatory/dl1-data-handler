@@ -5,7 +5,34 @@ from keras.utils import Sequence, to_categorical
 
 
 class DLDataLoader(Sequence):
-    "Generates batches for Keras application"
+    """
+    Generates batches for Keras application.
+
+    DLDataLoader is a data loader class that inherits from ``~keras.utils.Sequence``.
+    It is designed to handle and load data for deep learning models in a batch-wise manner.
+
+    Attributes:
+    -----------
+    data_reader : DLDataReader
+        An instance of DLDataReader to read the input data.
+    indices : list
+        List of indices to specify the data to be loaded.
+    tasks : list
+        List of tasks to be performed on the data to properly set up the labels.
+    batch_size : int
+        Size of the batch to load the data.
+    random_seed : int, optional
+        Whether to shuffle the data after each epoch with a provided random seed.
+
+    Methods:
+    --------
+    __len__():
+        Returns the number of batches per epoch.
+    __getitem__(index):
+        Generates one batch of data.
+    on_epoch_end():
+        Updates indices after each epoch if random seed is provided.
+    """
 
     def __init__(
         self,
@@ -39,18 +66,45 @@ class DLDataLoader(Sequence):
         )
 
     def __len__(self):
-        "Denotes the number of batches per epoch"
+        """
+        Returns the number of batches per epoch.
+
+        This method calculates the number of batches required to cover the entire dataset
+        based on the batch size.
+
+        Returns:
+        --------
+        int
+            Number of batches per epoch.
+        """
         return int(np.floor(len(self.indices) / self.batch_size))
 
     def on_epoch_end(self):
-        "Updates indexes after each epoch if random seed is set"
+        """
+        Updates indices after each epoch. If a random seed is provided, the indices are shuffled.
+
+        This method is called at the end of each epoch to ensure that the data is shuffled
+        if the shuffle attribute is set to True. This helps in improving the training process
+        by providing the model with a different order of data in each epoch.
+        """
         if self.random_seed is not None:
             np.random.seed(self.random_seed)
             np.random.shuffle(self.indices)
 
     def __getitem__(self, index):
-        "Generate one batch of data"
+        """
+        Generates one batch of data.
 
+        Parameters:
+        -----------
+        index : int
+            Index of the batch to generate.
+
+        Returns:
+        --------
+        tuple
+            A tuple containing the input data as features and the corresponding labels.
+        """
         # Generate indices of the batch
         batch_indices = self.indices[index * self.batch_size : (index + 1) * self.batch_size]
         if self.DLDataReader.mode == "mono":
