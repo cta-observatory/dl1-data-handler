@@ -103,8 +103,8 @@ class ImageMapper(TelescopeComponent):
         self.x_ticks = np.unique(self.pix_x).tolist()
         self.y_ticks = np.unique(self.pix_y).tolist()
 
-        # Additional smooth the ticks for 'DigiCam' and 'CHEC' cameras
-        if self.camera_type == "DigiCam":
+        # Additional smooth the ticks for 'DigiCam', 'RealLSTCam' and 'CHEC' cameras
+        if self.camera_type in ["DigiCam", "RealLSTCam"]:
             self.pix_y, self.y_ticks = self._smooth_ticks(self.pix_y, self.y_ticks)
         if self.camera_type == "CHEC":
             self.pix_x, self.x_ticks = self._smooth_ticks(self.pix_x, self.x_ticks)
