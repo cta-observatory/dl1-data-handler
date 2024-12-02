@@ -597,6 +597,9 @@ class DLDataReader(Component):
         # Constrcut the example identifiers for all files
         self.example_identifiers = vstack(example_identifiers)
         self.example_identifiers.sort(["obs_id", "event_id", "tel_id", "tel_type_id"])
+        self.example_identifiers_grouped = self.example_identifiers.group_by(
+            ["obs_id", "event_id"]
+        )
         # Unique example identifiers by events
         self.unique_example_identifiers = unique(
             self.example_identifiers, keys=["obs_id", "event_id"]
@@ -676,9 +679,7 @@ class DLDataReader(Component):
             dl1b_parameters.append([np.stack(parameters)])
         return np.array(dl1b_parameters)
 
-    def mono_batch_generation(
-        self, batch_indices, dl1b_parameter_list=None
-    ) -> (dict, Table):
+    def mono_batch_generation(self, batch_indices) -> (dict, Table):
         """
         Generate a batch of events for mono mode.
 
@@ -713,19 +714,11 @@ class DLDataReader(Component):
             )
         # Retrieve the batch from the example identifiers via indexing
         batch = self.example_identifiers.loc[batch_indices]
-        # Retrieve the features from child classes
-        features = self._get_features(batch)
-        # Retrieve the dl1b parameters if requested
-        if dl1b_parameter_list is not None:
-            features["parameters"] = self._get_parameters(
-                batch,
-                dl1b_parameter_list,
-            )
-        return features, batch
+        # Append the features from child classes to the batch
+        batch = self._append_features(batch)
+        return batch
 
-    def stereo_batch_generation(
-        self, batch_indices, dl1b_parameter_list=None
-    ) -> (dict, Table):
+    def stereo_batch_generation(self, batch_indices) -> (dict, Table):
         """
         Generate a batch of events for stereo mode.
 
@@ -759,27 +752,29 @@ class DLDataReader(Component):
         # Need this PR https://github.com/astropy/astropy/pull/15826
         # waiting astropy v7.0.0
         # Once available, the batch_generation can be shared with "mono"
-        example_identifiers_grouped = self.example_identifiers.group_by(
-            ["obs_id", "event_id"]
-        )
-        batch = example_identifiers_grouped.groups[batch_indices]
-        # Sort events based on their telescope types by the hillas intensity in a given batch
-        batch.sort(
-            ["obs_id", "event_id", "tel_type_id", "hillas_intensity"], reverse=True
-        )
-        batch.sort(["obs_id", "event_id", "tel_type_id"])
-        # Retrieve the features from child classes
-        features = self._get_features(batch)
-        # Retrieve the dl1b parameters if requested
-        if dl1b_parameter_list is not None:
-            features["parameters"] = self._get_parameters(
-                batch,
-                dl1b_parameter_list,
-            )
-        return features, batch
+        batch = self.example_identifiers_grouped.groups[batch_indices]
+         # Append the features from child classes to the batch
+        batch = self._append_features(batch)
+        # Add blank features for missing telescopes in the batch
+        batch_grouped = batch.group_by(["obs_id", "event_id"])
+        for batch_grouped in batch_grouped.groups:
+            for tel_type_id, tel_type in enumerate(self.selected_telescopes):
+                for tel_id in self.selected_telescopes[tel_type]:
+                    # Check if the telescope is missing in the batch
+                    if tel_id not in batch_grouped["tel_id"]:
+                        blank_features = batch_grouped.copy()[0]
+                        blank_features["table_index"] = -1
+                        blank_features["tel_type_id"] = tel_type_id
+                        blank_features["tel_id"] = tel_id
+                        blank_features["hillas_intensity"] = 0.0
+                        blank_features["features"] = np.zeros_like(blank_features["features"])
+                        batch.add_row(blank_features)
+        # Sort the batch with the new rows of blank features
+        batch.sort(["obs_id", "event_id", "tel_type_id", "tel_id"])
+        return batch
 
     @abstractmethod
-    def _get_features(self, batch) -> dict:
+    def _append_features(self, batch) -> dict:
         pass
 
 
@@ -941,17 +936,17 @@ class DLImageReader(DLDataReader):
                 "CTAFIELD_4_TRANSFORM_OFFSET"
             ]
 
-    def _get_features(self, batch) -> dict:
+    def _append_features(self, batch) -> dict:
         """
-        Retrieve images of a given batch as features.
+        Append images to a given batch as features.
 
-        This method processes a batch of events to retrieve images as input features for the neural networks.
+        This method processes a batch of events to append images as input features for the neural networks.
         It reads the image data from the specified files, applies any necessary transformations, and maps
         the images using the appropriate ``ImageMapper``.
 
         Parameters
         ----------
-        batch : Table
+        batch : astropy.table.Table
             A table containing information at minimum the following columns:
             - "file_index": List of indices corresponding to the files.
             - "table_index": List of indices corresponding to the event tables.
@@ -960,9 +955,8 @@ class DLImageReader(DLDataReader):
 
         Returns
         -------
-        dict
-            A dictionary containing the extracted features with the key ``input``,
-            which maps to a numpy array of the processed images.
+        batch : astropy.table.Table
+            The input batch with the appended processed images as features.
         """
         images = []
         for file_idx, table_idx, tel_type_id, tel_id in zip(
@@ -989,7 +983,8 @@ class DLImageReader(DLDataReader):
                 images.append(self.image_mappers[camera_type].map_image(unmapped_image))
             else:
                 images.append(unmapped_image)
-        return {"input": np.array(images)}
+        batch.add_column(images, name="features", index=7)
+        return batch
 
 
 def get_unmapped_waveform(
@@ -1192,11 +1187,11 @@ class DLWaveformReader(DLDataReader):
                 "CTAFIELD_5_TRANSFORM_OFFSET"
             ]
 
-    def _get_features(self, batch) -> dict:
+    def _append_features(self, batch) -> dict:
         """
-        Retrieve waveforms of a given batch as features.
+        Append waveforms to a given batch as features.
 
-        This method processes a batch of events to retrieve waveforms as input features for the neural networks.
+        This method processes a batch of events to append waveforms as input features for the neural networks.
         It reads the waveform data from the specified files, applies any necessary transformations, and maps
         the waveforms using the appropriate ``ImageMapper``.
 
@@ -1211,9 +1206,8 @@ class DLWaveformReader(DLDataReader):
 
         Returns
         -------
-        dict
-            A dictionary containing the extracted features with the key ``input``,
-            which maps to a numpy array of the processed waveforms.
+        batch : astropy.table.Table
+            The input batch with the appended processed waveforms as features.
         """
         waveforms = []
         for file_idx, table_idx, tel_type_id, tel_id in zip(
@@ -1252,4 +1246,5 @@ class DLWaveformReader(DLDataReader):
                 waveforms.append(self.image_mappers[camera_type].map_image(unmapped_waveform))
             else:
                 waveforms.append(unmapped_waveform)
-        return {"input": np.array(waveforms)}
+        batch.add_column(waveforms, name="features", index=7)
+        return batch
