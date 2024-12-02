@@ -23,6 +23,10 @@ class DLDataLoader(Sequence):
         Size of the batch to load the data.
     random_seed : int, optional
         Whether to shuffle the data after each epoch with a provided random seed.
+    sort_by_intensity : bool, optional
+        Whether to sort the events based on the hillas intensity for stereo analysis.
+    stack_telescope_images : bool, optional
+        Whether to stack the telescope images for stereo analysis.
 
     Methods:
     --------
@@ -41,6 +45,8 @@ class DLDataLoader(Sequence):
         tasks,
         batch_size=64,
         random_seed=None,
+        sort_by_intensity=False,
+        stack_telescope_images=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -51,19 +57,35 @@ class DLDataLoader(Sequence):
         self.batch_size = batch_size
         self.random_seed = random_seed
         self.on_epoch_end()
+        self.stack_telescope_images = stack_telescope_images
+        self.sort_by_intensity = sort_by_intensity
 
         # Get the input shape for the convolutional neural network
-        self.image_shape = self.DLDataReader.image_mappers[self.DLDataReader.cam_name].image_shape
         if self.DLDataReader.__class__.__name__ == "DLImageReader":
             self.channel_shape = len(self.DLDataReader.channels)
         elif self.DLDataReader.__class__.__name__ == "DLWaveformReader":
             self.channel_shape = self.DLDataReader.sequence_length
 
-        self.input_shape = (
-            self.image_shape,
-            self.image_shape,
-            self.channel_shape,
-        )
+
+        if self.DLDataReader.mode == "mono":
+            self.image_shape = self.DLDataReader.image_mappers[self.DLDataReader.cam_name].image_shape
+            self.input_shape = (
+                len(self.DLDataReader.tel_ids),
+                self.image_shape,
+                self.image_shape,
+                self.channel_shape,
+            )
+        elif self.DLDataReader.mode == "stereo":
+            if self.stack_telescope_images:
+                # Reshape inputs into proper dimensions for the stereo analysis with stacked images
+                self.input_shape = (
+                    self.image_shape,
+                    self.image_shape,
+                    len(self.DLDataReader.tel_ids) * self.channel_shape,
+                )
+            else:
+                self.input_shape = (110, 110, 2)
+
 
     def __len__(self):
         """
@@ -108,13 +130,23 @@ class DLDataLoader(Sequence):
         # Generate indices of the batch
         batch_indices = self.indices[index * self.batch_size : (index + 1) * self.batch_size]
         if self.DLDataReader.mode == "mono":
-            features, batch = self.DLDataReader.mono_batch_generation(
+            batch = self.DLDataReader.mono_batch_generation(
                 batch_indices=batch_indices,
             )
+            features = {"input": batch["features"].data}
         elif self.DLDataReader.mode == "stereo":
-            features, batch = self.DLDataReader.stereo_batch_generation(
+            batch = self.DLDataReader.stereo_batch_generation(
                 batch_indices=batch_indices,
             )
+            batch_grouped = batch.group_by(["obs_id", "event_id", "tel_type_id"])
+            # Sort events based on their telescope types by the hillas intensity in a given batch if requested
+            if self.sort_by_intensity:
+                for batch_grouped in batch_grouped.groups:
+                    batch_grouped.sort(["hillas_intensity"], reverse=True)
+                    print(batch_grouped)
+
+            if self.stack_telescope_images:
+                print(features)
         # Generate the labels for each task
         labels = {}
         if "type" in self.tasks:
