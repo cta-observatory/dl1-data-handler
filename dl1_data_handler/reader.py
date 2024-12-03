@@ -1092,7 +1092,7 @@ def get_unmapped_waveform(
     settings,
     camera_geometry=None,
     dl1_cleaning_mask=None,
-) -> numpy.ndarray:
+) -> np.ndarray:
     """
     Retrieve and process the unmapped waveform from an R1 event.
 
