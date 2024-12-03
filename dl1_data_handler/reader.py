@@ -632,8 +632,26 @@ class DLDataReader(Component):
         # waiting astropy v7.0.0
         # self.example_identifiers.add_index(["obs_id", "event_id"])
 
-    def _get_tel_pointing(self, file, tel_ids):
-        """Retrieve the telescope pointing information for the specified telescope IDs."""
+    def _get_tel_pointing(self, file, tel_ids) -> Table:
+        """
+        Retrieve the telescope pointing information for the specified telescope IDs.
+
+        This method extracts the pointing information (azimuth and altitude)
+        for the given telescope IDs from the provided file.
+
+        Parameters:
+        -----------
+        file : str
+            Path to the file containing the telescope pointing data.
+        tel_ids : list
+            List of telescope IDs for which the pointing information is to be retrieved.
+
+        Returns:
+        --------
+        tel_pointing : astropy.table.Table
+            A dictionary with telescope IDs as keys and their corresponding
+            pointing information (azimuth and altitude) as values.
+        """
         tel_pointing = []
         for tel_id in tel_ids:
             with lock:
@@ -646,12 +664,43 @@ class DLDataReader(Component):
         return vstack(tel_pointing)
 
     def _transform_to_log_energy(self, table):
-        """Transform true energy values in the given table to logarithmic space."""
+        """
+        Transform energy values to their logarithmic scale.
+
+        This method converts the energy values in the provided table to their logarithmic scale.
+
+        Parameters:
+        -----------
+        table : astropy.table.Table
+            A Table containing the energy values.
+
+        Returns:
+        --------
+        table : astropy.table.Table
+            A Table with the logarithmic energy values added as a new column.
+        """
         table.add_column(np.log10(table["true_energy"]), name="log_true_energy")
         return table
 
-    def _transform_to_spherical_offsets(self, table):
-        """Transform Alt/Az coordinates to spherical offsets."""
+    def _transform_to_spherical_offsets(self, table)  -> Table:
+        """
+        Transform Alt/Az coordinates to spherical offsets w.r.t. the telescope pointing.
+
+        This method converts the Alt/Az coordinates in the provided table to spherical offsets
+        w.r.t. the telescope pointing. It also calculates the angular separation between the
+        true and telescope pointing directions.
+
+        Parameters:
+        -----------
+        table : astropy.table.Table
+            A Table containing the true Alt/Az coordinates and telescope pointing.
+
+        Returns:
+        --------
+        table : astropy.table.Table
+            A Table with the spherical offsets and the angular separation added as new columns.
+            The telescope pointing columns are removed from the table.
+        """
         # Set the telescope pointing of the SkyOffsetSeparation tranform to the fix pointing
         fix_pointing = SkyCoord(
             table["telescope_pointing_azimuth"],
@@ -677,7 +726,23 @@ class DLDataReader(Component):
         return table
 
     def get_parameters(self, batch, dl1b_parameter_list) -> np.array:
-        """Retrieve DL1b parameters for a given batch of events."""
+        """
+        Retrieve DL1b parameters for a given batch of events.
+
+        This method extracts the specified DL1b parameters for each event in the batch.
+
+        Parameters:
+        -----------
+        batch : astropy.table.Table
+            A Table containing the batch with columns ``file_index``, ``table_index``, and ``tel_id``.
+        dl1b_parameter_list : list
+            A list of DL1b parameters to be retrieved for each event.
+
+        Returns:
+        --------
+        dl1b_parameters : np.array
+            An array of DL1b parameters for the batch of events.
+        """
         dl1b_parameters = []
         for file_idx, table_idx, tel_id in zip(
             batch["file_index"], batch["table_index"], batch["tel_id"]
@@ -692,7 +757,7 @@ class DLDataReader(Component):
             dl1b_parameters.append([np.stack(parameters)])
         return np.array(dl1b_parameters)
 
-    def generate_mono_batch(self, batch_indices) -> (dict, Table):
+    def generate_mono_batch(self, batch_indices) -> Table:
         """
         Generate a batch of events for mono mode.
 
@@ -729,7 +794,7 @@ class DLDataReader(Component):
         batch = self._append_features(batch)
         return batch
 
-    def generate_stereo_batch(self, batch_indices) -> (dict, Table):
+    def generate_stereo_batch(self, batch_indices) -> Table:
         """
         Generate a batch of events for stereo mode.
 
@@ -784,11 +849,11 @@ class DLDataReader(Component):
         return batch
 
     @abstractmethod
-    def _append_features(self, batch) -> dict:
+    def _append_features(self, batch) -> Table:
         pass
 
 
-def get_unmapped_image(dl1_event, channels, transforms):
+def get_unmapped_image(dl1_event, channels, transforms) -> np.ndarray:
     """
     Generate unmapped image from a DL1 event.
 
@@ -813,7 +878,7 @@ def get_unmapped_image(dl1_event, channels, transforms):
 
     Returns
     -------
-    np.ndarray
+    image : np.ndarray
         The processed image data image for the specific channels.
     """
     # Initialize the image array
@@ -971,7 +1036,7 @@ class DLImageReader(DLDataReader):
                 "CTAFIELD_4_TRANSFORM_OFFSET"
             ]
 
-    def _append_features(self, batch) -> dict:
+    def _append_features(self, batch) -> Table:
         """
         Append images to a given batch as features.
 
@@ -1027,7 +1092,7 @@ def get_unmapped_waveform(
     settings,
     camera_geometry=None,
     dl1_cleaning_mask=None,
-):
+) -> numpy.ndarray:
     """
     Retrieve and process the unmapped waveform from an R1 event.
 
@@ -1056,7 +1121,7 @@ def get_unmapped_waveform(
 
     Returns
     -------
-    numpy.ndarray
+    waveform : numpy.ndarray
         The processed and optionally cropped waveform data.
     """
 
@@ -1095,7 +1160,6 @@ def get_unmapped_waveform(
             stop = settings["readout_length"]
         # Crop the unmapped waveform in samples
         waveform = waveform[:, int(start) : int(stop)]
-
     return waveform
 
 
@@ -1249,7 +1313,7 @@ class DLWaveformReader(DLDataReader):
                 "CTAFIELD_5_TRANSFORM_OFFSET"
             ]
 
-    def _append_features(self, batch) -> dict:
+    def _append_features(self, batch) -> Table:
         """
         Append waveforms to a given batch as features.
 
