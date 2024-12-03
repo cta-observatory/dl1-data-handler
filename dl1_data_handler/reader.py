@@ -48,9 +48,11 @@ from dl1_data_handler.image_mapper import ImageMapper
 
 lock = threading.Lock()
 
+
 class ProcessType(Enum):
     Observation = "Observation"
     Simulation = "Simulation"
+
 
 class TableQualityQuery(QualityQuery):
     """Quality criteria for table-wise dl1b parameters."""
@@ -58,8 +60,8 @@ class TableQualityQuery(QualityQuery):
     quality_criteria = List(
         default_value=[
             ("> 50 phe", "hillas_intensity > 50"),
-            #("Positive width", "hillas_width > 0"),
-            #("> 3 pixels", "morphology_n_pixels > 3"),
+            # ("Positive width", "hillas_width > 0"),
+            # ("> 3 pixels", "morphology_n_pixels > 3"),
         ],
         allow_none=True,
         help=QualityQuery.quality_criteria.help,
@@ -125,9 +127,9 @@ class DLDataReader(Component):
 
     Methods
     -------
-    mono_batch_generation(batch_indices, dl1b_parameter_list=None)
+    generate_mono_batch(batch_indices)
         Generate a batch of mono events from list of indices.
-    stereo_batch_generation(batch_indices, dl1b_parameter_list=None)
+    generate_stereo_batch(batch_indices)
         Generate a batch of stereo events from list of indices.
     """
 
@@ -280,7 +282,7 @@ class DLDataReader(Component):
             # Filter subarray by selected telescopes
             if selected_tel_ids is not None:
                 subarray = subarray.select_subarray(self.tel_ids)
-        
+
             # Check if it matches the reference
             if not subarray.__eq__(self.subarray):
                 if self.skip_incompatible_files:
@@ -311,11 +313,17 @@ class DLDataReader(Component):
                 for scope, tel_type, name in self.image_mapper_type:
                     if scope == "type" and camera_name in tel_type:
                         self.image_mappers[camera_name] = ImageMapper.from_name(
-                            name, geometry=cam_geom[camera_name], subarray=self.subarray, parent=self
+                            name,
+                            geometry=cam_geom[camera_name],
+                            subarray=self.subarray,
+                            parent=self,
                         )
                     if tel_type == "*" and camera_name not in self.image_mappers:
                         self.image_mappers[camera_name] = ImageMapper.from_name(
-                            name, geometry=cam_geom[camera_name], subarray=self.subarray, parent=self
+                            name,
+                            geometry=cam_geom[camera_name],
+                            subarray=self.subarray,
+                            parent=self,
                         )
 
         # Telescope pointings
@@ -347,12 +355,6 @@ class DLDataReader(Component):
             self._construct_mono_example_identifiers()
         elif self.mode == "stereo":
             self._construct_stereo_example_identifiers()
-
-        # Transform true energy into the log space
-        if self.process_type == ProcessType.Simulation:
-            self.example_identifiers = self._transform_to_log_energy(
-                self.example_identifiers
-            )
 
         # Handling the class weights calculation.
         # Scaling by total/2 helps keep the loss to a similar magnitude.
@@ -440,6 +442,7 @@ class DLDataReader(Component):
             # Construct the example identifiers
             events.keep_columns(self.example_ids_keep_columns)
             if self.process_type == ProcessType.Simulation:
+                # Add the spherical offsets w.r.t. to the telescope pointing
                 tel_pointing = self._get_tel_pointing(f, self.tel_ids)
                 events = join(
                     left=events,
@@ -447,9 +450,13 @@ class DLDataReader(Component):
                     keys=["obs_id", "tel_id"],
                 )
                 events = self._transform_to_spherical_offsets(events)
-                # Add the true shower primary class to the table based on the filename is
-                # signal or background input file list
-                true_shower_primary_class = 1 if filename in self.input_url_signal else 0
+                # Add the logarithm of the true energy in TeV
+                events = self._transform_to_log_energy(events)
+                # Add the true shower primary class to the table based on the filename
+                # is signal or background input file list
+                true_shower_primary_class = (
+                    1 if filename in self.input_url_signal else 0
+                )
                 events.add_column(
                     true_shower_primary_class, name="true_shower_primary_class"
                 )
@@ -561,7 +568,9 @@ class DLDataReader(Component):
                         right=tel_pointing,
                         keys=["obs_id", "tel_id"],
                     )
-                    table_per_type = self._transform_to_spherical_offsets(table_per_type)
+                    table_per_type = self._transform_to_spherical_offsets(
+                        table_per_type
+                    )
                 # Apply the multiplicity cut based on the telescope type
                 table_per_type = table_per_type.group_by(["obs_id", "event_id"])
 
@@ -584,10 +593,14 @@ class DLDataReader(Component):
 
             events = events.groups.filter(_multiplicity_cut_subarray)
             events.add_column(file_idx, name="file_index", index=0)
-            # Add the true shower primary class to the table based on the filename is
-            # signal or background input file list
             if self.process_type == ProcessType.Simulation:
-                true_shower_primary_class = 1 if filename in self.input_url_signal else 0
+                # Add the logarithm of the true energy in TeV
+                events = self._transform_to_log_energy(events)
+                # Add the true shower primary class to the table based on the filename
+                # is signal or background input file list
+                true_shower_primary_class = (
+                    1 if filename in self.input_url_signal else 0
+                )
                 events.add_column(
                     true_shower_primary_class, name="true_shower_primary_class"
                 )
@@ -679,7 +692,7 @@ class DLDataReader(Component):
             dl1b_parameters.append([np.stack(parameters)])
         return np.array(dl1b_parameters)
 
-    def mono_batch_generation(self, batch_indices) -> (dict, Table):
+    def generate_mono_batch(self, batch_indices) -> (dict, Table):
         """
         Generate a batch of events for mono mode.
 
@@ -709,16 +722,14 @@ class DLDataReader(Component):
         "Generates data containing batch_size samples"
         # Check that the batch generation call is consistent with the mode
         if self.mode != "mono":
-            raise ValueError(
-                "Mono batch generation is not supported in stereo mode."
-            )
+            raise ValueError("Mono batch generation is not supported in stereo mode.")
         # Retrieve the batch from the example identifiers via indexing
         batch = self.example_identifiers.loc[batch_indices]
         # Append the features from child classes to the batch
         batch = self._append_features(batch)
         return batch
 
-    def stereo_batch_generation(self, batch_indices) -> (dict, Table):
+    def generate_stereo_batch(self, batch_indices) -> (dict, Table):
         """
         Generate a batch of events for stereo mode.
 
@@ -744,32 +755,31 @@ class DLDataReader(Component):
         """
         # Check that the batch generation call is consistent with the mode
         if self.mode != "stereo":
-            raise ValueError(
-                "Stereo batch generation is not supported in mono mode."
-            )
+            raise ValueError("Stereo batch generation is not supported in mono mode.")
         # Retrieve the batch from the example identifiers via groupd by
         # Workaround for the missing multicolumn indexing in astropy:
         # Need this PR https://github.com/astropy/astropy/pull/15826
         # waiting astropy v7.0.0
         # Once available, the batch_generation can be shared with "mono"
         batch = self.example_identifiers_grouped.groups[batch_indices]
-         # Append the features from child classes to the batch
+        # Append the features from child classes to the batch
         batch = self._append_features(batch)
-        # Add blank features for missing telescopes in the batch
+        # Add blank inputs for missing telescopes in the batch
         batch_grouped = batch.group_by(["obs_id", "event_id"])
-        for batch_grouped in batch_grouped.groups:
+        for group_element in batch_grouped.groups:
             for tel_type_id, tel_type in enumerate(self.selected_telescopes):
+                blank_input = np.zeros(self.input_shape[tel_type][1:])
                 for tel_id in self.selected_telescopes[tel_type]:
                     # Check if the telescope is missing in the batch
-                    if tel_id not in batch_grouped["tel_id"]:
-                        blank_features = batch_grouped.copy()[0]
-                        blank_features["table_index"] = -1
-                        blank_features["tel_type_id"] = tel_type_id
-                        blank_features["tel_id"] = tel_id
-                        blank_features["hillas_intensity"] = 0.0
-                        blank_features["features"] = np.zeros_like(blank_features["features"])
-                        batch.add_row(blank_features)
-        # Sort the batch with the new rows of blank features
+                    if tel_id not in group_element["tel_id"]:
+                        blank_input_row = group_element.copy()[0]
+                        blank_input_row["table_index"] = -1
+                        blank_input_row["tel_type_id"] = tel_type_id
+                        blank_input_row["tel_id"] = tel_id
+                        blank_input_row["hillas_intensity"] = 0.0
+                        blank_input_row["features"] = blank_input
+                        batch.add_row(blank_input_row)
+        # Sort the batch with the new rows of blank inputs
         batch.sort(["obs_id", "event_id", "tel_type_id", "tel_id"])
         return batch
 
@@ -785,20 +795,20 @@ def get_unmapped_image(dl1_event, channels, transforms):
     This function processes the DL1 event data to generate an image array
     based on the specified channels and transformation parameters. It handles
     different types of channels such as 'image' and 'peak_time', and
-    applies the necessary transformations to recover the original floating 
+    applies the necessary transformations to recover the original floating
     point values if the file was compressed.
 
     Parameters
     ----------
     dl1_event : astropy.table.Table
-        A table containing DL1 event data, including ``image``, ``image_mask``, 
+        A table containing DL1 event data, including ``image``, ``image_mask``,
         and ``peak_time``.
     channels : list of str
         A list of channels to be processed, such as ``image`` and ``peak_time``
         with optional ``cleaned_``-prefix for for the cleaned versions of the channels
         and ``relative_``-prefix for the relative peak arrival times.
     transforms : dict
-        A dictionary containing scaling and offset values for image and peak time 
+        A dictionary containing scaling and offset values for image and peak time
         transformations.
 
     Returns
@@ -829,10 +839,10 @@ def get_unmapped_image(dl1_event, channels, transforms):
             if "relative" in channel:
                 peak_times = dl1_event["peak_time"]
                 # Apply the cleaning mask to the peak times if specified
-                if "cleaned" in channel: peak_times *= mask
+                if "cleaned" in channel:
+                    peak_times *= mask
                 image[:, i] = (
-                    dl1_event["peak_time"]
-                    - peak_times[np.nonzero(peak_times)].mean()
+                    dl1_event["peak_time"] - peak_times[np.nonzero(peak_times)].mean()
                 )
             else:
                 image[:, i] = dl1_event["peak_time"]
@@ -880,11 +890,11 @@ class DLImageReader(DLDataReader):
                 "peak_time",
                 "relative_peak_time",
                 "cleaned_peak_time",
-                "cleaned_relative_peak_time"
+                "cleaned_relative_peak_time",
             ]
         ),
         default_value=["image", "peak_time"],
-        allow_none=False, 
+        allow_none=False,
         help=(
             "Set the input channels to be loaded from the DL1 event data. "
             "image: integrated charges, "
@@ -905,8 +915,33 @@ class DLImageReader(DLDataReader):
         **kwargs,
     ):
 
-        super().__init__(input_url_signal=input_url_signal, input_url_background=input_url_background, config=config, parent=parent, **kwargs)
- 
+        super().__init__(
+            input_url_signal=input_url_signal,
+            input_url_background=input_url_background,
+            config=config,
+            parent=parent,
+            **kwargs,
+        )
+
+        # Set the input shape based on the selected mode
+        if self.mode == "mono":
+            self.input_shape = (
+                self.image_mappers[self.cam_name].image_shape,
+                self.image_mappers[self.cam_name].image_shape,
+                len(self.channels),
+            )
+        elif self.mode == "stereo":
+            self.input_shape = {}
+            for tel_type in self.selected_telescopes:
+                camera_name = super()._get_camera_type(tel_type)
+                input_shape = (
+                    len(self.subarray.get_tel_ids_for_type(tel_type)),
+                    self.image_mappers[camera_name].image_shape,
+                    self.image_mappers[camera_name].image_shape,
+                    len(self.channels),
+                )
+                self.input_shape[tel_type] = input_shape
+
         # Get offset and scaling of images
         self.transforms = {}
         self.transforms["image_scale"] = 0.0
@@ -1031,9 +1066,7 @@ def get_unmapped_waveform(
         waveform = waveform[0]
     else:
         selected_gain_channel = r1_event["selected_gain_channel"][:, np.newaxis]
-        waveform = np.where(
-            selected_gain_channel == 0, waveform[0], waveform[1]
-        )
+        waveform = np.where(selected_gain_channel == 0, waveform[0], waveform[1])
     # Apply the transform to recover orginal floating point values if the file were compressed
     if settings["waveform_scale"] > 0.0:
         waveform /= settings["waveform_scale"]
@@ -1052,7 +1085,10 @@ def get_unmapped_waveform(
             sequence_position = np.argmax(np.sum(waveform, axis=0))
         # Calculate start and stop positions
         start = max(0, int(1 + sequence_position - settings["seq_length"] / 2))
-        stop = min(settings["readout_length"], int(1 + sequence_position + settings["seq_length"] / 2))
+        stop = min(
+            settings["readout_length"],
+            int(1 + sequence_position + settings["seq_length"] / 2),
+        )
         # Adjust the start and stop if bound overflows
         if stop > settings["readout_length"]:
             start -= stop - settings["readout_length"]
@@ -1062,8 +1098,10 @@ def get_unmapped_waveform(
 
     return waveform
 
+
 def clean_waveform(waveform, camera_geometry, DBSCAN_config):
     pass
+
 
 class DLWaveformReader(DLDataReader):
     """
@@ -1120,7 +1158,7 @@ class DLWaveformReader(DLDataReader):
     ).tag(config=True)
 
     DBSCAN_params = Dict(
-        default_value={"eps": 0.5, "min_samples": 5, "metric": 'euclidean'},
+        default_value={"eps": 0.5, "min_samples": 5, "metric": "euclidean"},
         allow_none=True,
         help=(
             "Set the DBSCAN clustering parameters for waveform cleaning. "
@@ -1131,7 +1169,6 @@ class DLWaveformReader(DLDataReader):
         ),
     ).tag(config=True)
 
-
     def __init__(
         self,
         input_url_signal,
@@ -1141,7 +1178,13 @@ class DLWaveformReader(DLDataReader):
         **kwargs,
     ):
 
-        super().__init__(input_url_signal=input_url_signal, input_url_background=input_url_background, config=config, parent=parent, **kwargs)
+        super().__init__(
+            input_url_signal=input_url_signal,
+            input_url_background=input_url_background,
+            config=config,
+            parent=parent,
+            **kwargs,
+        )
 
         # Read the readout length from the first file
         self.readout_length = int(
@@ -1160,6 +1203,25 @@ class DLWaveformReader(DLDataReader):
                 raise ValueError(
                     f"Invalid sequence length '{self.sequence_length}' (must be <= '{self.readout_length}')."
                 )
+
+        # Set the input shape based on the selected mode
+        if self.mode == "mono":
+            self.input_shape = (
+                self.image_mappers[self.cam_name].image_shape,
+                self.image_mappers[self.cam_name].image_shape,
+                self.sequence_length,
+            )
+        elif self.mode == "stereo":
+            self.input_shape = {}
+            for tel_type in self.selected_telescopes:
+                camera_name = super()._get_camera_type(tel_type)
+                input_shape = (
+                    len(self.subarray.get_tel_ids_for_type(tel_type)),
+                    self.image_mappers[camera_name].image_shape,
+                    self.image_mappers[camera_name].image_shape,
+                    self.sequence_length,
+                )
+                self.input_shape[tel_type] = input_shape
 
         # Construct settings dict for the calibrated waveforms
         self.waveform_settings = {
@@ -1243,7 +1305,9 @@ class DLWaveformReader(DLDataReader):
             # Apply the 'ImageMapper' whenever the index matrix is not None.
             # Otherwise, return the unmapped image for the 'IndexedConv' package.
             if self.image_mappers[camera_type].index_matrix is None:
-                waveforms.append(self.image_mappers[camera_type].map_image(unmapped_waveform))
+                waveforms.append(
+                    self.image_mappers[camera_type].map_image(unmapped_waveform)
+                )
             else:
                 waveforms.append(unmapped_waveform)
         batch.add_column(waveforms, name="features", index=7)
