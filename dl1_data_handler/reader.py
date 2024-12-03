@@ -676,7 +676,7 @@ class DLDataReader(Component):
         )
         return table
 
-    def _get_parameters(self, batch, dl1b_parameter_list) -> np.array:
+    def get_parameters(self, batch, dl1b_parameter_list) -> np.array:
         """Retrieve DL1b parameters for a given batch of events."""
         dl1b_parameters = []
         for file_idx, table_idx, tel_id in zip(
