@@ -149,7 +149,7 @@ class DLDataLoader(Sequence):
                 )
         elif self.DLDataReader.mode == "stereo":
             batch = self.DLDataReader.generate_stereo_batch(batch_indices)
-            batch_grouped = batch.group_by(["obs_id", "event_id", "tel_type_id"])
+            batch_grouped = batch.group_by(["obs_id", "event_id", "tel_type_id", "true_shower_primary_class"])
             features = []
             true_shower_primary_class = []
             log_true_energy = []
