@@ -131,6 +131,8 @@ class DLDataReader(Component):
         Generate a batch of mono events from list of indices.
     generate_stereo_batch(batch_indices)
         Generate a batch of stereo events from list of indices.
+    get_tel_pointing(file, tel_ids)
+        Retrieve the telescope pointing information for the specified telescope IDs.
     """
 
     mode = CaselessStrEnum(
@@ -328,7 +330,7 @@ class DLDataReader(Component):
 
         # Telescope pointings
         self.telescope_pointings = {}
-        self.tel_trigger_table = None
+        self.tel_trigger_table, self.subarray_trigger_table = None, None
         if self.process_type == ProcessType.Observation:
             for tel_id in self.tel_ids:
                 with lock:
@@ -341,7 +343,10 @@ class DLDataReader(Component):
                 self.files[self.first_file],
                 "/dl1/event/telescope/trigger",
             )
-
+            self.subarray_trigger_table = read_table(
+                self.files[self.first_file],
+                "/dl1/event/subarray/trigger",
+            )
         # Image parameters (DL1b)
         # Retrieve the column names for the DL1b parameter table
         with lock:
@@ -443,7 +448,7 @@ class DLDataReader(Component):
             events.keep_columns(self.example_ids_keep_columns)
             if self.process_type == ProcessType.Simulation:
                 # Add the spherical offsets w.r.t. to the telescope pointing
-                tel_pointing = self._get_tel_pointing(f, self.tel_ids)
+                tel_pointing = self.get_tel_pointing(f, self.tel_ids)
                 events = join(
                     left=events,
                     right=tel_pointing,
@@ -562,7 +567,7 @@ class DLDataReader(Component):
                 table_per_type = table_per_type.group_by(["obs_id", "event_id"])
                 table_per_type.keep_columns(self.example_ids_keep_columns)
                 if self.process_type == ProcessType.Simulation:
-                    tel_pointing = self._get_tel_pointing(f, self.tel_ids)
+                    tel_pointing = self.get_tel_pointing(f, self.tel_ids)
                     table_per_type = join(
                         left=table_per_type,
                         right=tel_pointing,
@@ -632,7 +637,7 @@ class DLDataReader(Component):
         # waiting astropy v7.0.0
         # self.example_identifiers.add_index(["obs_id", "event_id"])
 
-    def _get_tel_pointing(self, file, tel_ids) -> Table:
+    def get_tel_pointing(self, file, tel_ids) -> Table:
         """
         Retrieve the telescope pointing information for the specified telescope IDs.
 
@@ -682,7 +687,7 @@ class DLDataReader(Component):
         table.add_column(np.log10(table["true_energy"]), name="log_true_energy")
         return table
 
-    def _transform_to_spherical_offsets(self, table)  -> Table:
+    def _transform_to_spherical_offsets(self, table) -> Table:
         """
         Transform Alt/Az coordinates to spherical offsets w.r.t. the telescope pointing.
 
@@ -744,8 +749,8 @@ class DLDataReader(Component):
             An array of DL1b parameters for the batch of events.
         """
         dl1b_parameters = []
-        for file_idx, table_idx, tel_id in zip(
-            batch["file_index"], batch["table_index"], batch["tel_id"]
+        for file_idx, table_idx, tel_id in batch.iterrows(
+            "file_index", "table_index", "tel_id"
         ):
             filename = list(self.files)[file_idx]
             with lock:
@@ -790,6 +795,10 @@ class DLDataReader(Component):
             raise ValueError("Mono batch generation is not supported in stereo mode.")
         # Retrieve the batch from the example identifiers via indexing
         batch = self.example_identifiers.loc[batch_indices]
+        # If the batch is a single event loc returns a Rows object and not a Table.
+        # Convert the batch to a Table in order to append the features later
+        if not isinstance(batch, Table):
+            batch = Table(rows=batch)
         # Append the features from child classes to the batch
         batch = self._append_features(batch)
         return batch
@@ -827,6 +836,10 @@ class DLDataReader(Component):
         # waiting astropy v7.0.0
         # Once available, the batch_generation can be shared with "mono"
         batch = self.example_identifiers_grouped.groups[batch_indices]
+        # This may returns a Rows object and not a Table if the batch is a single event.
+        # Convert the batch to a Table in order to append the features later
+        if not isinstance(batch, Table):
+            batch = Table(rows=batch)
         # Append the features from child classes to the batch
         batch = self._append_features(batch)
         # Add blank inputs for missing telescopes in the batch
@@ -1059,11 +1072,8 @@ class DLImageReader(DLDataReader):
             The input batch with the appended processed images as features.
         """
         images = []
-        for file_idx, table_idx, tel_type_id, tel_id in zip(
-            batch["file_index"],
-            batch["table_index"],
-            batch["tel_type_id"],
-            batch["tel_id"],
+        for file_idx, table_idx, tel_type_id, tel_id in batch.iterrows(
+            "file_index", "table_index", "tel_type_id", "tel_id"
         ):
             filename = list(self.files)[file_idx]
             with lock:
@@ -1336,11 +1346,8 @@ class DLWaveformReader(DLDataReader):
             The input batch with the appended processed waveforms as features.
         """
         waveforms = []
-        for file_idx, table_idx, tel_type_id, tel_id in zip(
-            batch["file_index"],
-            batch["table_index"],
-            batch["tel_type_id"],
-            batch["tel_id"],
+        for file_idx, table_idx, tel_type_id, tel_id in batch.iterrows(
+            "file_index", "table_index", "tel_type_id", "tel_id"
         ):
             filename = list(self.files)[file_idx]
             camera_type = self._get_camera_type(
