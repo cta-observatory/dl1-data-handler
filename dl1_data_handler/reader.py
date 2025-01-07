@@ -20,6 +20,8 @@ import numpy as np
 import tables
 import threading
 
+from astropy import units as u
+from astropy.coordinates.earth import EarthLocation
 from astropy.coordinates import SkyCoord
 from astropy.table import (
     Table,
@@ -27,6 +29,7 @@ from astropy.table import (
     join,
     vstack,
 )
+from astropy.time import Time
 
 from ctapipe.core import Component, QualityQuery
 from ctapipe.core.traits import (
@@ -45,6 +48,15 @@ from ctapipe.instrument import SubarrayDescription
 from ctapipe.io import read_table
 from dl1_data_handler.image_mapper import ImageMapper
 
+# Reference (dummy) location to insert in the SkyCoord object as the default location
+#: Area averaged position of LST-1, MAGIC-1 and MAGIC-2 (using 23**2 and 17**2 m2)
+REFERENCE_LOCATION = EarthLocation(
+    lon=-17.890879 * u.deg,
+    lat=28.761579 * u.deg,
+    height=2199 * u.m,  # MC obs-level
+)
+# Reference (dummy) time to insert in the SkyCoord object as the default time
+LST_EPOCH = Time("2018-10-01T00:00:00", scale="utc")
 
 lock = threading.Lock()
 
@@ -367,9 +379,6 @@ class DLDataReader(Component):
         self.class_weight = None
         if self.process_type == ProcessType.Simulation:
             if self.input_url_background:
-                self.log.info("  Total number of events: %d", self._get_n_events())
-                self.log.info("  Number of signal events: %d", self.n_signal_events)
-                self.log.info("  Number of background events: %d", self.n_bkg_events)
                 self.class_weight = {
                     0: (1.0 / self.n_bkg_events) * (self._get_n_events() / 2.0),
                     1: (1.0 / self.n_signal_events) * (self._get_n_events() / 2.0),
@@ -711,11 +720,15 @@ class DLDataReader(Component):
             table["telescope_pointing_azimuth"],
             table["telescope_pointing_altitude"],
             frame="altaz",
+            location=REFERENCE_LOCATION,
+            obstime=LST_EPOCH,
         )
         true_direction = SkyCoord(
             table["true_az"],
             table["true_alt"],
             frame="altaz",
+            location=REFERENCE_LOCATION,
+            obstime=LST_EPOCH,
         )
         sky_offset = fix_pointing.spherical_offsets_to(true_direction)
         angular_separation = fix_pointing.separation(true_direction)
