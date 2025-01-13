@@ -362,16 +362,31 @@ class DLDataReader(Component):
         if self.process_type == ProcessType.Observation:
             for tel_id in self.tel_ids:
                 with lock:
-                    # Read the telescope pointing information from the dl0/dl1 monitoring. dl1 monitoring has priority.
-                    if self.files[self.first_file].__contains__(f"/dl0/monitoring/telescope/pointing/tel_{tel_id:03d}"):
+                    # Read the telescope pointing information from the dl0/dl1 monitoring tables.
+                    # dl1 monitoring table has priority.
+                    if self.files[self.first_file].__contains__(
+                        f"/dl0/monitoring/telescope/pointing/tel_{tel_id:03d}"
+                    ):
                         self.telescope_pointings[f"tel_{tel_id:03d}"] = read_table(
                             self.files[self.first_file],
                             f"/dl0/monitoring/telescope/pointing/tel_{tel_id:03d}",
                         )
-                    if self.files[self.first_file].__contains__(f"/dl1/monitoring/telescope/pointing/tel_{tel_id:03d}"):
+                    if self.files[self.first_file].__contains__(
+                        f"/dl1/monitoring/telescope/pointing/tel_{tel_id:03d}"
+                    ):
                         self.telescope_pointings[f"tel_{tel_id:03d}"] = read_table(
                             self.files[self.first_file],
                             f"/dl1/monitoring/telescope/pointing/tel_{tel_id:03d}",
+                        )
+                    # Break if no pointing information is available
+                    if not self.files[self.first_file].__contains__(
+                        f"/dl0/monitoring/telescope/pointing/tel_{tel_id:03d}"
+                    ) and not self.files[self.first_file].__contains__(
+                        f"/dl1/monitoring/telescope/pointing/tel_{tel_id:03d}"
+                    ):
+                        raise IOError(
+                            f"Telescope pointing information for telescope '{tel_id}' is not available "
+                            f"in the dl0/dl1 monitoring tables of file '{self.first_file}'."
                         )
         with lock:
             self.tel_trigger_table = read_table(
