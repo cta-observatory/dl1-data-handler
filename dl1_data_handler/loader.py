@@ -30,10 +30,14 @@ class DLDataLoader(Sequence):
     --------
     __len__():
         Returns the number of batches per epoch.
-    __getitem__(index):
-        Generates one batch of data.
     on_epoch_end():
         Updates indices after each epoch if random seed is provided.
+    __getitem__(index):
+        Generates one batch of data using _get_mono_item(index) or _get_stereo_item(index).
+    _get_mono_item(index):
+        Generates one batch of monoscopic data.
+    _get_stereo_item(index):
+        Generates one batch of stereoscopic data.
     """
 
     def __init__(
@@ -106,8 +110,7 @@ class DLDataLoader(Sequence):
         Generates one batch of data.
 
         This method is called to generate one batch of data based on the index provided. It
-        retrieves the data from the DLDataReader and sets up the labels based on the tasks
-        specified.
+        calls either _get_mono_item(index) or _get_stereo_item(index) based on the mode of the DLDataReader.
 
         Parameters:
         -----------
