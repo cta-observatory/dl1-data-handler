@@ -247,10 +247,15 @@ class DLDataReader(Component):
         self.data_format_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
         self.instrument_id = self._v_attrs["CTA INSTRUMENT ID"]
 
-        # Check for the minimum ctapipe data format version (v6.0.0)
-        if int(self.data_format_version.split(".")[0].replace("v", "")) < 6:
+        # Check for the minimum ctapipe data format version (v6.0.0) for MC sims
+        if self.process_type == ProcessType.Simulation and int(self.data_format_version.split(".")[0].replace("v", "")) < 6:
             raise IOError(
-                f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.6.0.0)."
+                f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.6.0.0 for Simulation)."
+            )
+        # Check for the minimum ctapipe data format version (v5.0.0) for real observational data
+        if self.process_type == ProcessType.Observation and int(self.data_format_version.split(".")[0].replace("v", "")) < 5:
+            raise IOError(
+                f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.5.0.0 for Observation)."
             )
         # Check for real data processing that only a single file is provided.
         if self.process_type == ProcessType.Observation and len(self.files) != 1:
