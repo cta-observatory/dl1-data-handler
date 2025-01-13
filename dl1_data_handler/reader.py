@@ -186,6 +186,7 @@ class DLDataReader(Component):
     image_mapper_type = TelescopeParameter(
         trait=Unicode(),
         default_value="BilinearMapper",
+        allow_none=True,
         help=(
             "Instances of ``ImageMapper`` transforming a raw 1D vector into a 2D image. "
             "Different mapping methods can be selected for each telescope type."
@@ -283,14 +284,20 @@ class DLDataReader(Component):
                     self.subarray.get_tel_ids_for_type(str(tel_type))
                 )
 
-        # Check if only one telescope type is selected when reading in mono mode
-        if self.mode == "mono" and len(self.selected_telescopes) > 1:
+        # Check if only one telescope type is selected for any subclass except the 'DLFeatureVectorReader'
+        if (
+            self.__class__.__name__ != "DLFeatureVectorReader"
+            and len(self.selected_telescopes) > 1
+        ):
             raise ValueError(
-                f"Mono mode selected but multiple telescope types are provided: '{self.selected_telescopes}'."
+                f"'{self.__class__.__name__}' do not support multiple telescope types: '{self.selected_telescopes}'. "
+                "Please select only one telescope type or perform the event reconstruction with multiple telescope "
+                "types using the 'DLFeatureVectorReader' subclass. Beforehand, the feature vectors have to be appended "
+                "to the DL1 data files using '$ ctlearn-predict-model --dl1-features ...'."
             )
         # Check that all files have the same SubarrayDescription
         for filename in self.files:
-            # Read SubarrayDescription from the new file and
+            # Read SubarrayDescription from the new file
             subarray = SubarrayDescription.from_hdf(filename)
 
             # Filter subarray by selected telescopes
@@ -310,35 +317,33 @@ class DLDataReader(Component):
                     )
 
         # Set the telescope type and camera name as class attributes for mono mode for convenience
-        self.tel_type = None
-        self.cam_name = None
-        if self.mode == "mono":
-            self.tel_type = list(self.selected_telescopes)[0]
-            self.cam_name = self._get_camera_type(self.tel_type)
-
+        # FIXME Make image mapper not a dict because we only need one since we do not select multiple telescope types for image/wvf reading
+        self.tel_type = list(self.selected_telescopes)[0]
+        self.cam_name = self._get_camera_type(self.tel_type)
         # Initialize the ImageMapper with the pixel positions and mapping settings
         # TODO: Find a better way for passing the configuration
         self.image_mappers = {}
         cam_geom = {}
-        for camera_type in self.subarray.camera_types:
-            camera_name = self._get_camera_type(camera_type.name)
-            if camera_name not in cam_geom:
-                cam_geom[camera_name] = camera_type.geometry
-                for scope, tel_type, name in self.image_mapper_type:
-                    if scope == "type" and camera_name in tel_type:
-                        self.image_mappers[camera_name] = ImageMapper.from_name(
-                            name,
-                            geometry=cam_geom[camera_name],
-                            subarray=self.subarray,
-                            parent=self,
-                        )
-                    if tel_type == "*" and camera_name not in self.image_mappers:
-                        self.image_mappers[camera_name] = ImageMapper.from_name(
-                            name,
-                            geometry=cam_geom[camera_name],
-                            subarray=self.subarray,
-                            parent=self,
-                        )
+        if self.image_mapper_type is not None:
+            for camera_type in self.subarray.camera_types:
+                camera_name = self._get_camera_type(camera_type.name)
+                if camera_name not in cam_geom:
+                    cam_geom[camera_name] = camera_type.geometry
+                    for scope, tel_type, name in self.image_mapper_type:
+                        if scope == "type" and camera_name in tel_type:
+                            self.image_mappers[camera_name] = ImageMapper.from_name(
+                                name,
+                                geometry=cam_geom[camera_name],
+                                subarray=self.subarray,
+                                parent=self,
+                            )
+                        if tel_type == "*" and camera_name not in self.image_mappers:
+                            self.image_mappers[camera_name] = ImageMapper.from_name(
+                                name,
+                                geometry=cam_geom[camera_name],
+                                subarray=self.subarray,
+                                parent=self,
+                            )
 
         # Telescope pointings
         self.telescope_pointings = {}
@@ -859,7 +864,16 @@ class DLDataReader(Component):
         batch_grouped = batch.group_by(["obs_id", "event_id"])
         for group_element in batch_grouped.groups:
             for tel_type_id, tel_type in enumerate(self.selected_telescopes):
-                blank_input = np.zeros(self.input_shape[tel_type][1:])
+                if "features" in group_element.colnames:
+                    blank_input = np.zeros(self.input_shape[tel_type][1:])
+                if "mono_feature_vectors" in group_element.colnames:
+                    blank_mono_feature_vectors = np.zeros(
+                        group_element["mono_feature_vectors"][0].shape
+                    )
+                if "stereo_feature_vectors" in group_element.colnames:
+                    blank_stereo_feature_vectors = np.zeros(
+                        group_element["stereo_feature_vectors"][0].shape
+                    )
                 for tel_id in self.selected_telescopes[tel_type]:
                     # Check if the telescope is missing in the batch
                     if tel_id not in group_element["tel_id"]:
@@ -868,7 +882,16 @@ class DLDataReader(Component):
                         blank_input_row["tel_type_id"] = tel_type_id
                         blank_input_row["tel_id"] = tel_id
                         blank_input_row["hillas_intensity"] = 0.0
-                        blank_input_row["features"] = blank_input
+                        if "features" in group_element.colnames:
+                            blank_input_row["features"] = blank_input
+                        if "mono_feature_vectors" in group_element.colnames:
+                            blank_input_row["mono_feature_vectors"] = (
+                                blank_mono_feature_vectors
+                            )
+                        if "stereo_feature_vectors" in group_element.colnames:
+                            blank_input_row["stereo_feature_vectors"] = (
+                                blank_stereo_feature_vectors
+                            )
                         batch.add_row(blank_input_row)
         # Sort the batch with the new rows of blank inputs
         batch.sort(["obs_id", "event_id", "tel_type_id", "tel_id"])
@@ -1395,4 +1418,184 @@ class DLWaveformReader(DLDataReader):
             else:
                 waveforms.append(unmapped_waveform)
         batch.add_column(waveforms, name="features", index=7)
+        return batch
+
+
+def get_feature_vectors(dl1_event, prefix, feature_vector_types) -> list:
+    """
+    Generate unmapped image from a DL1 event.
+
+    This function processes the DL1 event data to generate an image array
+    based on the specified channels and transformation parameters. It handles
+    different types of channels such as 'image' and 'peak_time', and
+    applies the necessary transformations to recover the original floating
+    point values if the file was compressed.
+
+    Parameters
+    ----------
+    dl1_event : astropy.table.Table
+        A table containing DL1 event data, including ``image``, ``image_mask``,
+        and ``peak_time``.
+    channels : list of str
+        A list of channels to be processed, such as ``image`` and ``peak_time``
+        with optional ``cleaned_``-prefix for for the cleaned versions of the channels
+        and ``relative_``-prefix for the relative peak arrival times.
+    transforms : dict
+        A dictionary containing scaling and offset values for image and peak time
+        transformations.
+
+    Returns
+    -------
+    image : np.ndarray
+        The processed image data image for the specific channels.
+    """
+    feature_vectors = []
+    for feature_vector_type in feature_vector_types:
+        feature_vectors.append(
+            dl1_event[f"{prefix}_{feature_vector_type}_feature_vectors"]
+        )
+    return feature_vectors
+
+
+class DLFeatureVectorReader(DLDataReader):
+    """
+    A data reader class for handling DL1 feature vector data.
+
+    This class extends the ``DLDataReader`` to specifically handle the reading of
+    DL1 feature vectors, obtained from a previous CTLearnModel. It supports the reading
+    of both ``mono`` and ``stereo`` feature vectors. This reader class only supports
+    the reading in stereo mode.
+    """
+
+    prefixes = List(
+        trait=Unicode(),
+        default_value=["CTLearn"],
+        allow_none=False,
+        help="List of prefixes for the feature vector group in the HDF5 file.",
+    ).tag(config=True)
+
+    feature_vector_types = List(
+        trait=CaselessStrEnum(
+            [
+                "classification",
+                "energy",
+                "direction",
+            ]
+        ),
+        allow_none=False,
+        help=(
+            "Set the type of the feature vector to be loaded from the DL1 data. "
+            "classification: "
+            "energy: , "
+            "direction: , "
+        ),
+    ).tag(config=True)
+
+    load_telescope_features = Bool(
+        default_value=True,
+        help="Set whether to load telescope feature vectors from the DL1 data.",
+    ).tag(config=True)
+
+    load_subarray_features = Bool(
+        default_value=False,
+        help="Set whether to load subarray feature vectors from the DL1 data.",
+    ).tag(config=True)
+
+    def __init__(
+        self,
+        input_url_signal,
+        input_url_background=[],
+        config=None,
+        parent=None,
+        **kwargs,
+    ):
+        super().__init__(
+            input_url_signal=input_url_signal,
+            input_url_background=input_url_background,
+            config=config,
+            parent=parent,
+            **kwargs,
+        )
+        # Check that the mode is consistent with the feature reader.
+        # The feature reader only supports stereo mode.
+        if self.mode != "stereo":
+            raise ValueError(
+                f"'{self.__class__.__name__}' only supports 'stereo' mode. "
+                "Please set the mode to 'stereo' or use one of the other subclasses."
+            )
+        # Check that at least one of the feature vector types is selected
+        if not self.load_telescope_features and not self.load_subarray_features:
+            raise ValueError(
+                "No loading of feature vectors selected. Please set 'load_telescope_features' "
+                "and/or 'load_subarray_features' to 'True'."
+            )
+
+    def _append_features(self, batch) -> Table:
+        """
+        Append previous obtained feature vectors to a given batch as features.
+
+        This method processes a batch of events to append feature vectors as input features
+        for the neural networks. It reads the feature vector data from the specified files
+        and appends the feature vectors to the batch. The feature vectors can be loaded
+        for both telescope and subarray level.
+
+        Parameters
+        ----------
+        batch : astropy.table.Table
+            A table containing information at minimum the following columns:
+            - "file_index": List of indices corresponding to the files.
+            - "table_index": List of indices corresponding to the event tables.
+            - "tel_type_id": List of telescope type IDs.
+            - "tel_id": List of telescope IDs.
+
+        Returns
+        -------
+        batch : astropy.table.Table
+            The input batch with the appended mono and stereo feature vectors.
+        """
+        mono_fvs, stereo_fvs = [], []
+        for file_idx, table_idx, tel_type_id, tel_id in batch.iterrows(
+            "file_index", "table_index", "tel_type_id", "tel_id"
+        ):
+            filename = list(self.files)[file_idx]
+            if self.load_telescope_features:
+                with lock:
+                    mono_fvs_per_prefix = []
+                    tel_table = f"tel_{tel_id:03d}"
+                    for prefix in self.prefixes:
+                        telescope_child = (
+                            self.files[filename]
+                            .root.dl1.event.telescope.features.__getitem__(prefix)
+                            ._f_get_child(tel_table)
+                        )
+                        mono_fvs_per_prefix.append(
+                            get_feature_vectors(
+                                telescope_child[table_idx],
+                                f"{prefix}_tel",
+                                self.feature_vector_types,
+                            )
+                        )
+                mono_fvs.append(mono_fvs_per_prefix)
+            if self.load_subarray_features:
+                with lock:
+                    stereo_fvs_per_prefix = []
+                    for prefix in self.prefixes:
+                        subarray_child = self.files[
+                            filename
+                        ].root.dl1.event.subarray.features._f_get_child(prefix)
+                        stereo_fvs_per_prefix.append(
+                            get_feature_vectors(
+                                subarray_child[table_idx],
+                                prefix,
+                                self.feature_vector_types,
+                            )
+                        )
+                stereo_fvs.append(stereo_fvs_per_prefix)
+        # Append the features to the batch
+        if self.load_telescope_features:
+            batch.add_column(np.array(mono_fvs), name="mono_feature_vectors", index=7)
+        if self.load_subarray_features:
+            batch.add_column(
+                np.array(stereo_fvs), name="stereo_feature_vectors", index=7
+            )
         return batch
