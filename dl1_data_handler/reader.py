@@ -248,12 +248,18 @@ class DLDataReader(Component):
         self.instrument_id = self._v_attrs["CTA INSTRUMENT ID"]
 
         # Check for the minimum ctapipe data format version (v6.0.0) for MC sims
-        if self.process_type == ProcessType.Simulation and int(self.data_format_version.split(".")[0].replace("v", "")) < 6:
+        if (
+            self.process_type == ProcessType.Simulation
+            and int(self.data_format_version.split(".")[0].replace("v", "")) < 6
+        ):
             raise IOError(
                 f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.6.0.0 for Simulation)."
             )
         # Check for the minimum ctapipe data format version (v5.0.0) for real observational data
-        if self.process_type == ProcessType.Observation and int(self.data_format_version.split(".")[0].replace("v", "")) < 5:
+        if (
+            self.process_type == ProcessType.Observation
+            and int(self.data_format_version.split(".")[0].replace("v", "")) < 5
+        ):
             raise IOError(
                 f"Provided ctapipe data format version is '{self.data_format_version}' (must be >= v.5.0.0 for Observation)."
             )
@@ -356,10 +362,17 @@ class DLDataReader(Component):
         if self.process_type == ProcessType.Observation:
             for tel_id in self.tel_ids:
                 with lock:
-                    self.telescope_pointings[f"tel_{tel_id:03d}"] = read_table(
-                        self.files[self.first_file],
-                        f"/dl0/monitoring/telescope/pointing/tel_{tel_id:03d}",
-                    )
+                    # Read the telescope pointing information from the dl0/dl1 monitoring. dl1 monitoring has priority.
+                    if self.files[self.first_file].__contains__(f"/dl0/monitoring/telescope/pointing/tel_{tel_id:03d}"):
+                        self.telescope_pointings[f"tel_{tel_id:03d}"] = read_table(
+                            self.files[self.first_file],
+                            f"/dl0/monitoring/telescope/pointing/tel_{tel_id:03d}",
+                        )
+                    if self.files[self.first_file].__contains__(f"/dl1/monitoring/telescope/pointing/tel_{tel_id:03d}"):
+                        self.telescope_pointings[f"tel_{tel_id:03d}"] = read_table(
+                            self.files[self.first_file],
+                            f"/dl1/monitoring/telescope/pointing/tel_{tel_id:03d}",
+                        )
         with lock:
             self.tel_trigger_table = read_table(
                 self.files[self.first_file],
