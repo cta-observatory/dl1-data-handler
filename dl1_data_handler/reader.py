@@ -11,6 +11,8 @@ __all__ = [
     "DLWaveformReader",
     "get_unmapped_waveform",
     "clean_waveform",
+    "DLFeatureVectorReader",
+    "get_feature_vectors",
 ]
 
 from abc import abstractmethod
@@ -1456,31 +1458,28 @@ class DLWaveformReader(DLDataReader):
 
 def get_feature_vectors(dl1_event, prefix, feature_vector_types) -> list:
     """
-    Generate unmapped image from a DL1 event.
+    Retrieve selected feature vectors from a DL1 event.
 
-    This function processes the DL1 event data to generate an image array
-    based on the specified channels and transformation parameters. It handles
-    different types of channels such as 'image' and 'peak_time', and
-    applies the necessary transformations to recover the original floating
-    point values if the file was compressed.
+    This function processes the DL1 event data to retrieve feature vectors
+    based on the specified feature vector types and prefix. It returns a list
+    of feature vectors for the selected types, which can be used as input features
+    for the neural networks.
 
     Parameters
     ----------
     dl1_event : astropy.table.Table
-        A table containing DL1 event data, including ``image``, ``image_mask``,
-        and ``peak_time``.
-    channels : list of str
-        A list of channels to be processed, such as ``image`` and ``peak_time``
-        with optional ``cleaned_``-prefix for for the cleaned versions of the channels
-        and ``relative_``-prefix for the relative peak arrival times.
-    transforms : dict
-        A dictionary containing scaling and offset values for image and peak time
-        transformations.
+        A table containing DL1 event data, including feature vectors for classification,
+        energy regression, and geometry/direction regression.
+    prefix : str
+        A prefix for the feature vector group in the HDF5 file.
+    feature_vector_types : list of str
+        A list of feature vector types to be loaded from the DL1 data, such as
+        ``classification``, ``energy``, and ``geometry``.
 
     Returns
     -------
-    image : np.ndarray
-        The processed image data image for the specific channels.
+    feature_vectors : list of np.ndarray
+        A list of feature vectors for the selected types.
     """
     feature_vectors = []
     for feature_vector_type in feature_vector_types:
@@ -1496,8 +1495,8 @@ class DLFeatureVectorReader(DLDataReader):
 
     This class extends the ``DLDataReader`` to specifically handle the reading of
     DL1 feature vectors, obtained from a previous CTLearnModel. It supports the reading
-    of both ``mono`` and ``stereo`` feature vectors. This reader class only supports
-    the reading in stereo mode.
+    of both ``telescope``- and ``subarray``-level feature vectors. This reader class only
+    supports the reading in stereo mode.
     """
 
     prefixes = List(
@@ -1512,15 +1511,15 @@ class DLFeatureVectorReader(DLDataReader):
             [
                 "classification",
                 "energy",
-                "direction",
+                "geometry",
             ]
         ),
         allow_none=False,
         help=(
             "Set the type of the feature vector to be loaded from the DL1 data. "
-            "classification: "
-            "energy: , "
-            "direction: , "
+            "classification: load feature vectors used for particle classification, "
+            "energy: load feature vectors used for energy regression, "
+            "geometry: load feature vectors used for geometry/direction regression."
         ),
     ).tag(config=True)
 
@@ -1570,7 +1569,7 @@ class DLFeatureVectorReader(DLDataReader):
         This method processes a batch of events to append feature vectors as input features
         for the neural networks. It reads the feature vector data from the specified files
         and appends the feature vectors to the batch. The feature vectors can be loaded
-        for both telescope and subarray level.
+        for both ``telescope``- and ``subarray``-level.
 
         Parameters
         ----------
