@@ -842,7 +842,6 @@ class DLDataReader(Component):
             the specified DL1b parameters and the rows correspond to the examples
             in the batch.
         """
-        "Generates data containing batch_size samples"
         # Check that the batch generation call is consistent with the mode
         if self.mode != "mono":
             raise ValueError("Mono batch generation is not supported in stereo mode.")
