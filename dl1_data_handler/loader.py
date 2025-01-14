@@ -136,7 +136,7 @@ class DLDataLoader(Sequence):
             features, labels = self._get_stereo_item(batch)
         return features, labels
 
-    def _get_mono_item(self, index):
+    def _get_mono_item(self, batch):
         """
         Retrieve the features and labels for one batch of monoscopic data.
 
@@ -184,7 +184,7 @@ class DLDataLoader(Sequence):
             features = features["input"]
         return features, labels
 
-    def _get_stereo_item(self, index):
+    def _get_stereo_item(self, batch):
         """
         Retrieve the features and labels for one batch of stereoscopic data.
 
