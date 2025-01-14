@@ -107,35 +107,11 @@ class DLDataLoader(Sequence):
 
     def __getitem__(self, index):
         """
-        Generates one batch of data.
+        Generate one batch of data and retrieve the features and labels.
 
-        This method is called to generate one batch of data based on the index provided. It
-        calls either _get_mono_item(index) or _get_stereo_item(index) based on the mode of the DLDataReader.
-
-        Parameters:
-        -----------
-        index : int
-            Index of the batch to generate.
-
-        Returns:
-        --------
-        tuple
-            A tuple containing the input data as features and the corresponding labels.
-        """
-        features, labels = None, None
-        if self.DLDataReader.mode == "mono":
-            features, labels = self._get_mono_item(index)
-        elif self.DLDataReader.mode == "stereo":
-            features, labels = self._get_stereo_item(index)
-        return features, labels
-
-    def _get_mono_item(self, index):
-        """
-        Generates one batch of monoscopic data.
-
-        This method is called to generate one batch of monoscopic data
-        based on the index provided. It retrieves the data from the DLDataReader and
-        sets up the labels based on the tasks specified.
+        This method is called to generate one batch of monoscopic and stereoscopic data based on
+        the index provided. It calls either _get_mono_item(batch) or _get_stereo_item(batch)
+        based on the mode of the DLDataReader.
 
         Parameters:
         -----------
@@ -151,9 +127,34 @@ class DLDataLoader(Sequence):
         batch_indices = self.indices[
             index * self.batch_size : (index + 1) * self.batch_size
         ]
-        labels = {}
-        batch = self.DLDataReader.generate_mono_batch(batch_indices)
+        features, labels = None, None
+        if self.DLDataReader.mode == "mono":
+            batch = self.DLDataReader.generate_mono_batch(batch_indices)
+            features, labels = self._get_mono_item(batch)
+        elif self.DLDataReader.mode == "stereo":
+            batch = self.DLDataReader.generate_stereo_batch(batch_indices)
+            features, labels = self._get_stereo_item(batch)
+        return features, labels
+
+    def _get_mono_item(self, index):
+        """
+        Retrieve the features and labels for one batch of monoscopic data.
+
+        This method is called to retrieve the features and labels for one batch of
+        monoscopic data. The labels are set up based on the tasks specified.
+
+        Parameters:
+        -----------
+        batch : astropy.table.Table
+            A table containing the data for the batch.
+
+        Returns:
+        --------
+        tuple
+            A tuple containing the input data as features and the corresponding labels.
+        """
         # Retrieve the telescope images and store in the features dictionary
+        labels = {}
         features = {"input": batch["features"].data}
         if "type" in self.tasks:
             labels["type"] = to_categorical(
@@ -185,28 +186,26 @@ class DLDataLoader(Sequence):
 
     def _get_stereo_item(self, index):
         """
-        Generates one batch of stereoscopic data.
+        Retrieve the features and labels for one batch of stereoscopic data.
 
-        This method is called to generate one batch of stereoscopic data
-        based on the index provided. It retrieves the data from the DLDataReader and
-        sets up the labels based on the tasks.
+        This method is called to retrieve the features and labels for one batch of
+        stereoscopic data. The original batch is grouped to retrieve the telescope
+        data for each event and then the telescope images or waveforms are stored
+        by the hillas intensity or stacked if required. Feature vectors can also
+        be retrieved if available for ``telescope``- and ``subarray``level. The
+        labels are set up based on the tasks specified.
 
         Parameters:
         -----------
-        index : int
-            Index of the batch to generate.
+        batch : astropy.table.Table
+            A table containing the data for the batch.
 
         Returns:
         --------
         tuple
             A tuple containing the input data as features and the corresponding labels.
         """
-        # Generate indices of the batch
-        batch_indices = self.indices[
-            index * self.batch_size : (index + 1) * self.batch_size
-        ]
         labels = {}
-        batch = self.DLDataReader.generate_stereo_batch(batch_indices)
         if self.DLDataReader.process_type == ProcessType.Simulation:
             batch_grouped = batch.group_by(
                 ["obs_id", "event_id", "tel_type_id", "true_shower_primary_class"]
@@ -294,5 +293,4 @@ class DLDataLoader(Sequence):
         # Temp fix for supporting keras2 & keras3
         if int(keras.__version__.split(".")[0]) >= 3:
             features = features["input"]
-
         return features, labels
