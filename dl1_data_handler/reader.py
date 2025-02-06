@@ -895,7 +895,10 @@ class DLDataReader(Component):
         # Append the features from child classes to the batch
         batch = self._append_features(batch)
         # Add blank inputs for missing telescopes in the batch
-        batch_grouped = batch.group_by(["obs_id", "event_id"])
+        if self.process_type == ProcessType.Simulation:
+            batch_grouped = batch.group_by(["obs_id", "event_id", "true_shower_primary_class"])
+        elif self.process_type == ProcessType.Observation:
+            batch_grouped = batch.group_by(["obs_id", "event_id"])
         for group_element in batch_grouped.groups:
             for tel_type_id, tel_type in enumerate(self.selected_telescopes):
                 if "features" in group_element.colnames:
