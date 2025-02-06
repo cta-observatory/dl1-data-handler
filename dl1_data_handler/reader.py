@@ -1,5 +1,5 @@
 """
-This module defines the ``DLDataReader`` and ``TableQualityQuery`` classes, which holds the basic reading and processing functionality for Deep Learning (DL) analyses.
+This module defines the ``DLDataReader`` and ``TableQualityQuery`` classes that hold the basic reading and processing functionality for Deep Learning (DL) analyses.
 """
 
 __all__ = [
