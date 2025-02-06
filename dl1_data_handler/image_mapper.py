@@ -94,10 +94,10 @@ class ImageMapper(TelescopeComponent):
         self.geometry.rotate(self.geometry.pix_rotation)
 
         self.pix_x = np.around(
-            self.geometry.pix_x.value, decimals=constants.decimal_precision
+            self.geometry.pix_x.value, decimals=self.constants.decimal_precision
         )
         self.pix_y = np.around(
-            self.geometry.pix_y.value, decimals=constants.decimal_precision
+            self.geometry.pix_y.value, decimals=self.constants.decimal_precision
         )
 
         self.x_ticks = np.unique(self.pix_x).tolist()
@@ -164,10 +164,10 @@ class ImageMapper(TelescopeComponent):
     ):
         """Create virtual hexagonal pixels outside of the camera."""
         dist_first = np.around(
-            abs(first_ticks[0] - first_ticks[1]), decimals=constants.decimal_precision
+            abs(first_ticks[0] - first_ticks[1]), decimals=self.constants.decimal_precision
         )
         dist_second = np.around(
-            abs(second_ticks[0] - second_ticks[1]), decimals=constants.decimal_precision
+            abs(second_ticks[0] - second_ticks[1]), decimals=self.constants.decimal_precision
         )
 
         tick_diff = len(first_ticks) * 2 - len(second_ticks)
@@ -178,14 +178,14 @@ class ImageMapper(TelescopeComponent):
                 [
                     np.around(
                         second_ticks[0] - dist_second,
-                        decimals=constants.decimal_precision,
+                        decimals=self.constants.decimal_precision,
                     )
                 ]
                 + second_ticks
                 + [
                     np.around(
                         second_ticks[-1] + dist_second,
-                        decimals=constants.decimal_precision,
+                        decimals=self.constants.decimal_precision,
                     )
                 ]
             )
@@ -195,14 +195,14 @@ class ImageMapper(TelescopeComponent):
                 [
                     np.around(
                         first_ticks[0] - dist_first,
-                        decimals=constants.decimal_precision,
+                        decimals=self.constants.decimal_precision,
                     )
                 ]
                 + first_ticks
                 + [
                     np.around(
                         first_ticks[-1] + dist_first,
-                        decimals=constants.decimal_precision,
+                        decimals=self.constants.decimal_precision,
                     )
                 ]
             )
@@ -211,7 +211,7 @@ class ImageMapper(TelescopeComponent):
             second_ticks.insert(
                 0,
                 np.around(
-                    second_ticks[0] - dist_second, decimals=constants.decimal_precision
+                    second_ticks[0] - dist_second, decimals=self.constants.decimal_precision
                 ),
             )
 
@@ -345,14 +345,14 @@ class ImageMapper(TelescopeComponent):
                 [
                     np.around(
                         grid_second[0] - dist_second,
-                        decimals=constants.decimal_precision,
+                        decimals=self.constants.decimal_precision,
                     )
                 ]
                 + grid_second
                 + [
                     np.around(
                         grid_second[-1] + dist_second,
-                        decimals=constants.decimal_precision,
+                        decimals=self.constants.decimal_precision,
                     )
                 ]
             )
@@ -362,7 +362,7 @@ class ImageMapper(TelescopeComponent):
             grid_second.insert(
                 0,
                 np.around(
-                    grid_second[0] - dist_second, decimals=constants.decimal_precision
+                    grid_second[0] - dist_second, decimals=self.constants.decimal_precision
                 ),
             )
 
@@ -426,7 +426,7 @@ class ImageMapper(TelescopeComponent):
         """Smooth the ticks needed for the 'DigiCam' and 'CHEC' cameras."""
         remove_val, change_val = [], []
         for i in range(len(ticks) - 1):
-            if abs(ticks[i] - ticks[i + 1]) <= constants.tick_interval_limit:
+            if abs(ticks[i] - ticks[i + 1]) <= self.constants.tick_interval_limit:
                 remove_val.append(ticks[i])
                 change_val.append(ticks[i + 1])
 
@@ -580,10 +580,10 @@ class AxialMapper(ImageMapper):
         )
 
         dist_first = np.around(
-            abs(first_ticks[0] - first_ticks[1]), decimals=constants.decimal_precision
+            abs(first_ticks[0] - first_ticks[1]), decimals=self.constants.decimal_precision
         )
         dist_second = np.around(
-            abs(second_ticks[0] - second_ticks[1]), decimals=constants.decimal_precision
+            abs(second_ticks[0] - second_ticks[1]), decimals=self.constants.decimal_precision
         )
 
         # manipulate y ticks with extra ticks
@@ -591,7 +591,7 @@ class AxialMapper(ImageMapper):
         for i in np.arange(num_extra_ticks):
             second_ticks.append(
                 np.around(
-                    second_ticks[-1] + dist_second, decimals=constants.decimal_precision
+                    second_ticks[-1] + dist_second, decimals=self.constants.decimal_precision
                 )
             )
         first_ticks = reversed(first_ticks)
@@ -611,7 +611,7 @@ class AxialMapper(ImageMapper):
                 grid_second.append(
                     np.around(
                         grid_second[-1] + dist_second,
-                        decimals=constants.decimal_precision,
+                        decimals=self.constants.decimal_precision,
                     )
                 )
         elif len(grid_first) < len(grid_second):
@@ -619,7 +619,7 @@ class AxialMapper(ImageMapper):
                 grid_first.append(
                     np.around(
                         grid_first[-1] + dist_first,
-                        decimals=constants.decimal_precision,
+                        decimals=self.constants.decimal_precision,
                     )
                 )
 
@@ -719,13 +719,13 @@ class ShiftingMapper(ImageMapper):
         for _ in np.arange(tick_diff_each_side):
             second_ticks.append(
                 np.around(
-                    second_ticks[-1] + dist_second, decimals=constants.decimal_precision
+                    second_ticks[-1] + dist_second, decimals=self.constants.decimal_precision
                 )
             )
             second_ticks.insert(
                 0,
                 np.around(
-                    second_ticks[0] - dist_second, decimals=constants.decimal_precision
+                    second_ticks[0] - dist_second, decimals=self.constants.decimal_precision
                 ),
             )
         # If tick_diff is odd, add one more tick to the beginning
@@ -733,7 +733,7 @@ class ShiftingMapper(ImageMapper):
             second_ticks.insert(
                 0,
                 np.around(
-                    second_ticks[0] - dist_second, decimals=constants.decimal_precision
+                    second_ticks[0] - dist_second, decimals=self.constants.decimal_precision
                 ),
             )
         # Create the input and output grid
