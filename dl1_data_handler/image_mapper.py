@@ -1,5 +1,5 @@
 """
-This module defines the ``ImageMapper`` classes, which holds the basic functionality for mapping raw 1D vectors into 2D mapped images.
+This module defines the ``ImageMapper`` classes that hold the basic functionality for mapping raw 1D vectors into 2D mapped images.
 """
 
 import numpy as np
@@ -22,10 +22,6 @@ __all__ = [
     "ShiftingMapper",
     "SquareMapper",
 ]
-
-# Constants for the ImageMapper classes
-Constants = namedtuple("Constants", ["decimal_precision", "tick_interval_limit"])
-constants = Constants(3, 0.002)
 
 class ImageMapper(TelescopeComponent):
     """
@@ -66,6 +62,10 @@ class ImageMapper(TelescopeComponent):
     map_image(raw_vector)
         Transform the raw 1D vector data into the 2D mapped image.
     """
+
+    # Constants for the ImageMapper classes
+    Constants = namedtuple("Constants", ["decimal_precision", "tick_interval_limit"])
+    constants = Constants(3, 0.002) 
 
     def __init__(
         self,
