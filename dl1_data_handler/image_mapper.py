@@ -357,8 +357,8 @@ class ImageMapper(TelescopeComponent):
                 ]
             )
         # Adjust for odd tick_diff
-        # TODO: Check why MAGICCam and VERITAS do not need this adjustment
-        if tick_diff % 2 != 0 and self.camera_type not in ["MAGICCam", "VERITAS"]:
+        # TODO: Check why MAGICCam, VERITAS, and UNKNOWN-7987PX (AdvCam) do not need this adjustment
+        if tick_diff % 2 != 0 and self.camera_type not in ["MAGICCam", "VERITAS", "UNKNOWN-7987PX"]:
             grid_second.insert(
                 0,
                 np.around(
