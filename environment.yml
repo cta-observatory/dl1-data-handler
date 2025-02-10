@@ -8,11 +8,11 @@ dependencies:
     - python>=3.10
     - astropy
     - setuptools
-    - numpy>=1.20
-    - scipy>=1.11
+    - numpy
+    - scipy
     - pip
-    - ctapipe>=0.23.0
-    - traitlets>=5.0
+    - ctapipe==0.23.2
+    - traitlets
     - pyyaml
     - pandas
     - pip:
