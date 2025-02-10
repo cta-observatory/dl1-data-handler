@@ -275,7 +275,7 @@ class DLDataReader(Component):
         self.subarray = SubarrayDescription.from_hdf(self.first_file)
         selected_tel_ids = None
         if self.allowed_tels is not None:
-            selected_tel_ids = np.array(self.allowed_tels, dtype=np.int16)
+            selected_tel_ids = np.array(list(self.allowed_tels), dtype=np.int16)
         else:
             if self.allowed_tel_types is not None:
                 selected_tel_ids = np.ravel(
