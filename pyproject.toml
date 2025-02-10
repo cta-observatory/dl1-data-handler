@@ -60,3 +60,9 @@ version_file = "dl1_data_handler/_version.py"
 
 [tool.pytest.ini_options]
 testpaths = ["dl1_data_handler"]
+
+norecursedirs = [
+    ".git",
+    "notebooks",
+    "build",
+]

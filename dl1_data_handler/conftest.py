@@ -7,7 +7,6 @@ import pytest
 
 from ctapipe.core import run_tool
 from ctapipe.utils import get_dataset_path
-from ctapipe.utils.filelock import FileLock
 
 @pytest.fixture(scope="session")
 def prod5_gamma_simtel_path():
@@ -32,19 +31,14 @@ def dl1_gamma_file(dl1_tmp_path, prod5_gamma_simtel_path):
 
     output = dl1_tmp_path / "gamma.dl1.h5"
 
-    # prevent running process multiple times in case of parallel tests
-    with FileLock(output.with_suffix(output.suffix + ".lock")):
-        if output.is_file():
-            return output
-
-        argv = [
-            f"--input={prod5_gamma_simtel_path}",
-            f"--output={output}",
-            "--write-images",
-            "--DataWriter.Contact.name=αℓℓ the äüöß",
-        ]
-        assert run_tool(ProcessorTool(), argv=argv, cwd=dl1_tmp_path) == 0
-        return output
+    argv = [
+        f"--input={prod5_gamma_simtel_path}",
+        f"--output={output}",
+        "--write-images",
+        "--DataWriter.Contact.name=αℓℓ the äüöß",
+    ]
+    assert run_tool(ProcessorTool(), argv=argv, cwd=dl1_tmp_path) == 0
+    return output
 
 @pytest.fixture(scope="session")
 def r1_gamma_file(r1_tmp_path, prod5_gamma_simtel_path):
@@ -55,16 +49,11 @@ def r1_gamma_file(r1_tmp_path, prod5_gamma_simtel_path):
 
     output = r1_tmp_path / "gamma.r1.h5"
 
-    # prevent running process multiple times in case of parallel tests
-    with FileLock(output.with_suffix(output.suffix + ".lock")):
-        if output.is_file():
-            return output
-
-        argv = [
-            f"--input={prod5_gamma_simtel_path}",
-            f"--output={output}",
-            f"--DataWriter.write_r1_waveforms=True",
-            "--DataWriter.Contact.name=αℓℓ the äüöß",
-        ]
-        assert run_tool(ProcessorTool(), argv=argv, cwd=r1_tmp_path) == 0
-        return output
+    argv = [
+        f"--input={prod5_gamma_simtel_path}",
+        f"--output={output}",
+        f"--DataWriter.write_r1_waveforms=True",
+        "--DataWriter.Contact.name=αℓℓ the äüöß",
+    ]
+    assert run_tool(ProcessorTool(), argv=argv, cwd=r1_tmp_path) == 0
+    return output
