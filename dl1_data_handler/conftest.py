@@ -19,6 +19,11 @@ def dl1_tmp_path(tmp_path_factory):
     return tmp_path_factory.mktemp("dl1_")
 
 @pytest.fixture(scope="session")
+def r1_tmp_path(tmp_path_factory):
+    """Temporary directory for global r1 test data"""
+    return tmp_path_factory.mktemp("r1_")
+
+@pytest.fixture(scope="session")
 def dl1_gamma_file(dl1_tmp_path, prod5_gamma_simtel_path):
     """
     DL1 file containing both images and parameters from a gamma simulation set.
@@ -39,4 +44,27 @@ def dl1_gamma_file(dl1_tmp_path, prod5_gamma_simtel_path):
             "--DataWriter.Contact.name=αℓℓ the äüöß",
         ]
         assert run_tool(ProcessorTool(), argv=argv, cwd=dl1_tmp_path) == 0
+        return output
+
+@pytest.fixture(scope="session")
+def r1_gamma_file(r1_tmp_path, prod5_gamma_simtel_path):
+    """
+    R1 file containing both waveforms and parameters from a gamma simulation set.
+    """
+    from ctapipe.tools.process import ProcessorTool
+
+    output = r1_tmp_path / "gamma.r1.h5"
+
+    # prevent running process multiple times in case of parallel tests
+    with FileLock(output.with_suffix(output.suffix + ".lock")):
+        if output.is_file():
+            return output
+
+        argv = [
+            f"--input={prod5_gamma_simtel_path}",
+            f"--output={output}",
+            f"--DataWriter.write_r1_waveforms=True",
+            "--DataWriter.Contact.name=αℓℓ the äüöß",
+        ]
+        assert run_tool(ProcessorTool(), argv=argv, cwd=r1_tmp_path) == 0
         return output
