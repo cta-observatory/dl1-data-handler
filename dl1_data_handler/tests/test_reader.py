@@ -21,7 +21,8 @@ def test_dl1_image_reading(dl1_tmp_path, dl1_gamma_file):
     mono_batch = dl1_reader.generate_mono_batch([0])
     assert mono_batch["tel_id"] == 4
     assert mono_batch["features"].shape == (1,  110, 110, 2)
-
+    # Close the files
+    dl1_reader.close_files()
 
 def test_r1_waveform_reading(r1_tmp_path, r1_gamma_file):
     """check reading from pixel-wise waveform data files"""
@@ -42,3 +43,5 @@ def test_r1_waveform_reading(r1_tmp_path, r1_gamma_file):
     mono_batch = r1_reader.generate_mono_batch([0])
     assert mono_batch["tel_id"] == 4
     assert mono_batch["features"].shape == (1,  110, 110, 20)
+    # Close the files
+    r1_reader.close_files()

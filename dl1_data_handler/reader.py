@@ -147,6 +147,8 @@ class DLDataReader(Component):
         Generate a batch of stereo events from list of indices.
     get_tel_pointing(file, tel_ids)
         Retrieve the telescope pointing information for the specified telescope IDs.
+    close_files()
+        Close all open files.
     """
 
     mode = CaselessStrEnum(
@@ -933,6 +935,11 @@ class DLDataReader(Component):
         # Sort the batch with the new rows of blank inputs
         batch.sort(["obs_id", "event_id", "tel_type_id", "tel_id"])
         return batch
+
+    def close_files(self):
+        """Close all open HDF5 files."""
+        for file in self.files.values():
+            file.close()
 
     @abstractmethod
     def _append_features(self, batch) -> Table:
