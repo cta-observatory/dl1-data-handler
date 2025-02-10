@@ -30,7 +30,6 @@ setup(
         "ctapipe==0.23.2",
         "traitlets",
         "jupyter",
-        "keras",
         "pandas",
         "pytest-cov",
         "tables",
