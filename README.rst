@@ -43,34 +43,13 @@ necessary package channels, and install dl1-data-handler specified version and i
 
 .. code-block:: bash
 
-   DL1DH_VER=0.12.0
+   DL1DH_VER=0.13.0
    wget https://raw.githubusercontent.com/cta-observatory/dl1-data-handler/v$DL1DH_VER/environment.yml
    conda env create -n [ENVIRONMENT_NAME] -f environment.yml
    conda activate [ENVIRONMENT_NAME]
    conda install -c ctlearn-project dl1_data_handler=$DL1DH_VER
 
 This should automatically install all dependencies (NOTE: this may take some time, as by default MKL is included as a dependency of NumPy and it is very large).
-
-
-Dependencies
-------------
-
-The main dependencies are:
-
-
-* PyTables >= 3.8
-* NumPy >= 1.20.0
-* ctapipe >= 0.23
-
-Also see setup.py.
-
-Usage
------
-
-ImageMapper
-^^^^^^^^^^^
-
-The ImageMapper class transforms the hexagonal input pixels into a 2D Cartesian output image. The basic usage is demonstrated in the `ImageMapper tutorial <https://github.com/cta-observatory/dl1-data-handler/blob/master/notebooks/test_image_mapper.ipynb>`_. It requires `ctapipe-extra <https://github.com/cta-observatory/ctapipe-extra>`_ outside of the dl1-data-handler. See this publication for a detailed description: `arXiv:1912.09898 <https://arxiv.org/abs/1912.09898>`_
 
 
 Links
