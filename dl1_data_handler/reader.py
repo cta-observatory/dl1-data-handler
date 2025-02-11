@@ -16,6 +16,7 @@ __all__ = [
 ]
 
 from abc import abstractmethod
+import atexit
 from collections import OrderedDict
 from enum import Enum
 import numpy as np
@@ -229,6 +230,8 @@ class DLDataReader(Component):
 
         super().__init__(config=config, parent=parent, **kwargs)
 
+        # Register the destructor to close all open files properly
+        atexit.register(self.__destructor)
         # Initialize the Table data quality query
         self.quality_query = TableQualityQuery(parent=self)
 
@@ -936,10 +939,13 @@ class DLDataReader(Component):
         batch.sort(["obs_id", "event_id", "tel_type_id", "tel_id"])
         return batch
 
-    def close_files(self):
-        """Close all open HDF5 files."""
-        for file in self.files.values():
-            file.close()
+    def __destructor(self):
+        """Destructor to ensure all opened HDF5 files are properly closed."""
+        if hasattr(self, "files"):  # Ensure self.files exists before attempting to close
+            for file_name in list(self.files.keys()):
+                if self.files[file_name].isopen:  # Check if file is still open
+                    self.files[file_name].close()
+
 
     @abstractmethod
     def _append_features(self, batch) -> Table:
