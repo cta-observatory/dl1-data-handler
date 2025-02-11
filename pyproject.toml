@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dl1_data_handler"
-description = "A package of utilities for reading, and applying image processing to Cherenkov Telescope Array (CTA) R0/R1/DL0/DL1 data in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data."
+description = "A package of utilities for reading, and applying image processing to Cherenkov Telescope Array (CTA) R1/DL0/DL1 data in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data."
 readme = "README.rst"
 license = {text = "BSD-3-Clause"}
 authors = [
@@ -27,14 +27,14 @@ classifiers = [
 
 requires-python = ">=3.10"
 dependencies = [
-    "ctapipe>=0.21.1",
+    "ctapipe==0.23.2",
     "astropy",
-    "numpy>=1.20",
+    "numpy",
     "pandas",
     "pip",
     "pyyaml",
-    "scipy>=1.11",
-    "traitlets>=5.0",
+    "scipy",
+    "traitlets",
     "pydot",
     "setuptools",
 ]
@@ -54,11 +54,15 @@ all = ["dl1_data_handler[doc]"]
 
 [project.urls]
 repository = "https://github.com/cta-observatory/dl1-data-handler"
-#documentation = "https://ctlearn.readthedocs.io/en/latest/"
-
-#[project.scripts]
-#ctlearn="ctlearn.run_model:main"
-#build_irf="ctlearn.build_irf:main"
 
 [tool.setuptools_scm]
 version_file = "dl1_data_handler/_version.py"
+
+[tool.pytest.ini_options]
+testpaths = ["dl1_data_handler"]
+
+norecursedirs = [
+    ".git",
+    "notebooks",
+    "build",
+]
