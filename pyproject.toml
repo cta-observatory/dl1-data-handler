@@ -30,7 +30,6 @@ dependencies = [
     "ctapipe==0.23.2",
     "astropy",
     "numpy",
-    "pandas",
     "pip",
     "pyyaml",
     "scipy",
