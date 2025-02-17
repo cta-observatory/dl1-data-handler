@@ -1478,7 +1478,59 @@ class DLWaveformReader(DLDataReader):
         batch.add_column(waveforms, name="features", index=7)
         return batch
 
+def get_trigger_patches(
+        trigger_settings,
+        image_shape):
+
+        trigger_patches_xpos = np.linspace(
+                                0,
+                                image_shape,
+                                num = trigger_settings["number_of_trigger_patches"] + 1,
+                                endpoint=False,
+                                dtype=int,
+                            )[1:]
+        trigger_patches_ypos = np.linspace(
+                                0,
+                                image_shape,
+                                num= trigger_settings["number_of_trigger_patches"] + 1,
+                                endpoint=False,
+                                dtype=int,
+                            )[1:]
+        trigger_settings["trigger_patch_size"] = [
+                                    trigger_patches_xpos[0] * 2,
+                                    trigger_patches_ypos[0] * 2,
+                                ]
+        trigger_settings["trigger_patches"] = []
+        for patches in np.array(np.meshgrid(trigger_patches_xpos, trigger_patches_ypos)).T:
+            for patch in patches:
+                trigger_settings["trigger_patches"].append({"x": patch[0], "y": patch[1]})
+
+        return trigger_settings, trigger_patches_xpos, trigger_patches_ypos
+
 class DLRawTriggerReader(DLWaveformReader):
+
+    output_settings = CaselessStrEnum(
+        ["waveform", "random_patch", "all_patches"],
+        default_value="waveform",
+        help=(
+            "Set the type of data in feature vector. "
+            "``waveform``: extract the sequence of samples selected for the complete camera. "
+            "``random_patch``: extract the sequence of samples selected for a random patch. "
+            "``all_patches``: extract the sequence of samples selected for all patches. "
+        ),
+    ).tag(config=True)
+    
+    number_of_trigger_patches = Int(
+        default_value=None,
+        allow_none=True,
+        help="Number of squared trigger patches in the mapped image.",
+    ).tag(config=True)
+
+    nsb_threshold = Int(
+        default_value=0,
+        allow_none=False,
+        help="Threshold in p.e. to consider a patch with nsb or cosmic.",
+    ).tag(config=True)
 
     def __init__(
         self,
@@ -1496,6 +1548,13 @@ class DLRawTriggerReader(DLWaveformReader):
             parent=parent,
             **kwargs,
         )
+
+        self.trigger_settings = {
+            "number_of_trigger_patches": self.number_of_trigger_patches
+        }
+        
+
+        self.waveform_settings["output_settings"] = self.output_settings
 
         with lock:
             wvf_table_v_attrs = (
@@ -1525,18 +1584,91 @@ class DLRawTriggerReader(DLWaveformReader):
                 child = self.files[filename].root.r0.event.telescope._f_get_child(
                     tel_table
                 )
+                true_image = self.files[filename].root.simulation.event.telescope.images._f_get_child(
+                    tel_table
+                ).col("true_image")[table_idx,:]
                 dl1_cleaning_mask = None
                 unmapped_waveform = get_unmapped_waveform(
                     child[table_idx],
                     self.waveform_settings,
                     self.image_mappers[camera_type].geometry,
                 )
+                mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
+                self.true_image_sum = np.sum(true_image)
+                true_image = np.expand_dims(
+                    np.array(true_image, dtype=int), axis=1
+                )
+                mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
+                integrated_waveform = np.sum(mapped_waveform, axis=2)
+                hot_spot = np.unravel_index(
+                    np.argmax(integrated_waveform, axis=None), integrated_waveform.shape
+                )
+                trigger_patch_center = {}
+                random_trigger_patch = None
+                if "random_patch" in self.output_settings:
+                    random_trigger_patch = np.random.choice(
+                        [False, True], p=[0.5, 0.5]
+                    )
+                    self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
+                        self.trigger_settings, self.image_mappers[self.cam_name].image_shape)
+                    patch_shape = self.trigger_settings["trigger_patch_size"][0]
+                if random_trigger_patch == True:
+                    counter = 0
+                    while counter < 10:
+                        n_patch = np.random.randint(
+                                len(
+                                    self.trigger_settings["trigger_patches"]
+                                )
+                        )
+                        random_center = self.trigger_settings["trigger_patches"][n_patch]
+                        trigger_patch_true_image_sum = np.sum(
+                            mapped_true_image[
+                                int(random_center["x"] - patch_shape / 2) : int(
+                                    random_center["x"] + patch_shape / 2
+                                ),
+                                int(random_center["y"] - patch_shape / 2) : int(
+                                    random_center["y"] + patch_shape / 2
+                                ),
+                                :,
+                            ],
+                            dtype=int,
+                        )
+                        counter+=1
+                        if (
+                            trigger_patch_true_image_sum < self.nsb_threshold
+                            or counter >= 10
+                        ):
+                            break
+                    trigger_patch_center = random_center
+                    mapped_waveform = mapped_waveform[
+                        int(trigger_patch_center["x"] - patch_shape / 2) : int(
+                            trigger_patch_center["x"] + patch_shape / 2
+                        ),
+                        int(trigger_patch_center["y"] - patch_shape / 2) : int(
+                            trigger_patch_center["y"] + patch_shape / 2
+                        ),
+                        :,
+                    ]
+                elif random_trigger_patch == False:
+                    trigger_patch_center["x"] = self.trigger_patches_xpos[np.argmin(
+                        np.abs(self.trigger_patches_xpos - hot_spot[0]))]
+                    trigger_patch_center["y"] = self.trigger_patches_ypos[np.argmin(
+                        np.abs(self.trigger_patches_ypos - hot_spot[1]))]
+                    mapped_waveform = mapped_waveform[
+                        int(trigger_patch_center["x"] - patch_shape / 2) : int(
+                            trigger_patch_center["x"] + patch_shape / 2
+                        ),
+                        int(trigger_patch_center["y"] - patch_shape / 2) : int(
+                            trigger_patch_center["y"] + patch_shape / 2
+                        ),
+                        :,
+                    ]
+                else:
+                    mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
             # Apply the 'ImageMapper' whenever the index matrix is not None.
             # Otherwise, return the unmapped image for the 'IndexedConv' package.
             if self.image_mappers[camera_type].index_matrix is None:
-                waveforms.append(
-                    self.image_mappers[camera_type].map_image(unmapped_waveform)
-                )
+                waveforms.append(mapped_waveform)
             else:
                 waveforms.append(unmapped_waveform)
         batch.add_column(waveforms, name="features", index=7)
