@@ -1253,15 +1253,15 @@ def get_unmapped_waveform(
         elif settings["seq_position"] == "maximum":
             sequence_position = np.argmax(np.sum(waveform, axis=0))
         # Calculate start and stop positions
-        start = max(0, int(1 + sequence_position - settings["seq_length"] / 2))
-        stop = min(
-            settings["readout_length"],
-            int(1 + sequence_position + settings["seq_length"] / 2),
-        )
+        start = int(1 + sequence_position - settings["seq_length"] / 2)
+        stop =  int(1 + sequence_position + settings["seq_length"] / 2)
         # Adjust the start and stop if bound overflows
         if stop > settings["readout_length"]:
             start -= stop - settings["readout_length"]
             stop = settings["readout_length"]
+        elif start < 0:
+            stop -= start
+            start = 0
         # Crop the unmapped waveform in samples
         waveform = waveform[:, int(start) : int(stop)]
     return waveform
