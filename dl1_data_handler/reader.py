@@ -219,6 +219,10 @@ class DLDataReader(Component):
         ),
     ).tag(config=True)
 
+    quality_cuts = Bool(
+        default_value=True,
+        help="Require quality cuts by ``TableQualityQuery``. False for nsb trigger.").tag(config=True)
+
     def __init__(
         self,
         input_url_signal,
@@ -233,7 +237,10 @@ class DLDataReader(Component):
         # Register the destructor to close all open files properly
         atexit.register(self.__destructor)
         # Initialize the Table data quality query
-        self.quality_query = TableQualityQuery(parent=self)
+        if self.quality_cuts:
+            self.quality_query = TableQualityQuery(parent=self)
+        else:
+            self.quality_query = None
 
         # Construct dict of filename:file_handle pairs of an ordered file list
         self.input_url_signal = input_url_signal
