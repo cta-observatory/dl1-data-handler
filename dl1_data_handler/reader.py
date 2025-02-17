@@ -11,6 +11,7 @@ __all__ = [
     "DLWaveformReader",
     "get_unmapped_waveform",
     "clean_waveform",
+    "DLRawTriggerReader",
     "DLFeatureVectorReader",
     "get_feature_vectors",
 ]
@@ -1465,6 +1466,70 @@ class DLWaveformReader(DLDataReader):
                     self.waveform_settings,
                     self.image_mappers[camera_type].geometry,
                     dl1_cleaning_mask,
+                )
+            # Apply the 'ImageMapper' whenever the index matrix is not None.
+            # Otherwise, return the unmapped image for the 'IndexedConv' package.
+            if self.image_mappers[camera_type].index_matrix is None:
+                waveforms.append(
+                    self.image_mappers[camera_type].map_image(unmapped_waveform)
+                )
+            else:
+                waveforms.append(unmapped_waveform)
+        batch.add_column(waveforms, name="features", index=7)
+        return batch
+
+class DLRawTriggerReader(DLWaveformReader):
+
+    def __init__(
+        self,
+        input_url_signal,
+        input_url_background=[],
+        config=None,
+        parent=None,
+        **kwargs,
+    ):
+
+        super().__init__(
+            input_url_signal=input_url_signal,
+            input_url_background=input_url_background,
+            config=config,
+            parent=parent,
+            **kwargs,
+        )
+
+        with lock:
+            wvf_table_v_attrs = (
+                self.files[self.first_file]
+                .root.r0.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
+                ._v_attrs
+            )
+        if "CTAFIELD_5_TRANSFORM_SCALE" in wvf_table_v_attrs:
+            self.waveform_settings["waveform_scale"] = wvf_table_v_attrs[
+                "CTAFIELD_5_TRANSFORM_SCALE"
+            ]
+            self.waveform_settings["waveform_offset"] = wvf_table_v_attrs[
+                "CTAFIELD_5_TRANSFORM_OFFSET"
+            ]
+
+    def _append_features(self, batch) -> Table:
+        waveforms = []
+        for file_idx, table_idx, tel_type_id, tel_id in batch.iterrows(
+            "file_index", "table_index", "tel_type_id", "tel_id"
+        ):
+            filename = list(self.files)[file_idx]
+            camera_type = self._get_camera_type(
+                list(self.selected_telescopes.keys())[tel_type_id]
+            )
+            with lock:
+                tel_table = f"tel_{tel_id:03d}"
+                child = self.files[filename].root.r0.event.telescope._f_get_child(
+                    tel_table
+                )
+                dl1_cleaning_mask = None
+                unmapped_waveform = get_unmapped_waveform(
+                    child[table_idx],
+                    self.waveform_settings,
+                    self.image_mappers[camera_type].geometry,
                 )
             # Apply the 'ImageMapper' whenever the index matrix is not None.
             # Otherwise, return the unmapped image for the 'IndexedConv' package.
