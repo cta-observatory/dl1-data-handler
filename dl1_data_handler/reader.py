@@ -1510,13 +1510,14 @@ def get_trigger_patches(
 class DLRawTriggerReader(DLWaveformReader):
 
     output_settings = CaselessStrEnum(
-        ["waveform", "random_patch", "all_patches"],
+        ["waveform", "random_patch", "all_patches", "hot_patch"],
         default_value="waveform",
         help=(
             "Set the type of data in feature vector. "
             "``waveform``: extract the sequence of samples selected for the complete camera. "
             "``random_patch``: extract the sequence of samples selected for a random patch. "
             "``all_patches``: extract the sequence of samples selected for all patches. "
+            "``hot_patch``: extract the sequence of selected samples for the patch with the higher pixel charge. "
         ),
     ).tag(config=True)
     
@@ -1572,6 +1573,7 @@ class DLRawTriggerReader(DLWaveformReader):
 
     def _append_features(self, batch) -> Table:
         waveforms = []
+        true_image_sums = []
         for file_idx, table_idx, tel_type_id, tel_id in batch.iterrows(
             "file_index", "table_index", "tel_type_id", "tel_id"
         ):
@@ -1599,12 +1601,19 @@ class DLRawTriggerReader(DLWaveformReader):
                     np.array(true_image, dtype=int), axis=1
                 )
                 mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
-                integrated_waveform = np.sum(mapped_waveform, axis=2)
+                integrated_waveform = np.sum(
+                    mapped_waveform, axis=2
+                )
                 hot_spot = np.unravel_index(
                     np.argmax(integrated_waveform, axis=None), integrated_waveform.shape
                 )
                 trigger_patch_center = {}
                 random_trigger_patch = None
+                if "hot_patch" in self.output_settings:
+                    random_trigger_patch = False
+                    self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
+                        self.trigger_settings, self.image_mappers[self.cam_name].image_shape)
+                    patch_shape = self.trigger_settings["trigger_patch_size"][0]
                 if "random_patch" in self.output_settings:
                     random_trigger_patch = np.random.choice(
                         [False, True], p=[0.5, 0.5]
@@ -1663,15 +1672,35 @@ class DLRawTriggerReader(DLWaveformReader):
                         ),
                         :,
                     ]
+                    trigger_patch_true_image_sum = np.sum(
+                            mapped_true_image[
+                                int(trigger_patch_center["x"] - patch_shape / 2) : int(
+                                    trigger_patch_center["x"] + patch_shape / 2
+                                ),
+                                int(trigger_patch_center["y"] - patch_shape / 2) : int(
+                                    trigger_patch_center["y"] + patch_shape / 2
+                                ),
+                                :,
+                            ],
+                            dtype=int,
+                        )
                 else:
                     mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
+                    trigger_patch_true_image_sum = np.sum(
+                            mapped_true_image[:,:
+                                :,
+                            ],
+                            dtype=int,
+                        )
             # Apply the 'ImageMapper' whenever the index matrix is not None.
             # Otherwise, return the unmapped image for the 'IndexedConv' package.
             if self.image_mappers[camera_type].index_matrix is None:
                 waveforms.append(mapped_waveform)
+                true_image_sums.append(trigger_patch_true_image_sum)
             else:
                 waveforms.append(unmapped_waveform)
         batch.add_column(waveforms, name="features", index=7)
+        batch.add_column(true_image_sums, name="cherenkov_pe", index=8)
         return batch
 
 
