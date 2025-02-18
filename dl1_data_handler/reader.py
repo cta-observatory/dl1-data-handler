@@ -1552,9 +1552,8 @@ class DLRawTriggerReader(DLWaveformReader):
 
         self.trigger_settings = {
             "number_of_trigger_patches": self.number_of_trigger_patches
+            "nsb_threshold": self.nsb_threshold
         }
-        
-
         self.waveform_settings["output_settings"] = self.output_settings
 
         with lock:
@@ -1609,70 +1608,59 @@ class DLRawTriggerReader(DLWaveformReader):
                 )
                 trigger_patch_center = {}
                 random_trigger_patch = None
-                if "hot_patch" in self.output_settings:
-                    random_trigger_patch = False
+                
+                if "waveform" in self.output_settings:
+                    mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
+                    trigger_patch_true_image_sum = self.true_image_sum
+                else:
                     self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
-                        self.trigger_settings, self.image_mappers[self.cam_name].image_shape)
-                    patch_shape = self.trigger_settings["trigger_patch_size"][0]
-                if "random_patch" in self.output_settings:
-                    random_trigger_patch = np.random.choice(
-                        [False, True], p=[0.5, 0.5]
+                        self.trigger_settings, self.image_mappers[self.cam_name].image_shape
                     )
-                    self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
-                        self.trigger_settings, self.image_mappers[self.cam_name].image_shape)
                     patch_shape = self.trigger_settings["trigger_patch_size"][0]
-                if random_trigger_patch == True:
-                    counter = 0
-                    while counter < 10:
-                        n_patch = np.random.randint(
+
+                    if "hot_patch" in self.output_settings:
+                        random_trigger_patch = False
+                    
+                    if "random_patch" in self.output_settings:
+                        random_trigger_patch = np.random.choice(
+                            [False, True], p=[0.5, 0.5]
+                        )
+                    if random_trigger_patch == True:
+                        counter = 0
+                        while counter < 10:
+                            n_patch = np.random.randint(
                                 len(
                                     self.trigger_settings["trigger_patches"]
                                 )
-                        )
-                        random_center = self.trigger_settings["trigger_patches"][n_patch]
+                            )
+                            random_center = self.trigger_settings["trigger_patches"][n_patch]
+                            trigger_patch_true_image_sum = np.sum(
+                                mapped_true_image[
+                                    int(random_center["x"] - patch_shape / 2) : int(
+                                        random_center["x"] + patch_shape / 2
+                                    ),
+                                    int(random_center["y"] - patch_shape / 2) : int(
+                                        random_center["y"] + patch_shape / 2
+                                    ),
+                                    :,
+                                ],
+                                dtype=int,
+                            )
+                            counter+=1
+                            if (
+                                    trigger_patch_true_image_sum < self.nsb_threshold
+                                    or counter >= 10
+                            ):
+                                break
+                        trigger_patch_center = random_center
+                    elif random_trigger_patch == False:
+                        trigger_patch_center["x"] = self.trigger_patches_xpos[np.argmin(
+                            np.abs(self.trigger_patches_xpos - hot_spot[0])
+                        )]
+                        trigger_patch_center["y"] = self.trigger_patches_ypos[np.argmin(
+                            np.abs(self.trigger_patches_ypos - hot_spot[1])
+                        )]
                         trigger_patch_true_image_sum = np.sum(
-                            mapped_true_image[
-                                int(random_center["x"] - patch_shape / 2) : int(
-                                    random_center["x"] + patch_shape / 2
-                                ),
-                                int(random_center["y"] - patch_shape / 2) : int(
-                                    random_center["y"] + patch_shape / 2
-                                ),
-                                :,
-                            ],
-                            dtype=int,
-                        )
-                        counter+=1
-                        if (
-                            trigger_patch_true_image_sum < self.nsb_threshold
-                            or counter >= 10
-                        ):
-                            break
-                    trigger_patch_center = random_center
-                    mapped_waveform = mapped_waveform[
-                        int(trigger_patch_center["x"] - patch_shape / 2) : int(
-                            trigger_patch_center["x"] + patch_shape / 2
-                        ),
-                        int(trigger_patch_center["y"] - patch_shape / 2) : int(
-                            trigger_patch_center["y"] + patch_shape / 2
-                        ),
-                        :,
-                    ]
-                elif random_trigger_patch == False:
-                    trigger_patch_center["x"] = self.trigger_patches_xpos[np.argmin(
-                        np.abs(self.trigger_patches_xpos - hot_spot[0]))]
-                    trigger_patch_center["y"] = self.trigger_patches_ypos[np.argmin(
-                        np.abs(self.trigger_patches_ypos - hot_spot[1]))]
-                    mapped_waveform = mapped_waveform[
-                        int(trigger_patch_center["x"] - patch_shape / 2) : int(
-                            trigger_patch_center["x"] + patch_shape / 2
-                        ),
-                        int(trigger_patch_center["y"] - patch_shape / 2) : int(
-                            trigger_patch_center["y"] + patch_shape / 2
-                        ),
-                        :,
-                    ]
-                    trigger_patch_true_image_sum = np.sum(
                             mapped_true_image[
                                 int(trigger_patch_center["x"] - patch_shape / 2) : int(
                                     trigger_patch_center["x"] + patch_shape / 2
@@ -1684,14 +1672,15 @@ class DLRawTriggerReader(DLWaveformReader):
                             ],
                             dtype=int,
                         )
-                else:
-                    mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
-                    trigger_patch_true_image_sum = np.sum(
-                            mapped_true_image[:,:
-                                :,
-                            ],
-                            dtype=int,
-                        )
+                    mapped_waveform = mapped_waveform[
+                            int(trigger_patch_center["x"] - patch_shape / 2) : int(
+                                trigger_patch_center["x"] + patch_shape / 2
+                            ),
+                            int(trigger_patch_center["y"] - patch_shape / 2) : int(
+                                trigger_patch_center["y"] + patch_shape / 2
+                            ),
+                            :,
+                        ]
             # Apply the 'ImageMapper' whenever the index matrix is not None.
             # Otherwise, return the unmapped image for the 'IndexedConv' package.
             if self.image_mappers[camera_type].index_matrix is None:
