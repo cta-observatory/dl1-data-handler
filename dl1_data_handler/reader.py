@@ -1533,6 +1533,11 @@ class DLRawTriggerReader(DLWaveformReader):
         help="Threshold in p.e. to consider a patch with nsb or cosmic.",
     ).tag(config=True)
 
+    hot_pixel_from_simulation = Bool(
+        default_value=True,
+        help="Getting hot pixel index from simulation or pixel with highest integrated signal",
+    ).tag(config=True)
+
     def __init__(
         self,
         input_url_signal,
@@ -1551,7 +1556,7 @@ class DLRawTriggerReader(DLWaveformReader):
         )
 
         self.trigger_settings = {
-            "number_of_trigger_patches": self.number_of_trigger_patches
+            "number_of_trigger_patches": self.number_of_trigger_patches,
             "nsb_threshold": self.nsb_threshold
         }
         self.waveform_settings["output_settings"] = self.output_settings
@@ -1603,9 +1608,14 @@ class DLRawTriggerReader(DLWaveformReader):
                 integrated_waveform = np.sum(
                     mapped_waveform, axis=2
                 )
-                hot_spot = np.unravel_index(
-                    np.argmax(integrated_waveform, axis=None), integrated_waveform.shape
-                )
+                if self.hot_pixel_from_simulation == False:
+                    hot_spot = np.unravel_index(
+                        np.argmax(integrated_waveform, axis=None), integrated_waveform.shape
+                    )
+                if self.hot_pixel_from_simulation == True:
+                    hot_spot = np.unravel_index(
+                        np.argmax(mapped_true_image, axis=None), integrated_waveform.shape
+                    )
                 trigger_patch_center = {}
                 random_trigger_patch = None
                 
@@ -1625,9 +1635,11 @@ class DLRawTriggerReader(DLWaveformReader):
                         random_trigger_patch = np.random.choice(
                             [False, True], p=[0.5, 0.5]
                         )
+                        print(random_trigger_patch)
                     if random_trigger_patch == True:
                         counter = 0
-                        while counter < 10:
+                        trigger_patch_true_image_sum = 1000 #dummy value
+                        while (counter < 10 or trigger_patch_true_image_sum > self.nsb_threshold):
                             n_patch = np.random.randint(
                                 len(
                                     self.trigger_settings["trigger_patches"]
@@ -1647,11 +1659,6 @@ class DLRawTriggerReader(DLWaveformReader):
                                 dtype=int,
                             )
                             counter+=1
-                            if (
-                                    trigger_patch_true_image_sum < self.nsb_threshold
-                                    or counter >= 10
-                            ):
-                                break
                         trigger_patch_center = random_center
                     elif random_trigger_patch == False:
                         trigger_patch_center["x"] = self.trigger_patches_xpos[np.argmin(
