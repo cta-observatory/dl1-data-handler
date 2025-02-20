@@ -501,7 +501,15 @@ class DLDataReader(Component):
                     right=tel_pointing,
                     keys=["obs_id", "tel_id"],
                 )
-                events = self._transform_to_spherical_offsets(events)
+                events = self._transform_to_cam_coord_offsets(events)
+                array_pointing = self._get_array_pointing(f)
+                # Join the prediction table with the telescope pointing table
+                events = join(
+                    left=events,
+                    right=array_pointing,
+                    keys=["obs_id"],
+                )
+                events = self._transform_to_sky_spher_offsets(events)
                 # Add the logarithm of the true energy in TeV
                 events = self._transform_to_log_energy(events)
                 # Add the true shower primary class to the table based on the filename
@@ -657,19 +665,13 @@ class DLDataReader(Component):
                 simulation_info_table = read_table(f, "/configuration/simulation/run")
                 # Append the simulation information to the list of simulation information
                 simulation_info.append(simulation_info_table)
-                # Assuming min_az = max_az and min_alt = max_alt
-                fix_array_pointing = simulation_info_table.copy()
-                fix_array_pointing.keep_columns(["obs_id", "min_az", "min_alt"])
-                fix_array_pointing.rename_column("min_az", "pointing_azimuth")
-                fix_array_pointing.rename_column("min_alt", "pointing_altitude")
+                array_pointing = self._get_array_pointing(f)
                 # Join the prediction table with the telescope pointing table
                 events = join(
                     left=events,
-                    right=fix_array_pointing,
+                    right=array_pointing,
                     keys=["obs_id"],
                 )
-                # TODO: use keep_order for astropy v7.0.0
-                events.sort(["obs_id", "event_id"])
                 events = self._transform_to_sky_spher_offsets(events)
             # Appending the events to the list of example identifiers
             example_identifiers.append(events)
@@ -716,8 +718,7 @@ class DLDataReader(Component):
         Returns:
         --------
         tel_pointing : astropy.table.Table
-            A dictionary with telescope IDs as keys and their corresponding
-            pointing information (azimuth and altitude) as values.
+            A table containing pointing information (azimuth and altitude) for each telescope.
         """
         tel_pointing = []
         for tel_id in tel_ids:
@@ -729,6 +730,32 @@ class DLDataReader(Component):
                     )
                 )
         return vstack(tel_pointing)
+
+    def get_array_pointing(self, file) -> Table
+        """
+        Retrieve the array pointing information.
+
+        This method extracts the array pointing information (azimuth and altitude)
+        from the provided file.
+
+        Parameters:
+        -----------
+        file : str
+            Path to the file containing the array pointing data.
+
+        Returns:
+        --------
+        array_pointing : astropy.table.Table
+            A table containing array pointing information (azimuth and altitude).
+        """
+        # Read simulation information for each observation
+        array_ppointing = read_table(file, "/configuration/simulation/run")
+        # Assuming min_az = max_az and min_alt = max_alt
+        array_pointing = simulation_info_table.copy()
+        array_pointing.keep_columns(["obs_id", "min_az", "min_alt"])
+        array_pointing.rename_column("min_az", "pointing_azimuth")
+        array_pointing.rename_column("min_alt", "pointing_altitude")
+        return array_pointing
 
     def _transform_to_log_energy(self, table):
         """
