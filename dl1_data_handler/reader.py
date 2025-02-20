@@ -853,8 +853,8 @@ class DLDataReader(Component):
             location=self.subarray.reference_location,
             obstime=LST_EPOCH,
         )
-        sky_offset = fix_pointing.spherical_offsets_to(true_direction)
-        angular_separation = fix_pointing.separation(true_direction)
+        sky_offset = fix_array_pointing.spherical_offsets_to(true_direction)
+        angular_separation = fix_array_pointing.separation(true_direction)
         table.add_column(sky_offset[0], name="sky_offset_lon")
         table.add_column(sky_offset[1], name="sky_offset_lat")
         table.add_column(angular_separation, name="sky_angular_separation")
