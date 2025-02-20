@@ -865,7 +865,10 @@ class DLDataReader(Component):
         if not isinstance(batch, Table):
             batch = Table(rows=batch)
         # Append the features from child classes to the batch
-        batch = self._append_features(batch)
+        if "all_patches" in self.output_settings:
+            batch = self.get_balanced_patches(batch)
+        else:
+            batch = self._append_features(batch)
         return batch
 
     def generate_stereo_batch(self, batch_indices) -> Table:
@@ -959,6 +962,9 @@ class DLDataReader(Component):
     def _append_features(self, batch) -> Table:
         pass
 
+    @abstractmethod
+    def get_balanced_patches(self, batch) -> Table:
+        pass
 
 def get_unmapped_image(dl1_event, channels, transforms) -> np.ndarray:
     """
@@ -1506,6 +1512,8 @@ def get_trigger_patches(
                 trigger_settings["trigger_patches"].append({"x": patch[0], "y": patch[1]})
 
         return trigger_settings, trigger_patches_xpos, trigger_patches_ypos
+    
+
 
 class DLRawTriggerReader(DLWaveformReader):
 
@@ -1574,6 +1582,101 @@ class DLRawTriggerReader(DLWaveformReader):
             self.waveform_settings["waveform_offset"] = wvf_table_v_attrs[
                 "CTAFIELD_5_TRANSFORM_OFFSET"
             ]
+    def get_balanced_patches(self, batch):
+        patches_indexes = []
+        patches_waveforms = []
+        cherenkov = []
+        file_index = []
+        table_index = []
+        self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
+            self.trigger_settings, self.image_mappers[self.cam_name].image_shape
+        )
+        patch_shape = self.trigger_settings["trigger_patch_size"][0]
+        for file_idx, table_idx, tel_type_id, tel_id in batch.iterrows(
+            "file_index", "table_index", "tel_type_id", "tel_id"
+        ):
+            filename = list(self.files)[file_idx]
+            camera_type = self._get_camera_type(
+                list(self.selected_telescopes.keys())[tel_type_id]
+            )
+            with lock:
+                tel_table = f"tel_{tel_id:03d}"
+                child = self.files[filename].root.r0.event.telescope._f_get_child(
+                    tel_table
+                )
+                true_image = self.files[filename].root.simulation.event.telescope.images._f_get_child(
+                    tel_table
+                ).col("true_image")[table_idx,:]
+                true_image = np.expand_dims(
+                    np.array(true_image, dtype=int), axis=1
+                )
+                mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
+                unmapped_waveform = get_unmapped_waveform(
+                    child[table_idx],
+                    self.waveform_settings,
+                    self.image_mappers[camera_type].geometry,
+                )
+                mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
+                temp_patches = []
+                temp_index_nsb = []
+                temp_index_cosmic = []
+                temp_chkov = []
+                temp_table_index = []
+                temp_file_index = []
+                for n in range(len(self.trigger_settings["trigger_patches"])):
+                    center = self.trigger_settings["trigger_patches"][n]
+                    chkov_per_patch = np.sum(
+                        mapped_true_image[
+                            int(center["x"] - patch_shape / 2) : int(
+                                center["x"] + patch_shape / 2
+                            ),
+                            int(center["y"] - patch_shape / 2) : int(
+                                center["y"] + patch_shape / 2
+                            ),
+                            :,
+                        ],
+                        dtype=int,
+                    )
+                    mapped_patch = mapped_waveform[
+                        int(center["x"] - patch_shape / 2) : int(
+                            center["x"] + patch_shape / 2
+                        ),
+                        int(center["y"] - patch_shape / 2) : int(
+                            center["y"] + patch_shape / 2
+                        ),
+                        :,
+                    ]
+                    temp_patches.append(mapped_patch)
+                    temp_chkov.append(chkov_per_patch)
+                    if chkov_per_patch <= self.nsb_threshold:
+                        temp_index_nsb.append(n)
+                    else:
+                        temp_index_cosmic.append(n)
+                comparator = min(len(temp_index_nsb), len(temp_index_cosmic))
+                temp_index_nsb = temp_index_nsb[:comparator]
+                temp_index_cosmic = temp_index_cosmic[:comparator]
+                for i in temp_index_cosmic:
+                    patches_waveforms.append(temp_patches[i])
+                    cherenkov.append(temp_chkov[i])
+                    patches_indexes.append(i)
+                    temp_file_index.append(file_idx)
+                    temp_table_index.append(table_idx)
+                for i in temp_index_nsb:
+                    patches_waveforms.append(temp_patches[i])
+                    cherenkov.append(temp_chkov[i])
+                    patches_indexes.append(i)
+                    temp_file_index.append(file_idx)
+                    temp_table_index.append(table_idx)
+                file_index.extend(temp_file_index)
+                table_index.extend(temp_table_index)
+        table_patches = Table([file_index, table_index, patches_indexes, patches_waveforms, cherenkov],
+                              names = ["file_index", "table_index", "patch_index", "patch_waveform", "cherenkov_pe"])
+        batch = join(
+            left=batch,
+            right=table_patches,
+            keys=["file_index", "table_index"],
+        )
+        return(batch)
 
     def _append_features(self, batch) -> Table:
         waveforms = []
@@ -1618,7 +1721,6 @@ class DLRawTriggerReader(DLWaveformReader):
                     )
                 trigger_patch_center = {}
                 random_trigger_patch = None
-                
                 if "waveform" in self.output_settings:
                     mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
                     trigger_patch_true_image_sum = self.true_image_sum
@@ -1627,7 +1729,6 @@ class DLRawTriggerReader(DLWaveformReader):
                         self.trigger_settings, self.image_mappers[self.cam_name].image_shape
                     )
                     patch_shape = self.trigger_settings["trigger_patch_size"][0]
-
                     if "hot_patch" in self.output_settings:
                         random_trigger_patch = False
                     
