@@ -749,7 +749,7 @@ class DLDataReader(Component):
             A table containing array pointing information (azimuth and altitude).
         """
         # Read simulation information for each observation
-        array_ppointing = read_table(file, "/configuration/simulation/run")
+        array_pointing = read_table(file, "/configuration/simulation/run")
         # Assuming min_az = max_az and min_alt = max_alt
         array_pointing = simulation_info_table.copy()
         array_pointing.keep_columns(["obs_id", "min_az", "min_alt"])
