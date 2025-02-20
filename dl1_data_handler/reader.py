@@ -751,7 +751,6 @@ class DLDataReader(Component):
         # Read simulation information for each observation
         array_pointing = read_table(file, "/configuration/simulation/run")
         # Assuming min_az = max_az and min_alt = max_alt
-        array_pointing = simulation_info_table.copy()
         array_pointing.keep_columns(["obs_id", "min_az", "min_alt"])
         array_pointing.rename_column("min_az", "pointing_azimuth")
         array_pointing.rename_column("min_alt", "pointing_altitude")
