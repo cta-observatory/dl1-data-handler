@@ -580,6 +580,10 @@ class DLDataReader(Component):
             # Read the trigger table.
             trigger_table = read_table(f, "/dl1/event/subarray/trigger")
             if self.process_type == ProcessType.Simulation:
+                # Read simulation information for each observation
+                simulation_info_table = read_table(f, "/configuration/simulation/run")
+                # Append the simulation information to the list of simulation information
+                simulation_info.append(simulation_info_table)
                 # Construct the shower simulation table
                 simshower_table = read_table(f, "/simulation/event/subarray/shower")
                 # The shower simulation table is joined with the subarray trigger table.
@@ -661,10 +665,6 @@ class DLDataReader(Component):
                 events.add_column(
                     true_shower_primary_class, name="true_shower_primary_class"
                 )
-                # Read simulation information for each observation
-                simulation_info_table = read_table(f, "/configuration/simulation/run")
-                # Append the simulation information to the list of simulation information
-                simulation_info.append(simulation_info_table)
                 array_pointing = self._get_array_pointing(f)
                 # Join the prediction table with the telescope pointing table
                 events = join(
