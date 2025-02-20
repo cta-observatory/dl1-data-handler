@@ -731,7 +731,7 @@ class DLDataReader(Component):
                 )
         return vstack(tel_pointing)
 
-    def get_array_pointing(self, file) -> Table
+    def get_array_pointing(self, file) -> Table:
         """
         Retrieve the array pointing information.
 
