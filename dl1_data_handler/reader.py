@@ -502,7 +502,7 @@ class DLDataReader(Component):
                     keys=["obs_id", "tel_id"],
                 )
                 events = self._transform_to_cam_coord_offsets(events)
-                array_pointing = self._get_array_pointing(f)
+                array_pointing = self.get_array_pointing(f)
                 # Join the prediction table with the telescope pointing table
                 events = join(
                     left=events,
@@ -665,7 +665,7 @@ class DLDataReader(Component):
                 events.add_column(
                     true_shower_primary_class, name="true_shower_primary_class"
                 )
-                array_pointing = self._get_array_pointing(f)
+                array_pointing = self.get_array_pointing(f)
                 # Join the prediction table with the telescope pointing table
                 events = join(
                     left=events,
@@ -797,16 +797,6 @@ class DLDataReader(Component):
         tel_tables = []
         for tel_id in self.tel_ids:
             tel_table = table.copy()
-            tel_table.keep_columns(
-                [
-                    "obs_id",
-                    "tel_id",
-                    "true_alt",
-                    "true_az",
-                    "telescope_pointing_azimuth",
-                    "telescope_pointing_altitude",
-                ]
-            )
             tel_table = tel_table[tel_table["tel_id"] == tel_id]
             # Set the telescope pointing of the SkyOffsetSeparation tranform to the fix pointing
             tel_ground_frame = self.subarray.tel_coords[
@@ -834,6 +824,7 @@ class DLDataReader(Component):
             true_cam_distance = np.sqrt(
                 true_cam_position.x**2 + true_cam_position.y**2
             )
+            tel_table.keep_columns(["obs_id", "tel_id"])
             tel_table.add_column(true_cam_position.x, name="cam_coord_offset_x")
             tel_table.add_column(true_cam_position.y, name="cam_coord_offset_y")
             tel_table.add_column(true_cam_distance, name="cam_coord_distance")
