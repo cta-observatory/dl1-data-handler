@@ -1660,6 +1660,7 @@ class DLRawTriggerReader(DLWaveformReader):
     def _append_features(self, batch) -> Table:
         waveforms = []
         true_image_sums = []
+        waveforms_all = []
         for file_idx, table_idx, tel_type_id, tel_id in batch.iterrows(
             "file_index", "table_index", "tel_type_id", "tel_id"
         ):
@@ -1710,8 +1711,18 @@ class DLRawTriggerReader(DLWaveformReader):
                     patch_shape = self.trigger_settings["trigger_patch_size"][0]
 
                     if "all_patches" in self.output_settings:
-                        for patch_idx in batch.iterrows("patch_index")
-
+                        for patch_idx in batch.iterrows("patch_index"):
+                            trigger_patch_center = self.trigger_settings["trigger_patches"][patch_idx]
+                            mapped_waveform = mapped_waveform[
+                                int(trigger_patch_center["x"] - patch_shape / 2) : int(
+                                    trigger_patch_center["x"] + patch_shape / 2
+                                ),
+                                int(trigger_patch_center["y"] - patch_shape / 2) : int(
+                                    trigger_patch_center["y"] + patch_shape / 2
+                                ),
+                                :,
+                            ]
+                            waveforms_all.append(mapped_waveform)
                     if "hot_patch" in self.output_settings:
                         random_trigger_patch = False
                     
@@ -1774,13 +1785,16 @@ class DLRawTriggerReader(DLWaveformReader):
                         ]
             # Apply the 'ImageMapper' whenever the index matrix is not None.
             # Otherwise, return the unmapped image for the 'IndexedConv' package.
-            if self.image_mappers[camera_type].index_matrix is None:
+            if self.image_mappers[camera_type].index_matrix is None and self.output_settings  != "all_patches":
                 waveforms.append(mapped_waveform)
                 true_image_sums.append(trigger_patch_true_image_sum)
             else:
                 waveforms.append(unmapped_waveform)
-        batch.add_column(waveforms, name="features", index=7)
-        batch.add_column(true_image_sums, name="cherenkov_pe", index=8)
+        if "all_patches" in self.output_settings:
+            batch.add_column(waveforms_all, name="waveform")
+        else:
+            batch.add_column(waveforms, name="features", index=7)
+            batch.add_column(true_image_sums, name="cherenkov_pe", index=8)
         return batch
 
 
