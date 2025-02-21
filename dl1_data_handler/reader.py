@@ -842,10 +842,8 @@ class DLDataReader(Component):
         table = join(
             left=table,
             right=tel_tables,
-            keys=["obs_id", "event_id", "tel_id"],
+            keys=["obs_id", "tel_id"],
         )
-        # TODO: use keep_order for astropy v7.0.0
-        table.sort(["obs_id", "event_id", "tel_id"])
         return table
 
     def _transform_to_sky_spher_offsets(self, table) -> Table:
