@@ -1708,7 +1708,8 @@ class DLRawTriggerReader(DLWaveformReader):
                     patch_shape = self.trigger_settings["trigger_patch_size"][0]
 
                     if "all_patches" in self.output_settings:
-                        for patch_idx in batch.iterrows("patch_index"):
+                        for row in batch.iterrows():
+                            patch_idx = row["patch_index"]
                             trigger_patch_center = self.trigger_settings["trigger_patches"][patch_idx]
                             mapped_waveform = mapped_waveform[
                                 int(trigger_patch_center["x"] - patch_shape / 2) : int(
