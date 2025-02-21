@@ -866,10 +866,7 @@ class DLDataReader(Component):
         if not isinstance(batch, Table):
             batch = Table(rows=batch)
         # Append the features from child classes to the batch
-        if "all_patches" in self.output_settings:
-            batch = self.get_balanced_patches(batch)
-        else:
-            batch = self._append_features(batch)
+        batch = self._append_features(batch)
         return batch
 
     def generate_stereo_batch(self, batch_indices) -> Table:
