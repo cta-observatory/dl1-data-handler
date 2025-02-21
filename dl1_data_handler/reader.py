@@ -532,8 +532,9 @@ class DLDataReader(Component):
             events.add_column(file_idx, name="file_index", index=0)
             events.add_column(0, name="tel_type_id", index=3)
             # Appending the events to the list of example identifiers
+            if "all_patches" in self.output_settings:
+                events = self.get_balanced_patches(events, file_idx)
             example_identifiers.append(events)
-
         # Constrcut the example identifiers for all files
         self.example_identifiers = vstack(example_identifiers)
         self.example_identifiers.sort(["obs_id", "event_id", "tel_id", "tel_type_id"])
@@ -1528,18 +1529,25 @@ class DLRawTriggerReader(DLWaveformReader):
             "``hot_patch``: extract the sequence of selected samples for the patch with the higher pixel charge. "
         ),
     ).tag(config=True)
-    
-    number_of_trigger_patches = Int(
-        default_value=None,
-        allow_none=True,
-        help="Number of squared trigger patches in the mapped image.",
+    trigger_settings = Dict(
+        default_value = None,
+        allow_none = True, 
+        help=("Dict for setting number of trigger patches and nsb threshold and saving patches positions"
+            "``number_of_trigger_patches``Number of squared trigger patches in the mapped image."
+            "``nsb_threshold``Threshold in p.e. to consider a patch with nsb or cosmic."
+            ),
     ).tag(config=True)
+    # number_of_trigger_patches = Int(
+    #     default_value=None,
+    #     allow_none=True,
+    #     help="Number of squared trigger patches in the mapped image.",
+    # ).tag(config=True)
 
-    nsb_threshold = Int(
-        default_value=0,
-        allow_none=False,
-        help="Threshold in p.e. to consider a patch with nsb or cosmic.",
-    ).tag(config=True)
+    # nsb_threshold = Int(
+    #     default_value=0,
+    #     allow_none=False,
+    #     help="Threshold in p.e. to consider a patch with nsb or cosmic.",
+    # ).tag(config=True)
 
     hot_pixel_from_simulation = Bool(
         default_value=True,
@@ -1555,6 +1563,8 @@ class DLRawTriggerReader(DLWaveformReader):
         **kwargs,
     ):
 
+        
+
         super().__init__(
             input_url_signal=input_url_signal,
             input_url_background=input_url_background,
@@ -1563,10 +1573,6 @@ class DLRawTriggerReader(DLWaveformReader):
             **kwargs,
         )
 
-        self.trigger_settings = {
-            "number_of_trigger_patches": self.number_of_trigger_patches,
-            "nsb_threshold": self.nsb_threshold
-        }
         self.waveform_settings["output_settings"] = self.output_settings
 
         with lock:
@@ -1582,18 +1588,16 @@ class DLRawTriggerReader(DLWaveformReader):
             self.waveform_settings["waveform_offset"] = wvf_table_v_attrs[
                 "CTAFIELD_5_TRANSFORM_OFFSET"
             ]
-    def get_balanced_patches(self, batch):
+    def get_balanced_patches(self, batch, file_idx):
         patches_indexes = []
-        patches_waveforms = []
         cherenkov = []
-        file_index = []
         table_index = []
         self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
             self.trigger_settings, self.image_mappers[self.cam_name].image_shape
         )
         patch_shape = self.trigger_settings["trigger_patch_size"][0]
-        for file_idx, table_idx, tel_type_id, tel_id in batch.iterrows(
-            "file_index", "table_index", "tel_type_id", "tel_id"
+        for table_idx, tel_type_id, tel_id in batch.iterrows(
+            "table_index", "tel_type_id", "tel_id"
         ):
             filename = list(self.files)[file_idx]
             camera_type = self._get_camera_type(
@@ -1611,18 +1615,11 @@ class DLRawTriggerReader(DLWaveformReader):
                     np.array(true_image, dtype=int), axis=1
                 )
                 mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
-                unmapped_waveform = get_unmapped_waveform(
-                    child[table_idx],
-                    self.waveform_settings,
-                    self.image_mappers[camera_type].geometry,
-                )
-                mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
-                temp_patches = []
                 temp_index_nsb = []
                 temp_index_cosmic = []
-                temp_chkov = []
+                temp_chkov_nsb = []
+                temp_chkov_cosmic = []
                 temp_table_index = []
-                temp_file_index = []
                 for n in range(len(self.trigger_settings["trigger_patches"])):
                     center = self.trigger_settings["trigger_patches"][n]
                     chkov_per_patch = np.sum(
@@ -1637,44 +1634,26 @@ class DLRawTriggerReader(DLWaveformReader):
                         ],
                         dtype=int,
                     )
-                    mapped_patch = mapped_waveform[
-                        int(center["x"] - patch_shape / 2) : int(
-                            center["x"] + patch_shape / 2
-                        ),
-                        int(center["y"] - patch_shape / 2) : int(
-                            center["y"] + patch_shape / 2
-                        ),
-                        :,
-                    ]
-                    temp_patches.append(mapped_patch)
-                    temp_chkov.append(chkov_per_patch)
-                    if chkov_per_patch <= self.nsb_threshold:
+                    if chkov_per_patch <= self.trigger_settings["nsb_threshold"]:
                         temp_index_nsb.append(n)
+                        temp_chkov_nsb.append(chkov_per_patch)
                     else:
                         temp_index_cosmic.append(n)
+                        temp_chkov_cosmic.append(chkov_per_patch)
                 comparator = min(len(temp_index_nsb), len(temp_index_cosmic))
                 temp_index_nsb = temp_index_nsb[:comparator]
                 temp_index_cosmic = temp_index_cosmic[:comparator]
-                for i in temp_index_cosmic:
-                    patches_waveforms.append(temp_patches[i])
-                    cherenkov.append(temp_chkov[i])
-                    patches_indexes.append(i)
-                    temp_file_index.append(file_idx)
-                    temp_table_index.append(table_idx)
-                for i in temp_index_nsb:
-                    patches_waveforms.append(temp_patches[i])
-                    cherenkov.append(temp_chkov[i])
-                    patches_indexes.append(i)
-                    temp_file_index.append(file_idx)
-                    temp_table_index.append(table_idx)
-                file_index.extend(temp_file_index)
-                table_index.extend(temp_table_index)
-        table_patches = Table([file_index, table_index, patches_indexes, patches_waveforms, cherenkov],
-                              names = ["file_index", "table_index", "patch_index", "patch_waveform", "cherenkov_pe"])
+                temp_chkov_cosmic = temp_chkov_cosmic[:comparator]
+                temp_chkov_nsb = temp_chkov_nsb[:comparator]
+                table_index.extend([table_idx] * 2 * comparator)
+                patches_indexes.extend(temp_index_cosmic + temp_index_nsb)
+                cherenkov.extend(temp_chkov_cosmic + temp_chkov_nsb)
+        table_patches = Table([table_index, patches_indexes, cherenkov],
+                              names = ["table_index", "patch_index", "cherenkov_pe"])
         batch = join(
             left=batch,
             right=table_patches,
-            keys=["file_index", "table_index"],
+            keys=["table_index"],
         )
         return(batch)
 
@@ -1729,6 +1708,10 @@ class DLRawTriggerReader(DLWaveformReader):
                         self.trigger_settings, self.image_mappers[self.cam_name].image_shape
                     )
                     patch_shape = self.trigger_settings["trigger_patch_size"][0]
+
+                    if "all_patches" in self.output_settings:
+                        for patch_idx in batch.iterrows("patch_index")
+
                     if "hot_patch" in self.output_settings:
                         random_trigger_patch = False
                     
