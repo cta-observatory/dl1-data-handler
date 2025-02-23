@@ -140,8 +140,8 @@ class DLDataReader(Component):
         Generate a batch of mono events from list of indices.
     generate_stereo_batch(batch_indices)
         Generate a batch of stereo events from list of indices.
-    get_tel_pointing(file, tel_ids)
-        Retrieve the telescope pointing information for the specified telescope IDs.
+    get_tel_pointing(file, tel_id)
+        Retrieve the telescope pointing information for the specified telescope ID.
     close_files()
         Close all open files.
     """
@@ -490,7 +490,7 @@ class DLDataReader(Component):
                         keys=["obs_id", "event_id"],
                     )
                     # Add the spherical offsets w.r.t. to the telescope pointing
-                    tel_pointing = self.get_tel_pointing(f, [tel_id])
+                    tel_pointing = self.get_tel_pointing(f, tel_id)
                     tel_table = join(
                         left=tel_table,
                         right=tel_pointing,
@@ -618,7 +618,7 @@ class DLDataReader(Component):
                         keys=["obs_id", "event_id"],
                     )
                     if self.process_type == ProcessType.Simulation:
-                        tel_pointing = self.get_tel_pointing(f, [tel_id])
+                        tel_pointing = self.get_tel_pointing(f, tel_id)
                         merged_table = join(
                             left=merged_table,
                             right=tel_pointing,
@@ -699,7 +699,7 @@ class DLDataReader(Component):
         # waiting astropy v7.0.0
         # self.example_identifiers.add_index(["obs_id", "event_id"])
 
-    def get_tel_pointing(self, file, tel_ids) -> Table:
+    def get_tel_pointing(self, file, tel_id) -> Table:
         """
         Retrieve the telescope pointing information for the specified telescope IDs.
 
@@ -710,24 +710,20 @@ class DLDataReader(Component):
         -----------
         file : str
             Path to the file containing the telescope pointing data.
-        tel_ids : list
-            List of telescope IDs for which the pointing information is to be retrieved.
+        tel_id : int
+            Telescope ID for which the pointing information is to be retrieved.
 
         Returns:
         --------
         tel_pointing : astropy.table.Table
             A table containing pointing information (azimuth and altitude) for each telescope.
         """
-        tel_pointing = []
-        for tel_id in tel_ids:
-            with lock:
-                tel_pointing.append(
-                    read_table(
-                        file,
-                        f"/configuration/telescope/pointing/tel_{tel_id:03d}",
-                    )
-                )
-        return vstack(tel_pointing)
+        with lock:
+            tel_pointing = read_table(
+                file,
+                f"/configuration/telescope/pointing/tel_{tel_id:03d}",
+            )
+        return tel_pointing
 
     def get_array_pointing(self, file) -> Table:
         """
