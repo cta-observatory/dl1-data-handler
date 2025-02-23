@@ -699,10 +699,10 @@ class DLDataReader(Component):
 
     def get_tel_pointing(self, file, tel_id) -> Table:
         """
-        Retrieve the telescope pointing information for the specified telescope IDs.
+        Retrieve the telescope pointing information for the specified telescope ID.
 
         This method extracts the pointing information (azimuth and altitude)
-        for the given telescope IDs from the provided file.
+        for the given telescope ID from the provided file.
 
         Parameters:
         -----------
@@ -714,7 +714,8 @@ class DLDataReader(Component):
         Returns:
         --------
         tel_pointing : astropy.table.Table
-            A table containing pointing information (azimuth and altitude) for each telescope.
+            A table containing pointing information (azimuth and altitude)
+            for the specified telescope ID.
         """
         with lock:
             tel_pointing = read_table(
