@@ -405,7 +405,7 @@ class DLDataReader(Component):
                 f"/dl1/event/telescope/parameters/tel_{self.tel_ids[0]:03d}",
             ).colnames
 
-        # Columns to keep in the the example identifiers
+        # Columns to keep in the example identifiers
         # This are the basic columns one need to do a
         # conventional IACT analysis with CNNs
         self.example_ids_keep_columns = ["table_index", "obs_id", "event_id", "tel_id"]
@@ -570,9 +570,7 @@ class DLDataReader(Component):
         (triggered and passed quality cuts) in the event. These identifiers are used to uniquely
         reference each example in the dataset.
         """
-        # Columns to keep in the the example identifiers
-        # This are the basic columns one need to do a
-        # conventional IACT analysis with CNNs
+        # Extend the columns to keep in the example identifiers
         self.example_ids_keep_columns.extend(["hillas_intensity"])
         simulation_info = []
         example_identifiers = []
