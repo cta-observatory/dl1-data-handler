@@ -23,6 +23,8 @@ from enum import Enum
 import numpy as np
 import tables
 import threading
+import random
+from itertools import chain
 
 from astropy import units as u
 from astropy.coordinates.earth import EarthLocation
@@ -1533,6 +1535,7 @@ class DLRawTriggerReader(DLWaveformReader):
         help=("Dict for setting number of trigger patches and nsb threshold and saving patches positions"
             "``number_of_trigger_patches``Number of squared trigger patches in the mapped image."
             "``nsb_threshold``Threshold in p.e. to consider a patch with nsb or cosmic."
+            "``interleave_patches``Get alternate nsb and cosmic patches as output
             ),
     ).tag(config=True)
     # number_of_trigger_patches = Int(
@@ -1615,9 +1618,8 @@ class DLRawTriggerReader(DLWaveformReader):
                 mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
                 temp_index_nsb = []
                 temp_index_cosmic = []
-                temp_chkov_nsb = []
-                temp_chkov_cosmic = []
-                temp_table_index = []
+                temp_index = []
+                temp_chkov = []
                 for n in range(len(self.trigger_settings["trigger_patches"])):
                     center = self.trigger_settings["trigger_patches"][n]
                     chkov_per_patch = np.sum(
@@ -1632,26 +1634,30 @@ class DLRawTriggerReader(DLWaveformReader):
                         ],
                         dtype=int,
                     )
+                    temp_chkov.append(chkov_per_patch)
                     if chkov_per_patch <= self.trigger_settings["nsb_threshold"]:
                         temp_index_nsb.append(n)
-                        temp_chkov_nsb.append(chkov_per_patch)
                     else:
                         temp_index_cosmic.append(n)
-                        temp_chkov_cosmic.append(chkov_per_patch)
                 comparator = min(len(temp_index_nsb), len(temp_index_cosmic))
-                temp_index_nsb = temp_index_nsb[:comparator]
-                temp_index_cosmic = temp_index_cosmic[:comparator]
-                temp_chkov_cosmic = temp_chkov_cosmic[:comparator]
-                temp_chkov_nsb = temp_chkov_nsb[:comparator]
+                temp_index_nsb = random.sort(temp_index_nsb,comparator)
+                temp_index_cosmic = random.sort(temp_index_cosmic,comparator)
+                if (comparator != 0 and self.trigger_settings["interleave_patches"]==True):
+                    temp_index = list(chain(*zip(temp_index_cosmic,temp_index_nsb)))
+                else:
+                    temp_index = temp_index_cosmic + temp_index_nsb
+                for idx in temp_index:
+                    cherenkov.append(temp_chkov[idx])
                 table_index.extend([table_idx] * 2 * comparator)
-                patches_indexes.extend(temp_index_cosmic + temp_index_nsb)
-                cherenkov.extend(temp_chkov_cosmic + temp_chkov_nsb)
+                patches_indexes.extend(temp_index)
         table_patches = Table([table_index, patches_indexes, cherenkov],
                               names = ["table_index", "patch_index", "cherenkov_pe"])
         batch = join(
             left=batch,
             right=table_patches,
             keys=["table_index"],
+            join_type="right",
+            keep_order=True,
         )
         return(batch)
 
@@ -1660,9 +1666,7 @@ class DLRawTriggerReader(DLWaveformReader):
         true_image_sums = []
         waveforms_all = []
         if "all_patches" in self.output_settings:
-            self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
-                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
-                )
+            patch_shape = self.trigger_settings["trigger_patch_size"][0]
             for file_idx, table_idx,  tel_type_id, tel_id, patch_idx in batch.iterrows(
             "file_index", "table_index", "tel_type_id", "tel_id", "patch_index"
             ):
@@ -1804,10 +1808,10 @@ class DLRawTriggerReader(DLWaveformReader):
                             ]
             # Apply the 'ImageMapper' whenever the index matrix is not None.
             # Otherwise, return the unmapped image for the 'IndexedConv' package.
-            if self.image_mappers[camera_type].index_matrix is None and self.output_settings  != "all_patches":
+            if self.image_mappers[camera_type].index_matrix is None:
                 waveforms.append(mapped_waveform)
                 true_image_sums.append(trigger_patch_true_image_sum)
-            elif self.output_settings  != "all_patches":
+            else:
                 waveforms.append(unmapped_waveform)
         if "all_patches" in self.output_settings:
             batch.add_column(waveforms_all, name="waveform")
