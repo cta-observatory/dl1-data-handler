@@ -1535,7 +1535,7 @@ class DLRawTriggerReader(DLWaveformReader):
         help=("Dict for setting number of trigger patches and nsb threshold and saving patches positions"
             "``number_of_trigger_patches``Number of squared trigger patches in the mapped image."
             "``nsb_threshold``Threshold in p.e. to consider a patch with nsb or cosmic."
-            "``interleave_patches``Get alternate nsb and cosmic patches as output
+            "``interleave_patches``Get alternate nsb and cosmic patches as output."
             ),
     ).tag(config=True)
     # number_of_trigger_patches = Int(
@@ -1640,8 +1640,8 @@ class DLRawTriggerReader(DLWaveformReader):
                     else:
                         temp_index_cosmic.append(n)
                 comparator = min(len(temp_index_nsb), len(temp_index_cosmic))
-                temp_index_nsb = random.sort(temp_index_nsb,comparator)
-                temp_index_cosmic = random.sort(temp_index_cosmic,comparator)
+                temp_index_nsb = random.sample(temp_index_nsb,comparator)
+                temp_index_cosmic = random.sample(temp_index_cosmic,comparator)
                 if (comparator != 0 and self.trigger_settings["interleave_patches"]==True):
                     temp_index = list(chain(*zip(temp_index_cosmic,temp_index_nsb)))
                 else:
