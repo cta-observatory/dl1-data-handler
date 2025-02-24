@@ -34,7 +34,7 @@ from astropy.table import (
 )
 from astropy.time import Time
 
-from ctapipe.coordinates import CameraFrame
+from ctapipe.coordinates import CameraFrame, NominalFrame
 from ctapipe.core import Component, QualityQuery
 from ctapipe.core.traits import (
     Bool,
@@ -788,15 +788,19 @@ class DLDataReader(Component):
         """
         # Get the telescope ID from the table
         tel_id = table["tel_id"][0]
-        # Set the telescope pointing of the SkyOffsetSeparation tranform to the fix pointing
+        # Set the telescope pointing
         tel_ground_frame = self.subarray.tel_coords[
             self.subarray.tel_ids_to_indices(tel_id)
         ]
+        # Set the AltAz frame with the tel location and reference time
+        altaz = AltAz(
+            location=tel_ground_frame.to_earth_location(),
+            obstime=LST_EPOCH,
+        )
         fix_tel_pointing = SkyCoord(
             table["telescope_pointing_azimuth"],
             table["telescope_pointing_altitude"],
-            location=tel_ground_frame.to_earth_location(),
-            obstime=LST_EPOCH,
+            frame=altaz,
         )
         # Set the camera frame with the focal length and rotation of the camera
         camera_frame = CameraFrame(
@@ -808,8 +812,7 @@ class DLDataReader(Component):
         true_direction = SkyCoord(
             table["true_az"],
             table["true_alt"],
-            location=tel_ground_frame.to_earth_location(),
-            obstime=LST_EPOCH,
+            frame=altaz,
         )
         # Calculate the camera coordinate offsets and distance
         true_cam_position = true_direction.transform_to(camera_frame)
@@ -822,40 +825,54 @@ class DLDataReader(Component):
 
     def _transform_to_sky_spher_offsets(self, table) -> Table:
         """
-        Transform Alt/Az coordinates to sky spherical offsets w.r.t. the telescope pointing.
+        Transform Alt/Az coordinates to sky spherical offsets w.r.t. the array pointing.
 
         This method converts the Alt/Az coordinates in the provided table to sky spherical offsets
-        w.r.t. the telescope pointing. It also calculates the angular separation between the
-        true and telescope pointing directions.
+        w.r.t. the array pointing. It also calculates the angular separation between the
+        true and array pointing directions.
 
         Parameters:
         -----------
         table : astropy.table.Table
-            A Table containing the true Alt/Az coordinates and telescope pointing.
+            A Table containing the true Alt/Az coordinates and array pointing.
 
         Returns:
         --------
         table : astropy.table.Table
             A Table with the spherical offsets and the angular separation added as new columns.
         """
-        # Set the telescope pointing of the SkyOffsetSeparation tranform to the fix pointing
+        # Set the AltAz frame with the reference location and time
+        altaz = AltAz(
+            location=self.subarray.reference_location,
+            obstime=LST_EPOCH,
+        )
+        # Set the array pointing
         fix_array_pointing = SkyCoord(
-            table["pointing_azimuth"],
-            table["pointing_altitude"],
+            az=table["pointing_azimuth"],
+            alt=table["pointing_altitude"],
+            frame=altaz,
+        )
+        # Set the nominal frame with the array pointing
+        nom_frame = NominalFrame(
+            origin=fix_array_pointing,
             location=self.subarray.reference_location,
             obstime=LST_EPOCH,
         )
+        # Set the true direction in (alt, az) coordinates
         true_direction = SkyCoord(
-            table["true_az"],
-            table["true_alt"],
-            location=self.subarray.reference_location,
-            obstime=LST_EPOCH,
+            az=table["true_az"],
+            alt=table["true_alt"],
+            frame=altaz,
         )
-        sky_offset = fix_array_pointing.spherical_offsets_to(true_direction)
+        # Transform the true direction to the nominal frame
+        sky_coord = true_direction.transform_to(nom_frame)
+        # Add the spherical offsets to the table
+        table.add_column(sky_coord.fov_lon.to(u.deg), name="fov_lon")
+        table.add_column(sky_coord.fov_lat.to(u.deg), name="fov_lat")
+        # Calculate the angular separation between the true and array pointing directions
         angular_separation = fix_array_pointing.separation(true_direction)
-        table.add_column(sky_offset[0], name="sky_offset_lon")
-        table.add_column(sky_offset[1], name="sky_offset_lat")
-        table.add_column(angular_separation, name="sky_angular_separation")
+        # Add the angular separation to the table
+        table.add_column(angular_separation, name="angular_separation")
         return table
 
     def get_parameters(self, batch, dl1b_parameter_list) -> np.array:
