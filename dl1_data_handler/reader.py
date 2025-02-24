@@ -531,9 +531,10 @@ class DLDataReader(Component):
             # This is needed to share code with stereo reading mode later on
             events.add_column(file_idx, name="file_index", index=0)
             events.add_column(0, name="tel_type_id", index=3)
-            # Appending the events to the list of example identifiers
+            # If balanced patches selected append the patches index and cherenkov p.e. to each event
             if "all_patches" in self.output_settings:
                 events = self.get_balanced_patches(events, file_idx)
+            # Appending the events to the list of example identifiers
             example_identifiers.append(events)
         # Constrcut the example identifiers for all files
         self.example_identifiers = vstack(example_identifiers)
@@ -1709,7 +1710,7 @@ class DLRawTriggerReader(DLWaveformReader):
 
                     if "all_patches" in self.output_settings:
                         for row in batch.iterrows():
-                            patch_idx = row["patch_index"]
+                            patch_idx = int(row["patch_index"])
                             trigger_patch_center = self.trigger_settings["trigger_patches"][patch_idx]
                             mapped_waveform = mapped_waveform[
                                 int(trigger_patch_center["x"] - patch_shape / 2) : int(
@@ -1786,7 +1787,7 @@ class DLRawTriggerReader(DLWaveformReader):
             if self.image_mappers[camera_type].index_matrix is None and self.output_settings  != "all_patches":
                 waveforms.append(mapped_waveform)
                 true_image_sums.append(trigger_patch_true_image_sum)
-            else:
+            elif self.output_settings  != "all_patches":
                 waveforms.append(unmapped_waveform)
         if "all_patches" in self.output_settings:
             batch.add_column(waveforms_all, name="waveform")
