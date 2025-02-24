@@ -1660,6 +1660,9 @@ class DLRawTriggerReader(DLWaveformReader):
         true_image_sums = []
         waveforms_all = []
         if "all_patches" in self.output_settings:
+            self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
+                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
+                )
             for file_idx, table_idx,  tel_type_id, tel_id, patch_idx in batch.iterrows(
             "file_index", "table_index", "tel_type_id", "tel_id", "patch_index"
             ):
