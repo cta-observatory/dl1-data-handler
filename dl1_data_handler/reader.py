@@ -1538,17 +1538,6 @@ class DLRawTriggerReader(DLWaveformReader):
             "``interleave_patches``Get alternate nsb and cosmic patches as output."
             ),
     ).tag(config=True)
-    # number_of_trigger_patches = Int(
-    #     default_value=None,
-    #     allow_none=True,
-    #     help="Number of squared trigger patches in the mapped image.",
-    # ).tag(config=True)
-
-    # nsb_threshold = Int(
-    #     default_value=0,
-    #     allow_none=False,
-    #     help="Threshold in p.e. to consider a patch with nsb or cosmic.",
-    # ).tag(config=True)
 
     hot_pixel_from_simulation = Bool(
         default_value=True,
@@ -1589,6 +1578,7 @@ class DLRawTriggerReader(DLWaveformReader):
             self.waveform_settings["waveform_offset"] = wvf_table_v_attrs[
                 "CTAFIELD_5_TRANSFORM_OFFSET"
             ]
+
     def get_balanced_patches(self, batch, file_idx):
         patches_indexes = []
         cherenkov = []
@@ -1606,9 +1596,6 @@ class DLRawTriggerReader(DLWaveformReader):
             )
             with lock:
                 tel_table = f"tel_{tel_id:03d}"
-                child = self.files[filename].root.r0.event.telescope._f_get_child(
-                    tel_table
-                )
                 true_image = self.files[filename].root.simulation.event.telescope.images._f_get_child(
                     tel_table
                 ).col("true_image")[table_idx,:]
