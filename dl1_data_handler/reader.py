@@ -534,13 +534,19 @@ class DLDataReader(Component):
             events.add_column(file_idx, name="file_index", index=0)
             events.add_column(0, name="tel_type_id", index=3)
             # If balanced patches selected append the patches index and cherenkov p.e. to each event
-            if "all_patches" in self.output_settings:
+            if isinstance(self,DLRawTriggerReader) and "balanced_patches" in self.output_settings:
                 events = self.get_balanced_patches(events, file_idx)
             # Appending the events to the list of example identifiers
             example_identifiers.append(events)
         # Constrcut the example identifiers for all files
         self.example_identifiers = vstack(example_identifiers)
         self.example_identifiers.sort(["obs_id", "event_id", "tel_id", "tel_type_id"])
+        # If all patches selected append the patches index to each event
+        if isinstance(self,DLRawTriggerReader) and "all_patches" in self.output_settings:
+            num_patches = self.trigger_settings["number_of_trigger_patches"]**2
+            patch_indices = np.tile(np.arange(num_patches), len(self.example_identifiers))
+            self.example_identifiers = self.example_identifiers[np.repeat(np.arange(len(self.example_identifiers)), num_patches)]
+            self.example_identifiers.add_column(patch_indices, name="patch_index", index=6)
         # Construct simulation information for all files
         if self.process_type == ProcessType.Simulation:
             self.simulation_info = vstack(simulation_info)
@@ -1485,6 +1491,9 @@ class DLWaveformReader(DLDataReader):
         batch.add_column(waveforms, name="features", index=7)
         return batch
 
+    def get_balanced_patches(self, batch) -> Table:
+        pass
+
 def get_trigger_patches(
         trigger_settings,
         image_shape):
@@ -1519,14 +1528,15 @@ def get_trigger_patches(
 class DLRawTriggerReader(DLWaveformReader):
 
     output_settings = CaselessStrEnum(
-        ["waveform", "random_patch", "all_patches", "hot_patch"],
+        ["waveform", "random_patch", "balanced_patches", "hot_patch", "all_patches"],
         default_value="waveform",
         help=(
             "Set the type of data in feature vector. "
             "``waveform``: extract the sequence of samples selected for the complete camera. "
             "``random_patch``: extract the sequence of samples selected for a random patch. "
-            "``all_patches``: extract the sequence of samples selected for all patches. "
+            "``balanced_patches``: extract the sequence of samples selected for all patches. "
             "``hot_patch``: extract the sequence of selected samples for the patch with the higher pixel charge. "
+            "``hot_patch``: extract the sequence of selected samples for all patches. "
         ),
     ).tag(config=True)
     trigger_settings = Dict(
@@ -1651,8 +1661,10 @@ class DLRawTriggerReader(DLWaveformReader):
     def _append_features(self, batch) -> Table:
         waveforms = []
         true_image_sums = []
-        waveforms_all = []
-        if "all_patches" in self.output_settings:
+        if "balanced_patches" in self.output_settings or "all_patches" in self.output_settings:
+            self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
+                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
+                )
             patch_shape = self.trigger_settings["trigger_patch_size"][0]
             for file_idx, table_idx,  tel_type_id, tel_id, patch_idx in batch.iterrows(
             "file_index", "table_index", "tel_type_id", "tel_id", "patch_index"
@@ -1682,8 +1694,30 @@ class DLRawTriggerReader(DLWaveformReader):
                         ),
                         :,
                     ]
-            
-                waveforms_all.append(mapped_waveform)
+                    if "all_patches" in self.output_settings:
+                        true_image = self.files[filename].root.simulation.event.telescope.images._f_get_child(
+                            tel_table
+                        ).col("true_image")[table_idx,:]
+                        true_image = np.expand_dims(
+                            np.array(true_image, dtype=int), axis=1
+                        )
+                        mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
+                        true_chkov = np.sum(
+                                    mapped_true_image[
+                                        int(trigger_patch_center["x"] - patch_shape / 2) : int(
+                                            trigger_patch_center["x"] + patch_shape / 2
+                                        ),
+                                        int(trigger_patch_center["y"] - patch_shape / 2) : int(
+                                            trigger_patch_center["y"] + patch_shape / 2
+                                        ),
+                                        :,
+                                    ],
+                                    dtype=int,
+                                )
+                        waveforms.append(mapped_waveform)
+                        true_image_sums.append(true_chkov)
+                    if "balanced_patches" in self.output_settings:
+                        waveforms.append(mapped_waveform)
         else:
             for file_idx, table_idx, tel_type_id, tel_id in batch.iterrows(
                 "file_index", "table_index", "tel_type_id", "tel_id"
@@ -1800,7 +1834,7 @@ class DLRawTriggerReader(DLWaveformReader):
                 true_image_sums.append(trigger_patch_true_image_sum)
             else:
                 waveforms.append(unmapped_waveform)
-        if "all_patches" in self.output_settings:
+        if "balanced_patches" in self.output_settings:
             batch.add_column(waveforms_all, name="waveform")
         else:
             batch.add_column(waveforms, name="features", index=7)
