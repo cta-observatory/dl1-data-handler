@@ -25,7 +25,7 @@ import threading
 
 from astropy import units as u
 from astropy.coordinates.earth import EarthLocation
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import AltAz, SkyCoord
 from astropy.table import (
     Table,
     unique,
@@ -34,6 +34,7 @@ from astropy.table import (
 )
 from astropy.time import Time
 
+from ctapipe.coordinates import CameraFrame, NominalFrame
 from ctapipe.core import Component, QualityQuery
 from ctapipe.core.traits import (
     Bool,
@@ -51,13 +52,6 @@ from ctapipe.instrument import SubarrayDescription
 from ctapipe.io import read_table
 from dl1_data_handler.image_mapper import ImageMapper
 
-# Reference (dummy) location to insert in the SkyCoord object as the default location
-#: Area averaged position of LST-1, MAGIC-1 and MAGIC-2 (using 23**2 and 17**2 m2)
-REFERENCE_LOCATION = EarthLocation(
-    lon=-17.890879 * u.deg,
-    lat=28.761579 * u.deg,
-    height=2199 * u.m,  # MC obs-level
-)
 # Reference (dummy) time to insert in the SkyCoord object as the default time
 LST_EPOCH = Time("2018-10-01T00:00:00", scale="utc")
 
@@ -146,8 +140,8 @@ class DLDataReader(Component):
         Generate a batch of mono events from list of indices.
     generate_stereo_batch(batch_indices)
         Generate a batch of stereo events from list of indices.
-    get_tel_pointing(file, tel_ids)
-        Retrieve the telescope pointing information for the specified telescope IDs.
+    get_tel_pointing(file, tel_id)
+        Retrieve the telescope pointing information for the specified telescope ID.
     close_files()
         Close all open files.
     """
@@ -227,7 +221,6 @@ class DLDataReader(Component):
         parent=None,
         **kwargs,
     ):
-
         super().__init__(config=config, parent=parent, **kwargs)
 
         # Register the destructor to close all open files properly
@@ -412,6 +405,27 @@ class DLDataReader(Component):
                 f"/dl1/event/telescope/parameters/tel_{self.tel_ids[0]:03d}",
             ).colnames
 
+        # Columns to keep in the example identifiers
+        # This are the basic columns one need to do a
+        # conventional IACT analysis with CNNs
+        self.example_ids_keep_columns = ["table_index", "obs_id", "event_id", "tel_id"]
+        if self.process_type == ProcessType.Simulation:
+            self.example_ids_keep_columns.extend(
+                [
+                    "true_energy",
+                    "true_shower_primary_id",
+                    "true_az",
+                    "telescope_pointing_azimuth",
+                    "true_alt",
+                    "telescope_pointing_altitude",
+                    "cam_coord_offset_x",
+                    "cam_coord_offset_y",
+                    "cam_coord_distance",
+                ]
+            )
+        elif self.process_type == ProcessType.Observation:
+            self.example_ids_keep_columns.extend(["time", "event_type"])
+
         # Construct the example identifiers
         if self.mode == "mono":
             self._construct_mono_example_identifiers()
@@ -449,15 +463,6 @@ class DLDataReader(Component):
         and constructs identifiers based on the event and telescope IDs. These
         identifiers are used to uniquely reference each example in the dataset.
         """
-        # Columns to keep in the the example identifiers
-        # This are the basic columns one need to do a
-        # conventional IACT analysis with CNNs
-        self.example_ids_keep_columns = ["table_index", "obs_id", "event_id", "tel_id"]
-        if self.process_type == ProcessType.Simulation:
-            self.example_ids_keep_columns.extend(
-                ["true_energy", "true_alt", "true_az", "true_shower_primary_id"]
-            )
-
         simulation_info = []
         example_identifiers = []
         for file_idx, (filename, f) in enumerate(self.files.items()):
@@ -484,6 +489,14 @@ class DLDataReader(Component):
                         right=simshower_table,
                         keys=["obs_id", "event_id"],
                     )
+                    # Add the spherical offsets w.r.t. to the telescope pointing
+                    tel_pointing = self.get_tel_pointing(f, tel_id)
+                    tel_table = join(
+                        left=tel_table,
+                        right=tel_pointing,
+                        keys=["obs_id", "tel_id"],
+                    )
+                    tel_table = self._transform_to_cam_coord_offsets(tel_table)
                 tel_tables.append(tel_table)
             events = vstack(tel_tables)
 
@@ -502,13 +515,14 @@ class DLDataReader(Component):
             events.keep_columns(self.example_ids_keep_columns)
             if self.process_type == ProcessType.Simulation:
                 # Add the spherical offsets w.r.t. to the telescope pointing
-                tel_pointing = self.get_tel_pointing(f, self.tel_ids)
+                array_pointing = self.get_array_pointing(f)
+                # Join the prediction table with the telescope pointing table
                 events = join(
                     left=events,
-                    right=tel_pointing,
-                    keys=["obs_id", "tel_id"],
+                    right=array_pointing,
+                    keys=["obs_id"],
                 )
-                events = self._transform_to_spherical_offsets(events)
+                events = self._transform_to_sky_spher_offsets(events)
                 # Add the logarithm of the true energy in TeV
                 events = self._transform_to_log_energy(events)
                 # Add the true shower primary class to the table based on the filename
@@ -556,34 +570,20 @@ class DLDataReader(Component):
         (triggered and passed quality cuts) in the event. These identifiers are used to uniquely
         reference each example in the dataset.
         """
-        # Columns to keep in the the example identifiers
-        # This are the basic columns one need to do a
-        # conventional IACT analysis with CNNs
-        self.example_ids_keep_columns = [
-            "table_index",
-            "obs_id",
-            "event_id",
-            "tel_id",
-            "hillas_intensity",
-        ]
-        if self.process_type == ProcessType.Simulation:
-            self.example_ids_keep_columns.extend(
-                ["true_energy", "true_alt", "true_az", "true_shower_primary_id"]
-            )
-        elif self.process_type == ProcessType.Observation:
-            self.example_ids_keep_columns.extend(["time", "event_type"])
-
+        # Extend the columns to keep in the example identifiers
+        self.example_ids_keep_columns.extend(["hillas_intensity"])
         simulation_info = []
         example_identifiers = []
         for file_idx, (filename, f) in enumerate(self.files.items()):
-            if self.process_type == ProcessType.Simulation:
-                # Read simulation information for each observation
-                simulation_info.append(read_table(f, "/configuration/simulation/run"))
-                # Construct the shower simulation table
-                simshower_table = read_table(f, "/simulation/event/subarray/shower")
             # Read the trigger table.
             trigger_table = read_table(f, "/dl1/event/subarray/trigger")
             if self.process_type == ProcessType.Simulation:
+                # Read simulation information for each observation
+                simulation_info_table = read_table(f, "/configuration/simulation/run")
+                # Append the simulation information to the list of simulation information
+                simulation_info.append(simulation_info_table)
+                # Construct the shower simulation table
+                simshower_table = read_table(f, "/simulation/event/subarray/shower")
                 # The shower simulation table is joined with the subarray trigger table.
                 trigger_table = join(
                     left=trigger_table,
@@ -615,21 +615,19 @@ class DLDataReader(Component):
                         right=trigger_table,
                         keys=["obs_id", "event_id"],
                     )
+                    if self.process_type == ProcessType.Simulation:
+                        tel_pointing = self.get_tel_pointing(f, tel_id)
+                        merged_table = join(
+                            left=merged_table,
+                            right=tel_pointing,
+                            keys=["obs_id", "tel_id"],
+                        )
+                        merged_table = self._transform_to_cam_coord_offsets(
+                            merged_table
+                        )
                     table_per_type.append(merged_table)
                 table_per_type = vstack(table_per_type)
-
-                table_per_type = table_per_type.group_by(["obs_id", "event_id"])
                 table_per_type.keep_columns(self.example_ids_keep_columns)
-                if self.process_type == ProcessType.Simulation:
-                    tel_pointing = self.get_tel_pointing(f, self.tel_ids)
-                    table_per_type = join(
-                        left=table_per_type,
-                        right=tel_pointing,
-                        keys=["obs_id", "tel_id"],
-                    )
-                    table_per_type = self._transform_to_spherical_offsets(
-                        table_per_type
-                    )
                 # Apply the multiplicity cut based on the telescope type
                 table_per_type = table_per_type.group_by(["obs_id", "event_id"])
 
@@ -663,6 +661,14 @@ class DLDataReader(Component):
                 events.add_column(
                     true_shower_primary_class, name="true_shower_primary_class"
                 )
+                array_pointing = self.get_array_pointing(f)
+                # Join the prediction table with the telescope pointing table
+                events = join(
+                    left=events,
+                    right=array_pointing,
+                    keys=["obs_id"],
+                )
+                events = self._transform_to_sky_spher_offsets(events)
             # Appending the events to the list of example identifiers
             example_identifiers.append(events)
 
@@ -691,36 +697,57 @@ class DLDataReader(Component):
         # waiting astropy v7.0.0
         # self.example_identifiers.add_index(["obs_id", "event_id"])
 
-    def get_tel_pointing(self, file, tel_ids) -> Table:
+    def get_tel_pointing(self, file, tel_id) -> Table:
         """
-        Retrieve the telescope pointing information for the specified telescope IDs.
+        Retrieve the telescope pointing information for the specified telescope ID.
 
         This method extracts the pointing information (azimuth and altitude)
-        for the given telescope IDs from the provided file.
+        for the given telescope ID from the provided file.
 
         Parameters:
         -----------
         file : str
             Path to the file containing the telescope pointing data.
-        tel_ids : list
-            List of telescope IDs for which the pointing information is to be retrieved.
+        tel_id : int
+            Telescope ID for which the pointing information is to be retrieved.
 
         Returns:
         --------
         tel_pointing : astropy.table.Table
-            A dictionary with telescope IDs as keys and their corresponding
-            pointing information (azimuth and altitude) as values.
+            A table containing pointing information (azimuth and altitude)
+            for the specified telescope ID.
         """
-        tel_pointing = []
-        for tel_id in tel_ids:
-            with lock:
-                tel_pointing.append(
-                    read_table(
-                        file,
-                        f"/configuration/telescope/pointing/tel_{tel_id:03d}",
-                    )
-                )
-        return vstack(tel_pointing)
+        with lock:
+            tel_pointing = read_table(
+                file,
+                f"/configuration/telescope/pointing/tel_{tel_id:03d}",
+            )
+        return tel_pointing
+
+    def get_array_pointing(self, file) -> Table:
+        """
+        Retrieve the array pointing information.
+
+        This method extracts the array pointing information (azimuth and altitude)
+        from the provided file.
+
+        Parameters:
+        -----------
+        file : str
+            Path to the file containing the array pointing data.
+
+        Returns:
+        --------
+        array_pointing : astropy.table.Table
+            A table containing array pointing information (azimuth and altitude).
+        """
+        # Read simulation information for each observation
+        array_pointing = read_table(file, "/configuration/simulation/run")
+        # Assuming min_az = max_az and min_alt = max_alt
+        array_pointing.keep_columns(["obs_id", "min_az", "min_alt"])
+        array_pointing.rename_column("min_az", "pointing_azimuth")
+        array_pointing.rename_column("min_alt", "pointing_altitude")
+        return array_pointing
 
     def _transform_to_log_energy(self, table):
         """
@@ -741,9 +768,9 @@ class DLDataReader(Component):
         table.add_column(np.log10(table["true_energy"]), name="log_true_energy")
         return table
 
-    def _transform_to_spherical_offsets(self, table) -> Table:
+    def _transform_to_cam_coord_offsets(self, table) -> Table:
         """
-        Transform Alt/Az coordinates to spherical offsets w.r.t. the telescope pointing.
+        Transform Alt/Az coordinates to camera coordinate offsets w.r.t. the telescope pointing.
 
         This method converts the Alt/Az coordinates in the provided table to spherical offsets
         w.r.t. the telescope pointing. It also calculates the angular separation between the
@@ -758,34 +785,94 @@ class DLDataReader(Component):
         --------
         table : astropy.table.Table
             A Table with the spherical offsets and the angular separation added as new columns.
-            The telescope pointing columns are removed from the table.
         """
-        # Set the telescope pointing of the SkyOffsetSeparation tranform to the fix pointing
-        fix_pointing = SkyCoord(
-            table["telescope_pointing_azimuth"],
-            table["telescope_pointing_altitude"],
-            frame="altaz",
-            location=REFERENCE_LOCATION,
+        # Get the telescope ID from the table
+        tel_id = table["tel_id"][0]
+        # Set the telescope pointing
+        tel_ground_frame = self.subarray.tel_coords[
+            self.subarray.tel_ids_to_indices(tel_id)
+        ]
+        # Set the AltAz frame with the tel location and reference time
+        altaz = AltAz(
+            location=tel_ground_frame.to_earth_location(),
             obstime=LST_EPOCH,
         )
+        fix_tel_pointing = SkyCoord(
+            table["telescope_pointing_azimuth"],
+            table["telescope_pointing_altitude"],
+            frame=altaz,
+        )
+        # Set the camera frame with the focal length and rotation of the camera
+        camera_frame = CameraFrame(
+            focal_length=self.subarray.tel[tel_id].optics.equivalent_focal_length,
+            rotation=self.subarray.tel[tel_id].camera.geometry.pix_rotation,
+            telescope_pointing=fix_tel_pointing,
+        )
+        # Transform the true Alt/Az coordinates to camera coordinates
         true_direction = SkyCoord(
             table["true_az"],
             table["true_alt"],
-            frame="altaz",
-            location=REFERENCE_LOCATION,
+            frame=altaz,
+        )
+        # Calculate the camera coordinate offsets and distance
+        true_cam_position = true_direction.transform_to(camera_frame)
+        true_cam_distance = np.sqrt(true_cam_position.x**2 + true_cam_position.y**2)
+        # Add the camera coordinate offsets and distance to the table
+        table.add_column(true_cam_position.x, name="cam_coord_offset_x")
+        table.add_column(true_cam_position.y, name="cam_coord_offset_y")
+        table.add_column(true_cam_distance, name="cam_coord_distance")
+        return table
+
+    def _transform_to_sky_spher_offsets(self, table) -> Table:
+        """
+        Transform Alt/Az coordinates to sky spherical offsets w.r.t. the array pointing.
+
+        This method converts the Alt/Az coordinates in the provided table to sky spherical offsets
+        w.r.t. the array pointing. It also calculates the angular separation between the
+        true and array pointing directions.
+
+        Parameters:
+        -----------
+        table : astropy.table.Table
+            A Table containing the true Alt/Az coordinates and array pointing.
+
+        Returns:
+        --------
+        table : astropy.table.Table
+            A Table with the spherical offsets and the angular separation added as new columns.
+        """
+        # Set the AltAz frame with the reference location and time
+        altaz = AltAz(
+            location=self.subarray.reference_location,
             obstime=LST_EPOCH,
         )
-        sky_offset = fix_pointing.spherical_offsets_to(true_direction)
-        angular_separation = fix_pointing.separation(true_direction)
-        table.add_column(sky_offset[0], name="spherical_offset_az")
-        table.add_column(sky_offset[1], name="spherical_offset_alt")
-        table.add_column(angular_separation, name="angular_separation")
-        table.remove_columns(
-            [
-                "telescope_pointing_azimuth",
-                "telescope_pointing_altitude",
-            ]
+        # Set the array pointing
+        fix_array_pointing = SkyCoord(
+            az=table["pointing_azimuth"],
+            alt=table["pointing_altitude"],
+            frame=altaz,
         )
+        # Set the nominal frame with the array pointing
+        nom_frame = NominalFrame(
+            origin=fix_array_pointing,
+            location=self.subarray.reference_location,
+            obstime=LST_EPOCH,
+        )
+        # Set the true direction in (alt, az) coordinates
+        true_direction = SkyCoord(
+            az=table["true_az"],
+            alt=table["true_alt"],
+            frame=altaz,
+        )
+        # Transform the true direction to the nominal frame
+        sky_coord = true_direction.transform_to(nom_frame)
+        # Add the spherical offsets to the table
+        table.add_column(sky_coord.fov_lon.to(u.deg), name="fov_lon")
+        table.add_column(sky_coord.fov_lat.to(u.deg), name="fov_lat")
+        # Calculate the angular separation between the true and array pointing directions
+        angular_separation = fix_array_pointing.separation(true_direction)
+        # Add the angular separation to the table
+        table.add_column(angular_separation, name="angular_separation")
         return table
 
     def get_parameters(self, batch, dl1b_parameter_list) -> np.array:
@@ -901,7 +988,9 @@ class DLDataReader(Component):
         batch = self._append_features(batch)
         # Add blank inputs for missing telescopes in the batch
         if self.process_type == ProcessType.Simulation:
-            batch_grouped = batch.group_by(["obs_id", "event_id", "true_shower_primary_class"])
+            batch_grouped = batch.group_by(
+                ["obs_id", "event_id", "true_shower_primary_class"]
+            )
         elif self.process_type == ProcessType.Observation:
             batch_grouped = batch.group_by(["obs_id", "event_id"])
         for group_element in batch_grouped.groups:
@@ -941,11 +1030,12 @@ class DLDataReader(Component):
 
     def __destructor(self):
         """Destructor to ensure all opened HDF5 files are properly closed."""
-        if hasattr(self, "files"):  # Ensure self.files exists before attempting to close
+        if hasattr(
+            self, "files"
+        ):  # Ensure self.files exists before attempting to close
             for file_name in list(self.files.keys()):
                 if self.files[file_name].isopen:  # Check if file is still open
                     self.files[file_name].close()
-
 
     @abstractmethod
     def _append_features(self, batch) -> Table:
@@ -1078,7 +1168,6 @@ class DLImageReader(DLDataReader):
         parent=None,
         **kwargs,
     ):
-
         super().__init__(
             input_url_signal=input_url_signal,
             input_url_background=input_url_background,
@@ -1337,7 +1426,6 @@ class DLWaveformReader(DLDataReader):
         parent=None,
         **kwargs,
     ):
-
         super().__init__(
             input_url_signal=input_url_signal,
             input_url_background=input_url_background,
