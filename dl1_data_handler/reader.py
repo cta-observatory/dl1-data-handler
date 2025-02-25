@@ -1734,7 +1734,6 @@ class DLRawTriggerReader(DLWaveformReader):
                     true_image = self.files[filename].root.simulation.event.telescope.images._f_get_child(
                         tel_table
                     ).col("true_image")[table_idx,:]
-                    dl1_cleaning_mask = None
                     unmapped_waveform = get_unmapped_waveform(
                         child[table_idx],
                         self.waveform_settings,
@@ -1746,21 +1745,17 @@ class DLRawTriggerReader(DLWaveformReader):
                         np.array(true_image, dtype=int), axis=1
                     )
                     mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
-                    integrated_waveform = np.sum(
-                        mapped_waveform, axis=2
-                    )
                     if self.hot_pixel_from_simulation == False:
                         hot_spot = np.unravel_index(
-                            np.argmax(integrated_waveform, axis=None), integrated_waveform.shape
+                            np.argmax(integrated_waveform = np.sum(mapped_waveform, axis=2), axis=None), integrated_waveform.shape
                         )
                     if self.hot_pixel_from_simulation == True:
                         hot_spot = np.unravel_index(
-                            np.argmax(mapped_true_image, axis=None), integrated_waveform.shape
+                            np.argmax(mapped_true_image, axis=None), mapped_true_image.shape
                         )
                     trigger_patch_center = {}
                     random_trigger_patch = None
                     if "waveform" in self.output_settings:
-                        mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
                         trigger_patch_true_image_sum = self.true_image_sum
                     else:
                         self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
