@@ -533,14 +533,14 @@ class DLDataReader(Component):
             # This is needed to share code with stereo reading mode later on
             events.add_column(file_idx, name="file_index", index=0)
             events.add_column(0, name="tel_type_id", index=3)
-            # If balanced patches selected append the patches index and cherenkov p.e. to each event
-            if isinstance(self,DLRawTriggerReader) and "balanced_patches" in self.output_settings:
-                events = self.get_balanced_patches(events, file_idx)
             # Appending the events to the list of example identifiers
             example_identifiers.append(events)
         # Constrcut the example identifiers for all files
         self.example_identifiers = vstack(example_identifiers)
         self.example_identifiers.sort(["obs_id", "event_id", "tel_id", "tel_type_id"])
+        # If balanced patches selected append the patches index and cherenkov p.e. to each event
+        if isinstance(self,DLRawTriggerReader) and "balanced_patches" in self.output_settings:
+            self.example_identifiers = self.get_balanced_patches(events)
         # If all patches selected append the patches index to each event
         if isinstance(self,DLRawTriggerReader) and "all_patches" in self.output_settings:
             num_patches = self.trigger_settings["number_of_trigger_patches"]**2
@@ -1529,6 +1529,11 @@ def get_trigger_patches(
 
         return trigger_settings, trigger_patches_xpos, trigger_patches_ypos
     
+def get_true_image(sim_event) -> np.ndarray:
+
+    true_image = np.array(sim_event["true_image"], dtype=int).reshape(-1, 1)
+
+    return true_image
 
 
 class DLRawTriggerReader(DLWaveformReader):
@@ -1542,7 +1547,7 @@ class DLRawTriggerReader(DLWaveformReader):
             "``random_patch``: extract the sequence of samples selected for a random patch. "
             "``balanced_patches``: extract the sequence of samples selected for all patches. "
             "``hot_patch``: extract the sequence of selected samples for the patch with the higher pixel charge. "
-            "``hot_patch``: extract the sequence of selected samples for all patches. "
+            "``all_patches``: extract the sequence of selected samples for all patches. "
         ),
     ).tag(config=True)
     trigger_settings = Dict(
@@ -1595,103 +1600,190 @@ class DLRawTriggerReader(DLWaveformReader):
                 "CTAFIELD_5_TRANSFORM_OFFSET"
             ]
 
-    def get_balanced_patches(self, batch, file_idx):
+    def get_balanced_patches(self, batch):
         patches_indexes = []
         cherenkov = []
         table_index = []
+        file_index = []
+
         self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
             self.trigger_settings, self.image_mappers[self.cam_name].image_shape
         )
         patch_shape = self.trigger_settings["trigger_patch_size"][0]
-        for table_idx, tel_type_id, tel_id in batch.iterrows(
-            "table_index", "tel_type_id", "tel_id"
+        trigger_patches = self.trigger_settings["trigger_patches"]
+
+        filenames = list(self.files)
+        telescope_keys = list(self.selected_telescopes.keys())
+
+        with lock:
+            all_data = {filename: self.files[filename].root for filename in filenames}
+
+        for file_idx, table_idx, tel_type_id, tel_id in batch.iterrows(
+            "file_index", "table_index", "tel_type_id", "tel_id"
         ):
-            filename = list(self.files)[file_idx]
-            camera_type = self._get_camera_type(
-                list(self.selected_telescopes.keys())[tel_type_id]
+            filename = filenames[file_idx]
+            camera_type = self._get_camera_type(telescope_keys[tel_type_id]
             )
-            with lock:
-                tel_table = f"tel_{tel_id:03d}"
-                true_image = self.files[filename].root.simulation.event.telescope.images._f_get_child(
-                    tel_table
-                ).col("true_image")[table_idx,:]
-                true_image = np.expand_dims(
-                    np.array(true_image, dtype=int), axis=1
-                )
-                mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
-                temp_index_nsb = []
-                temp_index_cosmic = []
-                temp_index = []
-                temp_chkov = []
-                for n in range(len(self.trigger_settings["trigger_patches"])):
-                    center = self.trigger_settings["trigger_patches"][n]
-                    chkov_per_patch = np.sum(
+            tel_table = f"tel_{tel_id:03d}"
+            root_data = all_data[
+                filename]
+
+            true_child = root_data.simulation.event.telescope.images._f_get_child(tel_table)
+            true_image = get_true_image(true_child[table_idx])
+            mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
+            # Get sums for all patches at once
+            true_sums = np.array([
+                    np.sum(
                         mapped_true_image[
-                            int(center["x"] - patch_shape / 2) : int(
-                                center["x"] + patch_shape / 2
-                            ),
-                            int(center["y"] - patch_shape / 2) : int(
-                                center["y"] + patch_shape / 2
-                            ),
-                            :,
-                        ],
-                        dtype=int,
-                    )
-                    temp_chkov.append(chkov_per_patch)
-                    if chkov_per_patch <= self.trigger_settings["nsb_threshold"]:
-                        temp_index_nsb.append(n)
-                    else:
-                        temp_index_cosmic.append(n)
-                comparator = min(len(temp_index_nsb), len(temp_index_cosmic))
-                temp_index_nsb = random.sample(temp_index_nsb,comparator)
-                temp_index_cosmic = random.sample(temp_index_cosmic,comparator)
-                if (comparator != 0 and self.trigger_settings["interleave_patches"]==True):
-                    temp_index = list(chain(*zip(temp_index_cosmic,temp_index_nsb)))
+                            int(patch["x"] - patch_shape / 2) : int(patch["x"] + patch_shape / 2),
+                            int(patch["y"] - patch_shape / 2) : int(patch["y"] + patch_shape / 2)
+                        ]
+                    )for patch in trigger_patches
+                ], dtype=int)
+            # Get indices of nsb and cosmic patches
+            cosmic_patches = np.where(true_sums > self.trigger_settings["nsb_threshold"])[0]
+            nsb_patches = np.where(true_sums <= self.trigger_settings["nsb_threshold"])[0]
+            # Balance nsb and cosmic patches
+            comparator = min(len(cosmic_patches), len(nsb_patches))
+            if comparator >0:
+                temp_index_nsb = np.random.choice(nsb_patches, size=comparator, replace=False)
+                temp_index_cosmic = np.random.choice(cosmic_patches, size=comparator, replace=False)
+
+                if self.trigger_settings.get("interleave_patches", False):
+                    temp_index = np.concatenate([temp_index_cosmic, temp_index_nsb]).ravel(order="F")
                 else:
                     temp_index = temp_index_cosmic + temp_index_nsb
-                for idx in temp_index:
-                    cherenkov.append(temp_chkov[idx])
+                patches_indexes.extend(temp_index.tolist())
+                cherenkov.extend(true_sums[temp_index].tolist())
                 table_index.extend([table_idx] * 2 * comparator)
-                patches_indexes.extend(temp_index)
-        table_patches = Table([table_index, patches_indexes, cherenkov],
-                              names = ["table_index", "patch_index", "cherenkov_pe"])
-        batch = join(
-            left=batch,
-            right=table_patches,
-            keys=["table_index"],
-            join_type="right",
-            keep_order=True,
+                file_index.extend([file_idx] * 2 * comparator)
+            # If there is no pe
+            else:
+                patches_indexes.append(-1)
+                cherenkov.append(-1)
+                table_index.append(table_idx)
+                file_index.append(file_idx)
+        table_patches = Table(
+            [file_index, table_index, patches_indexes, cherenkov],
+            names=["file_index", "table_index", "patch_index", "cherenkov_pe"]
         )
+        batch = join(left=batch, right=table_patches, keys=["file_index","table_index"], join_type="right", keep_order=True)
+
         return(batch)
 
     def _append_features(self, batch) -> Table:
         waveforms = []
         true_image_sums = []
         if "double_random" in self.output_settings:
+ 
             self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
                 self.trigger_settings, self.image_mappers[self.cam_name].image_shape
                 )
             patch_shape = self.trigger_settings["trigger_patch_size"][0]
+            trigger_patches = self.trigger_settings["trigger_patches"]
 
+            filenames = list(self.files)
+            telescope_keys = list(self.selected_telescopes.keys())
+
+            with lock:
+                all_data = {filename: self.files[filename].root for filename in filenames}
 
             for file_idx, table_idx,  tel_type_id, tel_id, nsb_cosmic in batch.iterrows(
             "file_index", "table_index", "tel_type_id", "tel_id", "cosmic_nsb"
             ):
-                filename = list(self.files)[file_idx]
-                camera_type = self._get_camera_type(
-                    list(self.selected_telescopes.keys())[tel_type_id]
+
+                filename = filenames[file_idx]
+                camera_type = self._get_camera_type(telescope_keys[tel_type_id]
                 )
-                with lock:
-                    tel_table = f"tel_{tel_id:03d}"
-                    child = self.files[filename].root.r0.event.telescope._f_get_child(
-                        tel_table
+                tel_table = f"tel_{tel_id:03d}"
+                root_data = all_data[
+                    filename]
+
+                child = root_data.r0.event.telescope._f_get_child(tel_table)
+                unmapped_waveform = get_unmapped_waveform(
+                    child[table_idx],
+                    self.waveform_settings,
+                    self.image_mappers[camera_type].geometry,
                     )
-                    unmapped_waveform = get_unmapped_waveform(
-                        child[table_idx],
-                        self.waveform_settings,
-                        self.image_mappers[camera_type].geometry,
+                mapped_waveform = self.image_mappers[camera_type].map_image(
+                    unmapped_waveform
                     )
-                    mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
+                
+                true_child = root_data.simulation.event.telescope.images._f_get_child(tel_table)
+                true_image = get_true_image(true_child[table_idx])
+                mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
+                
+                patch_sums = np.array([
+                    np.sum(
+                        mapped_true_image[
+                            int(patch["x"] - patch_shape / 2) : int(patch["x"] + patch_shape / 2),
+                            int(patch["y"] - patch_shape / 2) : int(patch["y"] + patch_shape / 2)
+                        ]
+                    )for patch in trigger_patches
+                ], dtype=int)
+                
+                if nsb_cosmic ==0 :
+                    valid_patches = np.where(patch_sums > self.trigger_settings["nsb_threshold"])[0]
+                else:
+                    valid_patches = np.where(patch_sums <= self.trigger_settings["nsb_threshold"])[0]
+
+                if len(valid_patches) >0:
+                    n_patch = np.random.choice(valid_patches)
+                else:
+                    n_patch = np.random.randint(self.trigger_settings["number_of_trigger_patches"])
+
+                trigger_center = trigger_patches[n_patch]
+                mapped_selected_waveform = mapped_waveform[
+                    int(trigger_center["x"] - patch_shape / 2) : int(trigger_center["x"] + patch_shape / 2),
+                    int(trigger_center["y"] - patch_shape / 2) : int(trigger_center["y"] + patch_shape / 2),
+                    :
+                ]
+                
+                waveforms.append(mapped_selected_waveform)
+                true_image_sums.append(patch_sums[n_patch])
+                
+
+        elif "balanced_patches" in self.output_settings or "all_patches" in self.output_settings:
+            self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
+                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
+                )
+            patch_shape = self.trigger_settings["trigger_patch_size"][0]
+            trigger_patches = self.trigger_settings["trigger_patches"]
+
+            filenames = list(self.files)
+            telescope_keys = list(self.selected_telescopes.keys())
+            with lock:
+                all_data = {filename: self.files[filename].root for filename in filenames}
+
+            for file_idx, table_idx,  tel_type_id, tel_id, patch_idx in batch.iterrows(
+            "file_index", "table_index", "tel_type_id", "tel_id", "patch_index"
+            ):
+                filename = filenames[file_idx]
+                camera_type = self._get_camera_type(telescope_keys[tel_type_id]
+                )
+                tel_table = f"tel_{tel_id:03d}"
+                root_data = all_data[
+                    filename]
+
+                child = root_data.r0.event.telescope._f_get_child(tel_table)
+                
+                unmapped_waveform = get_unmapped_waveform(
+                    child[table_idx],
+                    self.waveform_settings,
+                    self.image_mappers[camera_type].geometry,
+                )
+                mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
+                trigger_patch_center = self.trigger_settings["trigger_patches"][patch_idx]
+                mapped_waveform = mapped_waveform[
+                    int(trigger_patch_center["x"] - patch_shape / 2) : int(
+                        trigger_patch_center["x"] + patch_shape / 2
+                    ),
+                    int(trigger_patch_center["y"] - patch_shape / 2) : int(
+                        trigger_patch_center["y"] + patch_shape / 2
+                    ),
+                    :,
+                ]
+                if "all_patches" in self.output_settings:
                     true_image = self.files[filename].root.simulation.event.telescope.images._f_get_child(
                         tel_table
                     ).col("true_image")[table_idx,:]
@@ -1699,133 +1791,22 @@ class DLRawTriggerReader(DLWaveformReader):
                         np.array(true_image, dtype=int), axis=1
                     )
                     mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
-                    if nsb_cosmic ==0 :
-                        counter = 0
-                        trigger_patch_true_image_sum = None 
-                        while (counter < 10 or trigger_patch_true_image_sum > self.trigger_settings["nsb_threshold"]):
-                            n_patch = np.random.randint(
-                                len(
-                                    self.trigger_settings["trigger_patches"]
-                                )
-                            )
-                            random_center = self.trigger_settings["trigger_patches"][n_patch]
-                            trigger_patch_true_image_sum = np.sum(
+                    true_chkov = np.sum(
                                 mapped_true_image[
-                                    int(random_center["x"] - patch_shape / 2) : int(
-                                        random_center["x"] + patch_shape / 2
+                                    int(trigger_patch_center["x"] - patch_shape / 2) : int(
+                                        trigger_patch_center["x"] + patch_shape / 2
                                     ),
-                                    int(random_center["y"] - patch_shape / 2) : int(
-                                        random_center["y"] + patch_shape / 2
+                                    int(trigger_patch_center["y"] - patch_shape / 2) : int(
+                                        trigger_patch_center["y"] + patch_shape / 2
                                     ),
                                     :,
                                 ],
                                 dtype=int,
-                                )
-                            counter+=1
-                        trigger_nsb_center = random_center
-                        mapped_nsb_waveform = mapped_waveform[
-                            int(trigger_nsb_center["x"] - patch_shape / 2) : int(
-                                trigger_nsb_center["x"] + patch_shape / 2
-                            ),
-                            int(trigger_nsb_center["y"] - patch_shape / 2) : int(
-                                trigger_nsb_center["y"] + patch_shape / 2
-                            ),
-                            :,
-                        ]
-                        waveforms.append(mapped_nsb_waveform)
-                        true_image_sums.append(trigger_patch_true_image_sum)
-                    elif nsb_cosmic == 1:
-                        counter = 0
-                        trigger_patch_true_image_sum = None
-                        while (counter < 10 or trigger_patch_true_image_sum <= self.trigger_settings["nsb_threshold"]):
-                            n_patch = np.random.randint(
-                                len(
-                                    self.trigger_settings["trigger_patches"]
-                                )
                             )
-                            random_center = self.trigger_settings["trigger_patches"][n_patch]
-                            trigger_patch_true_image_sum = np.sum(
-                                mapped_true_image[
-                                    int(random_center["x"] - patch_shape / 2) : int(
-                                        random_center["x"] + patch_shape / 2
-                                    ),
-                                    int(random_center["y"] - patch_shape / 2) : int(
-                                        random_center["y"] + patch_shape / 2
-                                    ),
-                                    :,
-                                ],
-                                dtype=int,
-                                )
-                            counter+=1
-                        trigger_cosmic_center = random_center
-                        mapped_cosmic_waveform = mapped_waveform[
-                            int(trigger_nsb_center["x"] - patch_shape / 2) : int(
-                                trigger_nsb_center["x"] + patch_shape / 2
-                            ),
-                            int(trigger_nsb_center["y"] - patch_shape / 2) : int(
-                                trigger_nsb_center["y"] + patch_shape / 2
-                            ),
-                            :,
-                        ]
-                        waveforms.append(mapped_cosmic_waveform)
-                        true_image_sums.append(trigger_patch_true_image_sum)
-        elif "balanced_patches" in self.output_settings or "all_patches" in self.output_settings:
-            self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
-                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
-                )
-            patch_shape = self.trigger_settings["trigger_patch_size"][0]
-            for file_idx, table_idx,  tel_type_id, tel_id, patch_idx in batch.iterrows(
-            "file_index", "table_index", "tel_type_id", "tel_id", "patch_index"
-            ):
-                filename = list(self.files)[file_idx]
-                camera_type = self._get_camera_type(
-                    list(self.selected_telescopes.keys())[tel_type_id]
-                )
-                with lock:
-                    tel_table = f"tel_{tel_id:03d}"
-                    child = self.files[filename].root.r0.event.telescope._f_get_child(
-                        tel_table
-                    )
-                    unmapped_waveform = get_unmapped_waveform(
-                        child[table_idx],
-                        self.waveform_settings,
-                        self.image_mappers[camera_type].geometry,
-                    )
-                    mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
-                    trigger_patch_center = self.trigger_settings["trigger_patches"][patch_idx]
-                    mapped_waveform = mapped_waveform[
-                        int(trigger_patch_center["x"] - patch_shape / 2) : int(
-                            trigger_patch_center["x"] + patch_shape / 2
-                        ),
-                        int(trigger_patch_center["y"] - patch_shape / 2) : int(
-                            trigger_patch_center["y"] + patch_shape / 2
-                        ),
-                        :,
-                    ]
-                    if "all_patches" in self.output_settings:
-                        true_image = self.files[filename].root.simulation.event.telescope.images._f_get_child(
-                            tel_table
-                        ).col("true_image")[table_idx,:]
-                        true_image = np.expand_dims(
-                            np.array(true_image, dtype=int), axis=1
-                        )
-                        mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
-                        true_chkov = np.sum(
-                                    mapped_true_image[
-                                        int(trigger_patch_center["x"] - patch_shape / 2) : int(
-                                            trigger_patch_center["x"] + patch_shape / 2
-                                        ),
-                                        int(trigger_patch_center["y"] - patch_shape / 2) : int(
-                                            trigger_patch_center["y"] + patch_shape / 2
-                                        ),
-                                        :,
-                                    ],
-                                    dtype=int,
-                                )
-                        waveforms.append(mapped_waveform)
-                        true_image_sums.append(true_chkov)
-                    if "balanced_patches" in self.output_settings:
-                        waveforms.append(mapped_waveform)
+                    waveforms.append(mapped_waveform)
+                    true_image_sums.append(true_chkov)
+                if "balanced_patches" in self.output_settings:
+                    waveforms.append(mapped_waveform)
         else:
             for file_idx, table_idx, tel_type_id, tel_id in batch.iterrows(
                 "file_index", "table_index", "tel_type_id", "tel_id"
@@ -1942,6 +1923,7 @@ class DLRawTriggerReader(DLWaveformReader):
         else:
             batch.add_column(waveforms, name="features", index=7)
             batch.add_column(true_image_sums, name="cherenkov_pe", index=8)
+
         return batch
 
 
