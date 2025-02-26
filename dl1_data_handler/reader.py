@@ -547,6 +547,12 @@ class DLDataReader(Component):
             patch_indices = np.tile(np.arange(num_patches), len(self.example_identifiers))
             self.example_identifiers = self.example_identifiers[np.repeat(np.arange(len(self.example_identifiers)), num_patches)]
             self.example_identifiers.add_column(patch_indices, name="patch_index", index=6)
+        if isinstance(self,DLRawTriggerReader) and "double_random" in self.output_settings:
+            nsb_cosmic = np.tile(np.arange(2), len(self.example_identifiers))
+            self.example_identifiers = self.example_identifiers[np.repeat(np.arange(len(self.example_identifiers)), 2)]
+            self.example_identifiers.add_column(nsb_cosmic, name="cosmic_nsb")
+
+
         # Construct simulation information for all files
         if self.process_type == ProcessType.Simulation:
             self.simulation_info = vstack(simulation_info)
@@ -1528,7 +1534,7 @@ def get_trigger_patches(
 class DLRawTriggerReader(DLWaveformReader):
 
     output_settings = CaselessStrEnum(
-        ["waveform", "random_patch", "balanced_patches", "hot_patch", "all_patches"],
+        ["waveform", "random_patch", "balanced_patches", "hot_patch", "all_patches", "double_random"],
         default_value="waveform",
         help=(
             "Set the type of data in feature vector. "
@@ -1661,7 +1667,109 @@ class DLRawTriggerReader(DLWaveformReader):
     def _append_features(self, batch) -> Table:
         waveforms = []
         true_image_sums = []
-        if "balanced_patches" in self.output_settings or "all_patches" in self.output_settings:
+        if "double_random" in self.output_settings:
+            self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
+                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
+                )
+            patch_shape = self.trigger_settings["trigger_patch_size"][0]
+
+
+            for file_idx, table_idx,  tel_type_id, tel_id, nsb_cosmic in batch.iterrows(
+            "file_index", "table_index", "tel_type_id", "tel_id", "cosmic_nsb"
+            ):
+                filename = list(self.files)[file_idx]
+                camera_type = self._get_camera_type(
+                    list(self.selected_telescopes.keys())[tel_type_id]
+                )
+                with lock:
+                    tel_table = f"tel_{tel_id:03d}"
+                    child = self.files[filename].root.r0.event.telescope._f_get_child(
+                        tel_table
+                    )
+                    unmapped_waveform = get_unmapped_waveform(
+                        child[table_idx],
+                        self.waveform_settings,
+                        self.image_mappers[camera_type].geometry,
+                    )
+                    mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
+                    true_image = self.files[filename].root.simulation.event.telescope.images._f_get_child(
+                        tel_table
+                    ).col("true_image")[table_idx,:]
+                    true_image = np.expand_dims(
+                        np.array(true_image, dtype=int), axis=1
+                    )
+                    mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
+                    if nsb_cosmic ==0 :
+                        counter = 0
+                        trigger_patch_true_image_sum = None 
+                        while (counter < 10 or trigger_patch_true_image_sum > self.trigger_settings["nsb_threshold"]):
+                            n_patch = np.random.randint(
+                                len(
+                                    self.trigger_settings["trigger_patches"]
+                                )
+                            )
+                            random_center = self.trigger_settings["trigger_patches"][n_patch]
+                            trigger_patch_true_image_sum = np.sum(
+                                mapped_true_image[
+                                    int(random_center["x"] - patch_shape / 2) : int(
+                                        random_center["x"] + patch_shape / 2
+                                    ),
+                                    int(random_center["y"] - patch_shape / 2) : int(
+                                        random_center["y"] + patch_shape / 2
+                                    ),
+                                    :,
+                                ],
+                                dtype=int,
+                                )
+                            counter+=1
+                        trigger_nsb_center = random_center
+                        mapped_nsb_waveform = mapped_waveform[
+                            int(trigger_nsb_center["x"] - patch_shape / 2) : int(
+                                trigger_nsb_center["x"] + patch_shape / 2
+                            ),
+                            int(trigger_nsb_center["y"] - patch_shape / 2) : int(
+                                trigger_nsb_center["y"] + patch_shape / 2
+                            ),
+                            :,
+                        ]
+                        waveforms.append(mapped_nsb_waveform)
+                        true_image_sums.append(trigger_patch_true_image_sum)
+                    elif nsb_cosmic == 1:
+                        counter = 0
+                        trigger_patch_true_image_sum = None
+                        while (counter < 10 or trigger_patch_true_image_sum <= self.trigger_settings["nsb_threshold"]):
+                            n_patch = np.random.randint(
+                                len(
+                                    self.trigger_settings["trigger_patches"]
+                                )
+                            )
+                            random_center = self.trigger_settings["trigger_patches"][n_patch]
+                            trigger_patch_true_image_sum = np.sum(
+                                mapped_true_image[
+                                    int(random_center["x"] - patch_shape / 2) : int(
+                                        random_center["x"] + patch_shape / 2
+                                    ),
+                                    int(random_center["y"] - patch_shape / 2) : int(
+                                        random_center["y"] + patch_shape / 2
+                                    ),
+                                    :,
+                                ],
+                                dtype=int,
+                                )
+                            counter+=1
+                        trigger_cosmic_center = random_center
+                        mapped_cosmic_waveform = mapped_waveform[
+                            int(trigger_nsb_center["x"] - patch_shape / 2) : int(
+                                trigger_nsb_center["x"] + patch_shape / 2
+                            ),
+                            int(trigger_nsb_center["y"] - patch_shape / 2) : int(
+                                trigger_nsb_center["y"] + patch_shape / 2
+                            ),
+                            :,
+                        ]
+                        waveforms.append(mapped_cosmic_waveform)
+                        true_image_sums.append(trigger_patch_true_image_sum)
+        elif "balanced_patches" in self.output_settings or "all_patches" in self.output_settings:
             self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
                 self.trigger_settings, self.image_mappers[self.cam_name].image_shape
                 )
@@ -1773,7 +1881,7 @@ class DLRawTriggerReader(DLWaveformReader):
                         if random_trigger_patch == True:
                             counter = 0
                             trigger_patch_true_image_sum = 1000 #dummy value
-                            while (counter < 10 or trigger_patch_true_image_sum > self.nsb_threshold):
+                            while (counter < 10 or trigger_patch_true_image_sum > self.trigger_settings["nsb_threshold"]):
                                 n_patch = np.random.randint(
                                     len(
                                         self.trigger_settings["trigger_patches"]
