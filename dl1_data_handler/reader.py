@@ -1298,6 +1298,9 @@ class DLImageReader(DLDataReader):
         batch.add_column(images, name="features", index=7)
         return batch
 
+    def get_balanced_patches(self, batch) -> Table:
+        pass
+
 
 def get_unmapped_waveform(
     r1_event,
@@ -1927,7 +1930,7 @@ class DLRawTriggerReader(DLWaveformReader):
                     hot_spot = np.unravel_index(
                         np.argmax(integrated_waveform = np.sum(mapped_waveform, axis=2), axis=None), integrated_waveform.shape
                     )
-                if self.hot_pixel_from_simulation == True:
+                elif self.hot_pixel_from_simulation == True:
                     hot_spot = np.unravel_index(
                         np.argmax(mapped_true_image, axis=None), mapped_true_image.shape
                     )
