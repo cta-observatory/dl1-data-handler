@@ -1882,11 +1882,24 @@ class DLRawTriggerReader(DLWaveformReader):
                         trigger_patch_center = self.trigger_settings["trigger_patches"][nsb_patch]
 
                     elif random_trigger_patch == False:
-                        patch_positions = np.array([(p["x"], p["y"]) for p in self.trigger_settings["trigger_patches"]])
-                        distances = np.sum((patch_positions - hot_spot) ** 2, axis=1)
-                        closest_patch_idx = np.argmin(distances)
-                        trigger_patch_true_image_sum = patch_sums[closest_patch_idx]
-                        trigger_patch_center = self.trigger_settings["trigger_patches"][closest_patch_idx]
+                        trigger_patch_center["x"] = self.trigger_patches_xpos[np.argmin(
+                            np.abs(self.trigger_patches_xpos - hot_spot[0])
+                        )]
+                        trigger_patch_center["y"] = self.trigger_patches_ypos[np.argmin(
+                            np.abs(self.trigger_patches_ypos - hot_spot[1])
+                        )]
+                        trigger_patch_true_image_sum = np.sum(
+                            mapped_true_image[
+                                int(trigger_patch_center["x"] - patch_shape / 2) : int(
+                                    trigger_patch_center["x"] + patch_shape / 2
+                                ),
+                                int(trigger_patch_center["y"] - patch_shape / 2) : int(
+                                    trigger_patch_center["y"] + patch_shape / 2
+                                ),
+                                :,
+                            ],
+                            dtype=int,
+                        )
                     mapped_waveform = mapped_waveform[
                             int(trigger_patch_center["x"] - patch_shape / 2) : int(
                                 trigger_patch_center["x"] + patch_shape / 2
