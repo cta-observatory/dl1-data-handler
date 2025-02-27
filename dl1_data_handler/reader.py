@@ -1573,9 +1573,6 @@ class DLRawTriggerReader(DLWaveformReader):
         parent=None,
         **kwargs,
     ):
-
-        
-
         super().__init__(
             input_url_signal=input_url_signal,
             input_url_background=input_url_background,
@@ -1713,8 +1710,7 @@ class DLRawTriggerReader(DLWaveformReader):
                 
                 true_child = root_data.simulation.event.telescope.images._f_get_child(tel_table)
                 true_image = get_true_image(true_child[table_idx])
-                mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
-                
+                mapped_true_image = self.image_mappers[camera_type].map_image(true_image)               
                 patch_sums = np.array([
                     np.sum(
                         mapped_true_image[
@@ -1722,13 +1718,11 @@ class DLRawTriggerReader(DLWaveformReader):
                             int(patch["y"] - patch_shape / 2) : int(patch["y"] + patch_shape / 2)
                         ]
                     )for patch in trigger_patches
-                ], dtype=int)
-                
+                ], dtype=int)                
                 if nsb_cosmic ==0 :
                     valid_patches = np.where(patch_sums > self.trigger_settings["nsb_threshold"])[0]
                 else:
                     valid_patches = np.where(patch_sums <= self.trigger_settings["nsb_threshold"])[0]
-
                 if len(valid_patches) >0:
                     n_patch = np.random.choice(valid_patches)
                 else:
@@ -1785,22 +1779,22 @@ class DLRawTriggerReader(DLWaveformReader):
                     ),
                     :,
                 ]
-                if "all_patches" in self.output_settings:
-                    true_child = root_data.simulation.event.telescope.images._f_get_child(tel_table)
-                    true_image = get_true_image(true_child[table_idx])
-                    mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
-                    true_chkov = np.sum(
-                                mapped_true_image[
-                                    int(trigger_patch_center["x"] - patch_shape / 2) : int(
-                                        trigger_patch_center["x"] + patch_shape / 2
-                                    ),
-                                    int(trigger_patch_center["y"] - patch_shape / 2) : int(
-                                        trigger_patch_center["y"] + patch_shape / 2
-                                    ),
-                                    :,
-                                ],
-                                dtype=int,
-                            )
+                true_child = root_data.simulation.event.telescope.images._f_get_child(tel_table)
+                true_image = get_true_image(true_child[table_idx])
+                mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
+                true_chkov = np.sum(
+                            mapped_true_image[
+                                int(trigger_patch_center["x"] - patch_shape / 2) : int(
+                                    trigger_patch_center["x"] + patch_shape / 2
+                                ),
+                                int(trigger_patch_center["y"] - patch_shape / 2) : int(
+                                    trigger_patch_center["y"] + patch_shape / 2
+                                ),
+                                :,
+                            ],
+                            dtype=int,
+                        )
+                if "all_patches" in self.output_settings:                   
                     waveforms.append(mapped_waveform)
                     true_image_sums.append(true_chkov)
                 elif "balanced_patches" in self.output_settings:
@@ -1868,8 +1862,6 @@ class DLRawTriggerReader(DLWaveformReader):
                         random_trigger_patch = np.random.choice(
                             [False, True], p=[0.5, 0.5]
                         )
-                        print(random_trigger_patch)
-
                     if random_trigger_patch == True:
                         nsb_patches = np.where(patch_sums <= self.trigger_settings["nsb_threshold"])[0]
                         #If no patches with only nsb take a random patch
@@ -1909,13 +1901,13 @@ class DLRawTriggerReader(DLWaveformReader):
                             ),
                             :,
                         ]
-            # Apply the 'ImageMapper' whenever the index matrix is not None.
-            # Otherwise, return the unmapped image for the 'IndexedConv' package.
-            if self.image_mappers[camera_type].index_matrix is None:
-                waveforms.append(mapped_waveform)
-                true_image_sums.append(trigger_patch_true_image_sum)
-            else:
-                waveforms.append(unmapped_waveform)
+                # Apply the 'ImageMapper' whenever the index matrix is not None.
+                # Otherwise, return the unmapped image for the 'IndexedConv' package.
+                if self.image_mappers[camera_type].index_matrix is None:
+                    waveforms.append(mapped_waveform)
+                    true_image_sums.append(trigger_patch_true_image_sum)
+                else:
+                    waveforms.append(unmapped_waveform)
         if "balanced_patches" in self.output_settings:
             batch.add_column(waveforms, name="waveform")
         else:
