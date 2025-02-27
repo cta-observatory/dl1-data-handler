@@ -1545,7 +1545,7 @@ class DLRawTriggerReader(DLWaveformReader):
             "Set the type of data in feature vector. "
             "``waveform``: extract the sequence of samples selected for the complete camera. "
             "``random_patch``: extract the sequence of samples selected for a random patch. "
-            "``balanced_patches``: extract the sequence of samples selected for all patches. "
+            "``balanced_patches``: extract the sequence of samples selected for equilibrated number of cosmic and nsb patches. "
             "``hot_patch``: extract the sequence of selected samples for the patch with the higher pixel charge. "
             "``all_patches``: extract the sequence of selected samples for all patches. "
         ),
@@ -1754,46 +1754,50 @@ class DLRawTriggerReader(DLWaveformReader):
             for file_idx, table_idx,  tel_type_id, tel_id, patch_idx in batch.iterrows(
             "file_index", "table_index", "tel_type_id", "tel_id", "patch_index"
             ):
-                filename = filenames[file_idx]
-                camera_type = self._get_camera_type(telescope_keys[tel_type_id]
-                )
-                tel_table = f"tel_{tel_id:03d}"
-                root_data = all_data[
-                    filename]
+                if patch_idx == -1:
+                    # Create an array of shape (patch_shape, patch_shape, sequence_length) filled with -1
+                    mapped_waveform = np.full((patch_shape, patch_shape, self.sequence_length), -1)
+                else:
+                    filename = filenames[file_idx]
+                    camera_type = self._get_camera_type(telescope_keys[tel_type_id]
+                    )
+                    tel_table = f"tel_{tel_id:03d}"
+                    root_data = all_data[
+                        filename]
 
-                child = root_data.r0.event.telescope._f_get_child(tel_table)
-                
-                unmapped_waveform = get_unmapped_waveform(
-                    child[table_idx],
-                    self.waveform_settings,
-                    self.image_mappers[camera_type].geometry,
-                )
-                mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
-                trigger_patch_center = trigger_patches[patch_idx]
-                mapped_waveform = mapped_waveform[
-                    int(trigger_patch_center["x"] - patch_shape / 2) : int(
-                        trigger_patch_center["x"] + patch_shape / 2
-                    ),
-                    int(trigger_patch_center["y"] - patch_shape / 2) : int(
-                        trigger_patch_center["y"] + patch_shape / 2
-                    ),
-                    :,
-                ]
-                true_child = root_data.simulation.event.telescope.images._f_get_child(tel_table)
-                true_image = get_true_image(true_child[table_idx])
-                mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
-                true_chkov = np.sum(
-                            mapped_true_image[
-                                int(trigger_patch_center["x"] - patch_shape / 2) : int(
-                                    trigger_patch_center["x"] + patch_shape / 2
-                                ),
-                                int(trigger_patch_center["y"] - patch_shape / 2) : int(
-                                    trigger_patch_center["y"] + patch_shape / 2
-                                ),
-                                :,
-                            ],
-                            dtype=int,
-                        )
+                    child = root_data.r0.event.telescope._f_get_child(tel_table)
+                    
+                    unmapped_waveform = get_unmapped_waveform(
+                        child[table_idx],
+                        self.waveform_settings,
+                        self.image_mappers[camera_type].geometry,
+                    )
+                    mapped_waveform = self.image_mappers[camera_type].map_image(unmapped_waveform)
+                    trigger_patch_center = trigger_patches[patch_idx]
+                    mapped_waveform = mapped_waveform[
+                        int(trigger_patch_center["x"] - patch_shape / 2) : int(
+                            trigger_patch_center["x"] + patch_shape / 2
+                        ),
+                        int(trigger_patch_center["y"] - patch_shape / 2) : int(
+                            trigger_patch_center["y"] + patch_shape / 2
+                        ),
+                        :,
+                    ]
+                    true_child = root_data.simulation.event.telescope.images._f_get_child(tel_table)
+                    true_image = get_true_image(true_child[table_idx])
+                    mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
+                    true_chkov = np.sum(
+                                mapped_true_image[
+                                    int(trigger_patch_center["x"] - patch_shape / 2) : int(
+                                        trigger_patch_center["x"] + patch_shape / 2
+                                    ),
+                                    int(trigger_patch_center["y"] - patch_shape / 2) : int(
+                                        trigger_patch_center["y"] + patch_shape / 2
+                                    ),
+                                    :,
+                                ],
+                                dtype=int,
+                            )
                 if "all_patches" in self.output_settings:                   
                     waveforms.append(mapped_waveform)
                     true_image_sums.append(true_chkov)
