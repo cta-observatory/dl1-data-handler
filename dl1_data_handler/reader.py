@@ -1543,9 +1543,10 @@ class DLRawTriggerReader(DLWaveformReader):
         default_value="waveform",
         help=(
             "Set the type of data in feature vector. "
-            "``waveform``: extract the sequence of samples selected for the complete camera. "
-            "``random_patch``: extract the sequence of samples selected for a random patch. "
-            "``balanced_patches``: extract the sequence of samples selected for equilibrated number of cosmic and nsb patches. "
+            "``waveform``: extract the sequence of selected samples for the complete camera. "
+            "``random_patch``: extract the sequence of selected samples for a random patch(random nsb or hot patch). "
+            "``double_random``: extract the sequence of selected samples for a random nsb and a random cosmic patch per event"
+            "``balanced_patches``: extract the sequence of selected samples for equilibrated number of cosmic and nsb patches. "
             "``hot_patch``: extract the sequence of selected samples for the patch with the higher pixel charge. "
             "``all_patches``: extract the sequence of selected samples for all patches. "
         ),
@@ -1555,7 +1556,7 @@ class DLRawTriggerReader(DLWaveformReader):
         allow_none = True, 
         help=("Dict for setting number of trigger patches and nsb threshold and saving patches positions"
             "``number_of_trigger_patches``Number of squared trigger patches in the mapped image."
-            "``nsb_threshold``Threshold in p.e. to consider a patch with nsb or cosmic."
+            "``cpe_threshold``Threshold in Cherenkov p.e.. A patch with cpe > threshold is considered as a cosmic patch."
             "``interleave_patches``Get alternate nsb and cosmic patches as output."
             ),
     ).tag(config=True)
@@ -1638,8 +1639,8 @@ class DLRawTriggerReader(DLWaveformReader):
                     )for patch in trigger_patches
                 ], dtype=int)
             # Get indices of nsb and cosmic patches
-            cosmic_patches = np.where(true_sums > self.trigger_settings["nsb_threshold"])[0]
-            nsb_patches = np.where(true_sums <= self.trigger_settings["nsb_threshold"])[0]
+            cosmic_patches = np.where(true_sums > self.trigger_settings["cpe_threshold"])[0]
+            nsb_patches = np.where(true_sums <= self.trigger_settings["cpe_threshold"])[0]
             # Balance nsb and cosmic patches
             comparator = min(len(cosmic_patches), len(nsb_patches))
             if comparator >0:
@@ -1720,9 +1721,10 @@ class DLRawTriggerReader(DLWaveformReader):
                     )for patch in trigger_patches
                 ], dtype=int)                
                 if nsb_cosmic ==0 :
-                    valid_patches = np.where(patch_sums > self.trigger_settings["nsb_threshold"])[0]
+                    valid_patches = np.where(patch_sums > self.trigger_settings["cpe_threshold"])[0]
                 else:
-                    valid_patches = np.where(patch_sums <= self.trigger_settings["nsb_threshold"])[0]
+                    valid_patches = np.where(patch_sums <= self.trigger_settings["cpe_threshold"])[0]
+                # If there is no nsb or cosmic patch selects a random patch
                 if len(valid_patches) >0:
                     n_patch = np.random.choice(valid_patches)
                 else:
@@ -1867,7 +1869,7 @@ class DLRawTriggerReader(DLWaveformReader):
                             [False, True], p=[0.5, 0.5]
                         )
                     if random_trigger_patch == True:
-                        nsb_patches = np.where(patch_sums <= self.trigger_settings["nsb_threshold"])[0]
+                        nsb_patches = np.where(patch_sums <= self.trigger_settings["cpe_threshold"])[0]
                         #If no patches with only nsb take a random patch
                         if len(nsb_patches) == 0:
                             nsb_patch = np.randint(0, len(trigger_patches))
