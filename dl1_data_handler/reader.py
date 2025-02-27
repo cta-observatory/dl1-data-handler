@@ -540,7 +540,7 @@ class DLDataReader(Component):
         self.example_identifiers.sort(["obs_id", "event_id", "tel_id", "tel_type_id"])
         # If balanced patches selected append the patches index and cherenkov p.e. to each event
         if isinstance(self,DLRawTriggerReader) and "balanced_patches" in self.output_settings:
-            self.example_identifiers = self.get_balanced_patches(events)
+            self.example_identifiers = self.get_balanced_patches(self.example_identifiers)
         # If all patches selected append the patches index to each event
         if isinstance(self,DLRawTriggerReader) and "all_patches" in self.output_settings:
             num_patches = self.trigger_settings["number_of_trigger_patches"]**2
@@ -1671,7 +1671,9 @@ class DLRawTriggerReader(DLWaveformReader):
             names=["file_index", "table_index", "patch_index", "cherenkov_pe"]
         )
         batch = join(left=batch, right=table_patches, keys=["file_index","table_index"], join_type="right", keep_order=True)
-
+        column_order = batch.colnames
+        new_order = column_order[:6] + ["patch_index", "cherenkov_pe"] + column_order[6:-2]
+        batch = batch[new_order]
         return(batch)
 
     def _append_features(self, batch) -> Table:
@@ -1918,7 +1920,7 @@ class DLRawTriggerReader(DLWaveformReader):
                 else:
                     waveforms.append(unmapped_waveform)
         if "balanced_patches" in self.output_settings:
-            batch.add_column(waveforms, name="waveform")
+            batch.add_column(waveforms, name="waveform", index=9)
         else:
             batch.add_column(waveforms, name="features", index=7)
             batch.add_column(true_image_sums, name="cherenkov_pe", index=8)
