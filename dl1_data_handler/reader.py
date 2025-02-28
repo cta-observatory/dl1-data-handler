@@ -556,30 +556,30 @@ class DLDataReader(Component):
         if isinstance(self,DLRawTriggerReader):
             if "balanced_patches" in self.output_settings:
                 self.example_identifiers = self.get_balanced_patches(self.example_identifiers)
-            # If all patches selected append the patches index to each event and dummy column for nsbness
+            # If all patches selected append the patches index to each event and dummy column for patch_class
             elif "all_patches" in self.output_settings:
                 num_patches = self.trigger_settings["number_of_trigger_patches"]**2
                 patch_indices = np.tile(np.arange(num_patches), len(self.example_identifiers))
                 self.example_identifiers = self.example_identifiers[np.repeat(np.arange(len(self.example_identifiers)), num_patches)]
                 self.example_identifiers.add_column(patch_indices, name="patch_index", index=6)
-                nsbness = np.zeros(len(self.example_identifiers))
-                self.example_identifiers.add_column(nsbness, name="nsbness", index=7)
+                nsb_cosmic = np.zeros(len(self.example_identifiers))
+                self.example_identifiers.add_column(nsb_cosmic, name="patch_class", index=7)
             elif "double_random" in self.output_settings:
                 nsb_cosmic = np.tile(np.arange(2), len(self.example_identifiers))
                 self.example_identifiers = self.example_identifiers[np.repeat(np.arange(len(self.example_identifiers)), 2)]
-                self.example_identifiers.add_column(nsb_cosmic, name="nsbness", index=6)
+                self.example_identifiers.add_column(nsb_cosmic, name="patch_class", index=6)
                 patch_indices = np.zeros(len(self.example_identifiers))
                 self.example_identifiers.add_column(patch_indices, name="patch_index", index=6)
             elif "waveform" in self.output_settings or "random_patch" in self.output_settings:
                 patch_indices = np.zeros(len(self.example_identifiers))
                 self.example_identifiers.add_column(patch_indices, name="patch_index", index=6)
-                nsbness = np.zeros(len(self.example_identifiers))
-                self.example_identifiers.add_column(nsbness, name="nsbness", index=7)
+                nsb_cosmic = np.zeros(len(self.example_identifiers))
+                self.example_identifiers.add_column(nsb_cosmic, name="patch_class", index=7)
             elif "hot_patch" in self.output_settings:
                 patch_indices = np.zeros(len(self.example_identifiers))
                 self.example_identifiers.add_column(patch_indices, name="patch_index", index=6)
-                nsbness = np.ones(len(self.example_identifiers))
-                self.example_identifiers.add_column(nsbness, name="nsbness", index=7)
+                nsb_cosmic = np.ones(len(self.example_identifiers))
+                self.example_identifiers.add_column(nsb_cosmic, name="patch_class", index=7)
 
         # Construct simulation information for all files
         if self.process_type == ProcessType.Simulation:
@@ -1709,7 +1709,7 @@ class DLRawTriggerReader(DLWaveformReader):
         cherenkov = []
         table_index = []
         file_index = []
-        nsbness = []
+        nsb_cosmic = []
         self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
             self.trigger_settings, self.image_mappers[self.cam_name].image_shape
         )
@@ -1756,36 +1756,36 @@ class DLRawTriggerReader(DLWaveformReader):
                     temp_index = np.empty(temp_index_cosmic.size + temp_index_nsb.size, dtype=temp_index_cosmic.dtype)
                     temp_index[0::2] = temp_index_cosmic
                     temp_index[1::2] = temp_index_nsb
-                    temp_nsbness = np.tile(np.arange(2), comparator)
+                    temp_nsb_cosmic = np.tile(np.arange(2), comparator)
                 else:
                     temp_index = np.concatenate((temp_index_cosmic,temp_index_nsb))
-                    temp_nsbness = np.concatenate([np.zeros(comparator, dtype=int), np.ones(comparator, dtype=int)])
+                    temp_nsb_cosmic = np.concatenate([np.zeros(comparator, dtype=int), np.ones(comparator, dtype=int)])
                 patches_indexes.extend(temp_index.tolist())
                 cherenkov.extend(true_sums[temp_index].tolist())
-                nsbness.extend(temp_nsbness)
+                nsb_cosmic.extend(temp_nsb_cosmic)
                 table_index.extend([table_idx] * 2 * comparator)
                 file_index.extend([file_idx] * 2 * comparator)
             # If there is no pe
             else:
                 patches_indexes.append(-1)
                 cherenkov.append(-1)
-                nsbness.append(-1)
+                nsb_cosmic.append(-1)
                 table_index.append(table_idx)
                 file_index.append(file_idx)
         table_patches = Table(
-            [file_index, table_index, patches_indexes, cherenkov, nsbness],
-            names=["file_index", "table_index", "patch_index", "cherenkov_pe", "nsbness"]
+            [file_index, table_index, patches_indexes, cherenkov, nsb_cosmic],
+            names=["file_index", "table_index", "patch_index", "cherenkov_pe", "patch_class"]
         )
         batch = join(left=batch, right=table_patches, keys=["file_index","table_index"], join_type="right", keep_order=True)
         column_order = batch.colnames
-        new_order = column_order[:6] + ["patch_index", "cherenkov_pe", "nsbness"] + column_order[6:-3]
+        new_order = column_order[:6] + ["patch_index", "cherenkov_pe", "patch_class"] + column_order[6:-3]
         batch = batch[new_order]
         return(batch)
 
     def _append_features(self, batch) -> Table:
         waveforms = []
         true_image_sums = []
-        nsbness = []
+        nsb_cosmic = []
         patch_nbr = []
         
         # Before the iteration so that we do not load it for every index
@@ -1796,14 +1796,14 @@ class DLRawTriggerReader(DLWaveformReader):
             all_data = {filename: self.files[filename].root for filename in filenames}
         
         if "waveform" not in self.output_settings:
-                    self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
-                        self.trigger_settings, self.image_mappers[self.cam_name].image_shape
-                        )
-                    patch_shape = self.trigger_settings["trigger_patch_size"][0]
-                    trigger_patches = self.trigger_settings["trigger_patches"]
+            self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
+                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
+                )
+            patch_shape = self.trigger_settings["trigger_patch_size"][0]
+            trigger_patches = self.trigger_settings["trigger_patches"]
 
         for idx, file_idx, table_idx,  tel_type_id, tel_id, patch_idx, nsb_idx  in batch.iterrows(
-            "index", "file_index", "table_index", "tel_type_id", "tel_id", "patch_index", "nsbness"
+            "index", "file_index", "table_index", "tel_type_id", "tel_id", "patch_index", "patch_class"
             ):
                 filename = filenames[file_idx]
                 camera_type = self._get_camera_type(telescope_keys[tel_type_id])
@@ -1899,13 +1899,13 @@ class DLRawTriggerReader(DLWaveformReader):
                     waveforms.append(unmapped_waveform)
                 if "balanced_patches" not in self.output_settings:
                     true_image_sums.append(trigger_patch_true_image_sum)
-                    nsbness.append(int(trigger_patch_true_image_sum <= self.trigger_settings["cpe_threshold"]))
+                    nsb_cosmic.append(int(trigger_patch_true_image_sum <= self.trigger_settings["cpe_threshold"]))
 
         if "hot_patch" in self.output_settings or "random_patch" in self.output_settings or "double_random" in self.output_settings:
             batch["patch_index"] = patch_nbr
 
         if "hot_patch" in self.output_settings or "random_patch" in self.output_settings or "all_patches" in self.output_settings or "waveform" in self.output_settings:
-            batch["nsbness"] = nsbness
+            batch["patch_class"] = nsb_cosmic
 
         batch.add_column(waveforms, name="waveform", index=8)
 
