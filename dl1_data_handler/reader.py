@@ -1833,6 +1833,10 @@ class DLRawTriggerReader(DLWaveformReader):
                         ], dtype=int)
                 if "waveform" in self.output_settings:
                     trigger_patch_true_image_sum = np.sum(true_image)
+                    if trigger_patch_true_image_sum <= self.trigger_settings["cpe_threshold"]:
+                        nsbness.append(1)
+                    else:
+                        nsbness.append(0)
                 elif "hot_patch" in self.output_settings or "random_patch" in self.output_settings:
                     if self.hot_pixel_from_simulation == False:
                         hot_spot = np.unravel_index(
@@ -1851,7 +1855,6 @@ class DLRawTriggerReader(DLWaveformReader):
                         random_trigger_patch = np.random.choice(
                             [False, True], p=[0.5, 0.5]
                         )
-                        print(random_trigger_patch)
                     if random_trigger_patch == True:
                         nsb_patches = np.where(patch_sums <= self.trigger_settings["cpe_threshold"])[0]
                         #If no patches with only nsb take a random patch
@@ -1912,19 +1915,20 @@ class DLRawTriggerReader(DLWaveformReader):
                     waveforms.append(unmapped_waveform)
                 if "balanced_patches" not in self.output_settings:
                     true_image_sums.append(trigger_patch_true_image_sum)
-        if "waveform" in self.output_settings:
-            batch.remove_columns(["patch_index", "nsbness"])
+        
         if "hot_patch" in self.output_settings or "random_patch" in self.output_settings:
             batch["patch_index"] = patch_nbr
             batch["nsbness"] = nsbness
-        if "all_patches" in self.output_settings:
+        elif "all_patches" in self.output_settings:
             batch["nsbness"] = nsbness
         if "balanced_patches" in self.output_settings:
-            batch.add_column(waveforms, name="waveform", index=9)
+            batch.add_column(waveforms, name="waveform", index=8)
         else:
-            batch.add_column(waveforms, name="features", index=7)
-            batch.add_column(true_image_sums, name="cherenkov_pe", index=8)
-            
+            batch.add_column(waveforms, name="waveform", index=8)
+            batch.add_column(true_image_sums, name="cherenkov_pe", index=9)
+        if "waveform" in self.output_settings:
+            batch.remove_column("patch_index")
+            batch["nsbness"] = nsbness
         return batch
 
 
