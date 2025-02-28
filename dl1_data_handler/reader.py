@@ -1518,35 +1518,51 @@ class DLWaveformReader(DLDataReader):
     def get_balanced_patches(self, batch) -> Table:
         pass
 
-def get_trigger_patches(
-        trigger_settings,
-        image_shape):
+def get_trigger_patches(trigger_settings, image_shape):
+    """
+    Retrieve the trigger patch positions for a given number of patches.
 
-        trigger_patches_xpos = np.linspace(
+    This method computes the trigger patch positions for a given number of patches.
+    It calculates for square patches in the mapped frame.
+
+    Parameters
+    ----------
+    trigger_settings : dict
+        Dictionary with the number of trigger patches. 
+    image_shape : int
+        Integer indicating the shape of the mapped image.
+
+    Returns
+    -------
+    trigger_settings : dict
+        Dictionary containing the computed trigger patches positions, and the
+        size of the trigger patch.
+    """
+    trigger_patches_xpos = np.linspace(
                                 0,
                                 image_shape,
                                 num = trigger_settings["number_of_trigger_patches"] + 1,
                                 endpoint=False,
                                 dtype=int,
                             )[1:]
-        trigger_patches_ypos = np.linspace(
-                                0,
-                                image_shape,
-                                num= trigger_settings["number_of_trigger_patches"] + 1,
-                                endpoint=False,
-                                dtype=int,
-                            )[1:]
-        trigger_settings["trigger_patch_size"] = [
-                                    trigger_patches_xpos[0] * 2,
-                                    trigger_patches_ypos[0] * 2,
-                                ]
-        trigger_settings["trigger_patches"] = []
-        for patches in np.array(np.meshgrid(trigger_patches_xpos, trigger_patches_ypos)).T:
-            for patch in patches:
-                trigger_settings["trigger_patches"].append({"x": patch[0], "y": patch[1]})
+    trigger_patches_ypos = np.linspace(
+                            0,
+                            image_shape,
+                            num= trigger_settings["number_of_trigger_patches"] + 1,
+                            endpoint=False,
+                            dtype=int,
+                        )[1:]
+    trigger_settings["trigger_patch_size"] = [
+                                trigger_patches_xpos[0] * 2,
+                                trigger_patches_ypos[0] * 2,
+                            ]
+    trigger_settings["trigger_patches"] = []
+    for patches in np.array(np.meshgrid(trigger_patches_xpos, trigger_patches_ypos)).T:
+        for patch in patches:
+            trigger_settings["trigger_patches"].append({"x": patch[0], "y": patch[1]})
 
-        return trigger_settings, trigger_patches_xpos, trigger_patches_ypos
-    
+    return trigger_settings
+
 def get_true_image(sim_event) -> np.ndarray:
 
     true_image = np.array(sim_event["true_image"], dtype=int).reshape(-1, 1)
@@ -1622,7 +1638,7 @@ class DLRawTriggerReader(DLWaveformReader):
         table_index = []
         file_index = []
         nsb_cosmic = []
-        self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
+        self.trigger_settings = get_trigger_patches(
             self.trigger_settings, self.image_mappers[self.cam_name].image_shape
         )
         patch_shape = self.trigger_settings["trigger_patch_size"][0]
@@ -1708,7 +1724,7 @@ class DLRawTriggerReader(DLWaveformReader):
             all_data = {filename: self.files[filename].root for filename in filenames}
         
         if "waveform" not in self.output_settings:
-            self.trigger_settings, self.trigger_patches_xpos, self.trigger_patches_ypos = get_trigger_patches(
+            self.trigger_settings = get_trigger_patches(
                 self.trigger_settings, self.image_mappers[self.cam_name].image_shape
                 )
             patch_shape = self.trigger_settings["trigger_patch_size"][0]
