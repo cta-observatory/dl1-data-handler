@@ -439,10 +439,10 @@ class DLDataReader(Component):
                     1: (1.0 / self.n_signal_events) * (self._get_n_events() / 2.0),
                 }
             # Always the same proportion of nsb and cosmic patches for ''balanced_patches'' and ''double_random''
-            if isinstance(self,DLRawTriggerReader) and "balanced_patches" in self.output_settings or "double_random" in self.output_settings:
+            if isinstance(self,DLRawTriggerReader) and ("balanced_patches" in self.output_settings or "double_random" in self.output_settings):
                 self.class_weight = {
-                    0: 1.0, #cosmic
-                    1: 1.0, #nsb
+                    0: (1.0 / self.n_bkg_events) * (self._get_n_events() / 2.0),
+                    1: (1.0 / self.n_signal_events) * (self._get_n_events() / 2.0),
                 }
 
     def _get_camera_type(self, tel_type):
@@ -575,13 +575,21 @@ class DLDataReader(Component):
         # Construct simulation information for all files
         if self.process_type == ProcessType.Simulation:
             self.simulation_info = vstack(simulation_info)
-            self.n_signal_events = np.count_nonzero(
-                self.example_identifiers["true_shower_primary_class"] == 1
-            )
-            if self.input_url_background:
-                self.n_bkg_events = np.count_nonzero(
-                    self.example_identifiers["true_shower_primary_class"] == 0
+            if isinstance(self,DLRawTriggerReader)  and ("balanced_patches" in self.output_settings or "double_random" in self.output_settings):
+                self.n_signal_events = np.count_nonzero(
+                    self.example_identifiers["patch_class"] == 0
                 )
+                self.n_bkg_events = np.count_nonzero(
+                    self.example_identifiers["patch_class"] == 1
+                )
+            else:              
+                self.n_signal_events = np.count_nonzero(
+                    self.example_identifiers["true_shower_primary_class"] == 1
+                )
+                if self.input_url_background:
+                    self.n_bkg_events = np.count_nonzero(
+                        self.example_identifiers["true_shower_primary_class"] == 0
+                    )
         # Add index column to the example identifiers to later retrieve batches
         # using the loc functionality
         self.example_identifiers.add_column(
