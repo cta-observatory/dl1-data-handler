@@ -452,6 +452,12 @@ class DLDataReader(Component):
                     0: (1.0 / self.n_bkg_events) * (self._get_n_events() / 2.0),
                     1: (1.0 / self.n_signal_events) * (self._get_n_events() / 2.0),
                 }
+            # Always the same proportion of nsb and cosmic patches for ''balanced_patches'' and ''double_random''
+            if isinstance(self,DLRawTriggerReader) and "balanced_patches" in self.output_settings or "double_random" in self.output_settings:
+                self.class_weight = {
+                    0: 1.0, #cosmic
+                    1: 1.0, #nsb
+                }
 
     def _get_camera_type(self, tel_type):
         """Extract the camera type from the telescope type string."""
