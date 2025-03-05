@@ -586,7 +586,7 @@ class DLDataReader(Component):
                 self.example_identifiers.add_column(patch_indices, name="patch_index", index=6)
                 self.example_identifiers.add_column(nsb_cosmic, name="patch_class", index=7)
 
-            self.example_identifiers.sort(["obs_id", "event_id", "tel_id", "tel_type_id"])
+        self.example_identifiers.sort(["obs_id", "event_id", "tel_id", "tel_type_id"])
         # Construct simulation information for all files
         if self.process_type == ProcessType.Simulation:
             self.simulation_info = vstack(simulation_info)
