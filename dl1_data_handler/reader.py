@@ -543,7 +543,7 @@ class DLDataReader(Component):
             example_identifiers.append(events)
         # Constrcut the example identifiers for all files
         self.example_identifiers = vstack(example_identifiers)
-        self.example_identifiers.sort(["obs_id", "event_id", "tel_id", "tel_type_id"])
+        
 
         # For the RawTriggerReader to have the required number of rows for each option
         # If balanced patches selected append the patches index and cherenkov p.e. to each event
@@ -572,6 +572,7 @@ class DLDataReader(Component):
                 self.example_identifiers.add_column(patch_indices, name="patch_index", index=6)
                 self.example_identifiers.add_column(nsb_cosmic, name="patch_class", index=7)
 
+            self.example_identifiers.sort(["obs_id", "event_id", "tel_id", "tel_type_id"])
         # Construct simulation information for all files
         if self.process_type == ProcessType.Simulation:
             self.simulation_info = vstack(simulation_info)
@@ -1639,11 +1640,6 @@ class DLRawTriggerReader(DLWaveformReader):
             ),
     ).tag(config=True)
 
-    interleave_patches = Bool(
-        default_value=True,
-        help="Get alternate nsb and cosmic patches in the batch output. Only for ``balanced_patches`` output setting.",
-    ).tag(config=True)
-
     hot_pixel_from_simulation = Bool(
         default_value=True,
         help="Get the hot pixel index from the simulation (more Cherenkov p.e.) or the pixel with highest integrated signal",
@@ -1699,6 +1695,7 @@ class DLRawTriggerReader(DLWaveformReader):
         cherenkov = []
         table_index = []
         file_index = []
+        tel_index = []
         nsb_cosmic = []
         # Compute trigger patches and its characteristics
         self.trigger_settings = get_trigger_patches(
@@ -1744,19 +1741,14 @@ class DLRawTriggerReader(DLWaveformReader):
             if comparator >0:
                 temp_index_nsb = np.random.choice(nsb_patches, size=comparator, replace=False)
                 temp_index_cosmic = np.random.choice(cosmic_patches, size=comparator, replace=False)
-                if self.interleave_patches:
-                    temp_index = np.empty(temp_index_cosmic.size + temp_index_nsb.size, dtype=temp_index_cosmic.dtype)
-                    temp_index[0::2] = temp_index_cosmic
-                    temp_index[1::2] = temp_index_nsb
-                    temp_nsb_cosmic = np.tile(np.arange(2), comparator)
-                else:
-                    temp_index = np.concatenate((temp_index_cosmic,temp_index_nsb))
-                    temp_nsb_cosmic = np.concatenate([np.zeros(comparator, dtype=int), np.ones(comparator, dtype=int)])
+                temp_index = np.concatenate((temp_index_cosmic,temp_index_nsb))
+                temp_nsb_cosmic = np.concatenate([np.zeros(comparator, dtype=int), np.ones(comparator, dtype=int)])
                 patches_indexes.extend(temp_index.tolist())
                 cherenkov.extend(true_sums[temp_index].tolist())
                 nsb_cosmic.extend(temp_nsb_cosmic)
                 table_index.extend([table_idx] * 2 * comparator)
                 file_index.extend([file_idx] * 2 * comparator)
+                tel_index.extend([tel_id] * 2 * comparator)
             # If there is no cosmic or nsb patches append -1
             else:
                 patches_indexes.append(-1)
@@ -1764,12 +1756,13 @@ class DLRawTriggerReader(DLWaveformReader):
                 nsb_cosmic.append(-1)
                 table_index.append(table_idx)
                 file_index.append(file_idx)
+                tel_index.append(tel_id)
         # Create a table and join with the example table so that the rows are added for a same event
         table_patches = Table(
-            [file_index, table_index, patches_indexes, cherenkov, nsb_cosmic],
-            names=["file_index", "table_index", "patch_index", "cherenkov_pe", "patch_class"]
+            [file_index, table_index, tel_index, patches_indexes, cherenkov, nsb_cosmic],
+            names=["file_index", "table_index", "tel_id", "patch_index", "cherenkov_pe", "patch_class"]
         )
-        batch = join(left=batch, right=table_patches, keys=["file_index","table_index"], join_type="right", keep_order=True)
+        batch = join(left=batch, right=table_patches, keys=["file_index","table_index", "tel_id"], join_type="right")
         column_order = batch.colnames
         new_order = column_order[:6] + ["patch_index", "cherenkov_pe", "patch_class"] + column_order[6:-3]
         batch = batch[new_order]
