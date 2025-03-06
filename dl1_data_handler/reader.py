@@ -1839,7 +1839,7 @@ class DLRawTriggerReader(DLWaveformReader):
                 tel_index.extend([tel_id] * 2 * comparator)
             # If there is no cosmic or nsb patches append random patch
             else:
-                rand_index = np.randint(0, len(trigger_patches))
+                rand_index = np.random.randint(0, len(trigger_patches))
                 patches_indexes.append(rand_index)
                 cherenkov.append(true_sums[rand_index])
                 nsb_cosmic.append(1 if true_sums[rand_index]<= self.trigger_settings["cpe_threshold"] else 0)
@@ -1953,7 +1953,7 @@ class DLRawTriggerReader(DLWaveformReader):
                     if random_trigger_patch:
                         nsb_patches = np.where(patch_sums <= self.trigger_settings["cpe_threshold"])[0]
                         #If no patches with only nsb take a random patch
-                        index = np.random.choice(nsb_patches) if len(nsb_patches) != 0 else np.randint(0, len(trigger_patches)) 
+                        index = np.random.choice(nsb_patches) if len(nsb_patches) != 0 else np.random.randint(0, len(trigger_patches)) 
                     # Select the patch nearer to the hot pixel
                     else:
                         patches_x = np.array([patch["x"] for patch in self.trigger_settings["trigger_patches"]])
