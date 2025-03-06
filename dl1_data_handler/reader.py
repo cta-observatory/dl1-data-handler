@@ -1749,11 +1749,12 @@ class DLRawTriggerReader(DLWaveformReader):
                 table_index.extend([table_idx] * 2 * comparator)
                 file_index.extend([file_idx] * 2 * comparator)
                 tel_index.extend([tel_id] * 2 * comparator)
-            # If there is no cosmic or nsb patches append -1
+            # If there is no cosmic or nsb patches append random patch
             else:
-                patches_indexes.append(-1)
-                cherenkov.append(-1)
-                nsb_cosmic.append(-1)
+                rand_index = np.randint(0, len(trigger_patches))
+                patches_indexes.append(rand_index)
+                cherenkov.append(true_sums[rand_index])
+                nsb_cosmic.append(1 if true_sums[rand_index]<= self.trigger_settings["cpe_threshold"] else 0)
                 table_index.append(table_idx)
                 file_index.append(file_idx)
                 tel_index.append(tel_id)
@@ -1848,7 +1849,7 @@ class DLRawTriggerReader(DLWaveformReader):
                                 ]
                             )for patch in trigger_patches
                         ], dtype=int)
-                # Start to append depending on te output setting
+                # Start to append depending on the output setting
                 if "waveform" in self.output_settings:
                     trigger_patch_true_image_sum = np.sum(true_image)
                 # We define the trigger patch selected and its index for each output setting
