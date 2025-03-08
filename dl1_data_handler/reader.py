@@ -287,6 +287,13 @@ class DLDataReader(Component):
         if selected_tel_ids is not None:
             self.subarray = self.subarray.select_subarray(selected_tel_ids)
         self.tel_ids = self.subarray.tel_ids
+        # Copy the pixel rotation of the camera geometry for each telescope of the subarray
+        # in a variable since the ImageMapper will be derotated the pixels. The pixel rotation
+        # is needed to create a rotated camera frame in order to transform the true Alt/Az
+        # coordinates to correct camera coordinate offsets.
+        self.pix_rotation = {}
+        for tel_id in self.tel_ids:
+            self.pix_rotation[tel_id] = self.subarray.tel[tel_id].camera.geometry.pix_rotation
         self.selected_telescopes = {}
         for tel_type in self.subarray.telescope_types:
             # If is needed here for some sims where the same tel_type is stored twice
@@ -805,7 +812,7 @@ class DLDataReader(Component):
         # Set the camera frame with the focal length and rotation of the camera
         camera_frame = CameraFrame(
             focal_length=self.subarray.tel[tel_id].optics.equivalent_focal_length,
-            rotation=self.subarray.tel[tel_id].camera.geometry.pix_rotation,
+            rotation=self.pix_rotation[tel_id],
             telescope_pointing=fix_tel_pointing,
         )
         # Transform the true Alt/Az coordinates to camera coordinates
