@@ -42,6 +42,7 @@ from ctapipe.core.traits import (
     CInt,
     Int,
     IntTelescopeParameter,
+    Float,
     Set,
     List,
     CaselessStrEnum,
@@ -52,6 +53,12 @@ from ctapipe.instrument import SubarrayDescription
 from ctapipe.io import read_table
 from dl1_data_handler.image_mapper import ImageMapper
 
+#: Area averaged position of LST-1, MAGIC-1 and MAGIC-2 (using 23**2 and 17**2 m2)
+REFERENCE_LOCATION = EarthLocation(
+    lon=-17.890879 * u.deg,
+    lat=28.761579 * u.deg,
+    height=2199 * u.m,  # MC obs-level
+)
 # Reference (dummy) time to insert in the SkyCoord object as the default time
 LST_EPOCH = Time("2018-10-01T00:00:00", scale="utc")
 
@@ -159,6 +166,30 @@ class DLDataReader(Component):
     skip_incompatible_files = Bool(
         default_value=False,
         help="Skip files that are not compatible to the reference instead of raising an error",
+    ).tag(config=True)
+
+    reference_position_lon = Float(
+        default_value=REFERENCE_LOCATION.lon.deg,
+        help=(
+            "Longitude of the reference location for telescope GroundFrame coordinates."
+            " Default is the roughly area weighted average of LST-1, MAGIC-1 and MAGIC-2."
+        )
+    ).tag(config=True)
+
+    reference_position_lat = Float(
+        default_value=REFERENCE_LOCATION.lat.deg,
+        help=(
+            "Latitude of the reference location for telescope GroundFrame coordinates."
+            " Default is the roughly area weighted average of LST-1, MAGIC-1 and MAGIC-2."
+        )
+    ).tag(config=True)
+
+    reference_position_height = Float(
+        default_value=REFERENCE_LOCATION.height.to_value(u.m),
+        help=(
+            "Height of the reference location for telescope GroundFrame coordinates."
+            " Default is current MC obslevel."
+        )
     ).tag(config=True)
 
     allowed_tel_types = List(
@@ -269,8 +300,16 @@ class DLDataReader(Component):
                 f"When processing real observational data, please provide a single file (currently: '{len(self.files)}')."
             )
 
+        # Set the reference location from the config
+        reference_location = EarthLocation(
+            lon=self.reference_position_lon * u.deg,
+            lat=self.reference_position_lat * u.deg,
+            height=self.reference_position_height * u.m,
+        )
         # Set up the subarray
         self.subarray = SubarrayDescription.from_hdf(self.first_file)
+        # Overwrite the reference location of the subarray
+        self.subarray.reference_location = reference_location
         selected_tel_ids = None
         if self.allowed_tels is not None:
             selected_tel_ids = np.array(list(self.allowed_tels), dtype=np.int16)
@@ -317,7 +356,8 @@ class DLDataReader(Component):
         for filename in self.files:
             # Read SubarrayDescription from the new file
             subarray = SubarrayDescription.from_hdf(filename)
-
+            # Overwrite the reference location of the subarray
+            subarray.reference_location = reference_location
             # Filter subarray by selected telescopes
             if selected_tel_ids is not None:
                 subarray = subarray.select_subarray(self.tel_ids)
