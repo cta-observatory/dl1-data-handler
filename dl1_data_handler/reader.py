@@ -1905,8 +1905,8 @@ class DLRawTriggerReader(DLWaveformReader):
             patch_shape = self.trigger_settings["trigger_patch_size"][0]
             trigger_patches = self.trigger_settings["trigger_patches"]
             self.input_shape = (
-                trigger_patches,
-                trigger_patches,
+                patch_shape,
+                patch_shape,
                 self.sequence_length,
             )
         for idx, file_idx, table_idx,  tel_type_id, tel_id, patch_idx, nsb_idx  in batch.iterrows(
