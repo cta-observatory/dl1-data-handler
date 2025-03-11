@@ -1036,14 +1036,23 @@ def get_unmapped_image(dl1_event, channels, transforms) -> np.ndarray:
     image : np.ndarray
         The processed image data image for the specific channels.
     """
-    # Initialize the image array
-    image = np.zeros(
+    if isinstance(self,DLRawTriggerReader):
+        image = np.zeros(
         shape=(
             len(dl1_event["image"]),
             len(channels),
         ),
-        dtype=np.float32,
+        dtype=np.int,
     )
+    # Initialize the image array
+    else:
+        image = np.zeros(
+            shape=(
+                len(dl1_event["image"]),
+                len(channels),
+            ),
+            dtype=np.float32,
+        )
     # Process the channels and apply the necessary transformations
     for i, channel in enumerate(channels):
         # Save the cleaning mask to be applied to the channels in various cases
@@ -1661,12 +1670,24 @@ class DLRawTriggerReader(DLWaveformReader):
             **kwargs,
         )
 
+        if "waveform" not in self.output_settings:
+            self.trigger_settings = get_trigger_patches(
+                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
+                )
+            self.input_shape = (
+                patch_shape,
+                patch_shape,
+                self.sequence_length,
+            )
+
         with lock:
             wvf_table_v_attrs = (
                 self.files[self.first_file]
                 .root.r0.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
                 ._v_attrs
             )
+
+
 
     def _get_balanced_patches(self, batch):
         """
@@ -1810,17 +1831,6 @@ class DLRawTriggerReader(DLWaveformReader):
         with lock:
             all_data = {filename: self.files[filename].root for filename in filenames}
         
-        if "waveform" not in self.output_settings:
-            self.trigger_settings = get_trigger_patches(
-                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
-                )
-            patch_shape = self.trigger_settings["trigger_patch_size"][0]
-            trigger_patches = self.trigger_settings["trigger_patches"]
-            self.input_shape = (
-                patch_shape,
-                patch_shape,
-                self.sequence_length,
-            )
         for idx, file_idx, table_idx,  tel_type_id, tel_id, patch_idx, nsb_idx  in batch.iterrows(
             "index", "file_index", "table_index", "tel_type_id", "tel_id", "patch_index", "patch_class"
             ):
@@ -1838,7 +1848,10 @@ class DLRawTriggerReader(DLWaveformReader):
                 mapped_waveform = self.image_mappers[camera_type].map_image(
                     unmapped_waveform
                     )
-                
+
+                patch_shape = self.trigger_settings["trigger_patch_size"][0]
+                trigger_patches = self.trigger_settings["trigger_patches"]
+
                 # Load and compute the true image if not balanced patches since already computed.  
                 if "balanced_patches" not in self.output_settings:
                     true_child = root_data.simulation.event.telescope.images._f_get_child(tel_table)
