@@ -43,7 +43,7 @@ necessary package channels, and install dl1-data-handler specified version and i
 
 .. code-block:: bash
 
-   DL1DH_VER=0.14.0
+   DL1DH_VER=0.14.1
    wget https://raw.githubusercontent.com/cta-observatory/dl1-data-handler/v$DL1DH_VER/environment.yml
    conda env create -n [ENVIRONMENT_NAME] -f environment.yml
    conda activate [ENVIRONMENT_NAME]
