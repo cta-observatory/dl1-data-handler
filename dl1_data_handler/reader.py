@@ -293,7 +293,9 @@ class DLDataReader(Component):
         # coordinates to correct camera coordinate offsets.
         self.pix_rotation = {}
         for tel_id in self.tel_ids:
-            self.pix_rotation[tel_id] = self.subarray.tel[tel_id].camera.geometry.pix_rotation
+            self.pix_rotation[tel_id] = self.subarray.tel[
+                tel_id
+            ].camera.geometry.pix_rotation
         self.selected_telescopes = {}
         for tel_type in self.subarray.telescope_types:
             # If is needed here for some sims where the same tel_type is stored twice
