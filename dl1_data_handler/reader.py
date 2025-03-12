@@ -1736,12 +1736,12 @@ class DLRawTriggerReader(DLWaveformReader):
             self.trigger_settings = get_trigger_patches(
                 self.trigger_settings, self.image_mappers[self.cam_name].image_shape
                 )
-        if self.mode == "mono":
-            self.input_shape = (
-                self.trigger_settings["trigger_patch_size"][0],
-                self.trigger_settings["trigger_patch_size"][0],
-                self.sequence_length,
-            )
+            if self.mode == "mono":
+                self.input_shape = (
+                    self.trigger_settings["trigger_patch_size"][0],
+                    self.trigger_settings["trigger_patch_size"][0],
+                    self.sequence_length,
+                )
 
     def _get_balanced_patches(self, batch):
         """
@@ -1809,8 +1809,8 @@ class DLRawTriggerReader(DLWaveformReader):
                 if comparator >0:
                     nsb_patches = np.random.choice(nsb_patches, size=comparator, replace=False)
                     cosmic_patches = np.random.choice(cosmic_patches, size=comparator, replace=False)
-                    patches_indexes.extend(cosmic_patches.tolist())
-                    patches_indexes.extend(nsb_patches.tolist())
+                    temp_index = np.concatenate((cosmic_patches, nsb_patches))
+                    patches_indexes.extend(temp_index.tolist())
                     cherenkov.extend(true_sums[temp_index].tolist())
                     nsb_cosmic.extend(np.repeat([0, 1], comparator))
                     table_index.extend([table_idx] * 2 * comparator)
@@ -1898,7 +1898,7 @@ class DLRawTriggerReader(DLWaveformReader):
             with lock:
                 tel_table = f"tel_{tel_id:03d}"
                 sim_child = self.files[filename].root.simulation.event.telescope.images._f_get_child(
-                    tel_tables)
+                    tel_table)
                 true_image = get_true_image(sim_child[table_idx])
                 mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
                 # Compute all the sums of Cherenkov p.e. per patch.
