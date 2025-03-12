@@ -1762,15 +1762,15 @@ class DLRawTriggerReader(DLWaveformReader):
                     file_index.append(file_idx)
                     tel_index.append(tel_id)
             # Create a table and join with the example table so that the rows are added for a same event.
-            table_patches = Table(
-                [file_index, table_index, tel_index, patches_indexes.astype(np.int16), cherenkov.astype(np.int16), nsb_cosmic.astype(np.int8)],
-                names=["file_index", "table_index", "tel_id", "patch_index", "cherenkov_pe", "patch_class"]
-            )
-            batch = join(left=batch, right=table_patches, keys=["file_index","table_index", "tel_id"], join_type="right")
-            column_order = batch.colnames
-            new_order = column_order[:6] + ["patch_index", "cherenkov_pe", "patch_class"] + column_order[6:-3]
-            batch = batch[new_order]
-            return(batch)
+        table_patches = Table(
+            [file_index, table_index, tel_index, patches_indexes, cherenkov, nsb_cosmic],
+            names=["file_index", "table_index", "tel_id", "patch_index", "cherenkov_pe", "patch_class"]
+        )
+        batch = join(left=batch, right=table_patches, keys=["file_index","table_index", "tel_id"], join_type="right")
+        column_order = batch.colnames
+        new_order = column_order[:6] + ["patch_index", "cherenkov_pe", "patch_class"] + column_order[6:-3]
+        batch = batch[new_order]
+        return(batch)
 
     def _get_raw_example(self,batch):
         # Load the trigger settings.
@@ -1831,7 +1831,7 @@ class DLRawTriggerReader(DLWaveformReader):
                     # For double random depending on the patch_class (0 cosmic, 1 nsb) we select one random patch_index.
                     if "double_random" in self.output_settings:
                         valid_patches = np.where(
-                            patch_sums > self.trigger_settings["cpe_threshold"] if nsb_idx == 0 else patch_sums <= self.trigger_settings["cpe_threshold"]
+                            patch_sums > self.trigger_settings["cpe_threshold"] if ptch_clss == 0 else patch_sums <= self.trigger_settings["cpe_threshold"]
                         )[0]
                         n_patch = np.random.choice(valid_patches) if len(valid_patches) >0 else np.random.randint(
                             self.trigger_settings["number_of_trigger_patches"]
@@ -1861,10 +1861,10 @@ class DLRawTriggerReader(DLWaveformReader):
                             dist = np.abs(patches_x - hot_spot[0])**2 + np.abs(patches_y - hot_spot[1])**2
                             n_patch = np.argmin(dist)
                     # Append the computed patch_index, number of Cherenkov p.e. of the patch, and patch_class.
-                    patch_idx.append(n_patch.astype(np.int16))
+                    patch_idx.append(n_patch)
                     patch_true_image_sum = patch_sums[n_patch]
                     chkovs.append(patch_true_image_sum)
-                    nsb_cosmic.append(int(trigger_patch_true_image_sum <= self.trigger_settings["cpe_threshold"]))
+                    nsb_cosmic.append(int(patch_true_image_sum <= self.trigger_settings["cpe_threshold"]))
                 # For waveform only need the sum of Cherenkov and the class.
                 else:
                     true_sum = np.sum((true_image), dtype=np.int16)
@@ -1874,7 +1874,7 @@ class DLRawTriggerReader(DLWaveformReader):
         batch.add_column(chkovs, name="cherenkov_pe", index=7)
         batch["patch_class"] = nsb_cosmic
         if "waveform" not in self.output_settings:
-            batch["patch_index"] = patch_index
+            batch["patch_index"] = patch_idx
 
         return batch
 
