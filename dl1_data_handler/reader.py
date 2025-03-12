@@ -23,8 +23,6 @@ from enum import Enum
 import numpy as np
 import tables
 import threading
-import random
-from itertools import chain
 
 from astropy import units as u
 from astropy.coordinates.earth import EarthLocation
@@ -1744,12 +1742,6 @@ class DLRawTriggerReader(DLWaveformReader):
                 self.trigger_settings["trigger_patch_size"][0],
                 self.sequence_length,
             )
-        with lock:
-            wvf_table_v_attrs = (
-                self.files[self.first_file]
-                .root.r0.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
-                ._v_attrs
-            )
 
     def _get_balanced_patches(self, batch):
         """
@@ -1802,13 +1794,12 @@ class DLRawTriggerReader(DLWaveformReader):
                 mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
                 # Get sums for all patches at once.
                 true_sums = np.array([
-                        np.sum(
-                            mapped_true_image[
-                                int(patch["x"] - patch_shape / 2) : int(patch["x"] + patch_shape / 2),
-                                int(patch["y"] - patch_shape / 2) : int(patch["y"] + patch_shape / 2)
-                            ]
-                        )for patch in trigger_patches
-                    ], dtype=np.int16)
+                    np.sum(
+                        mapped_true_image[
+                            int(patch["x"] - patch_shape / 2) : int(patch["x"] + patch_shape / 2),
+                            int(patch["y"] - patch_shape / 2) : int(patch["y"] + patch_shape / 2)]
+                            )for patch in trigger_patches
+                            ], dtype=np.int16)
                 # Get indices of nsb and cosmic patches.
                 cosmic_patches = np.where(true_sums > self.trigger_settings["cpe_threshold"])[0]
                 nsb_patches = np.where(true_sums <= self.trigger_settings["cpe_threshold"])[0]
@@ -1816,13 +1807,12 @@ class DLRawTriggerReader(DLWaveformReader):
                 comparator = min(len(cosmic_patches), len(nsb_patches))
                 # Choose randomly and append the patches.
                 if comparator >0:
-                    temp_index_nsb = np.random.choice(nsb_patches, size=comparator, replace=False)
-                    temp_index_cosmic = np.random.choice(cosmic_patches, size=comparator, replace=False)
-                    temp_index = np.concatenate((temp_index_cosmic,temp_index_nsb))
-                    temp_nsb_cosmic = np.concatenate([np.zeros(comparator, dtype=np.int8), np.ones(comparator, dtype=np.int8)])
-                    patches_indexes.extend(temp_index.tolist())
+                    nsb_patches = np.random.choice(nsb_patches, size=comparator, replace=False)
+                    cosmic_patches = np.random.choice(cosmic_patches, size=comparator, replace=False)
+                    patches_indexes.extend(cosmic_patches.tolist())
+                    patches_indexes.extend(nsb_patches.tolist())
                     cherenkov.extend(true_sums[temp_index].tolist())
-                    nsb_cosmic.extend(temp_nsb_cosmic)
+                    nsb_cosmic.extend(np.repeat([0, 1], comparator))
                     table_index.extend([table_idx] * 2 * comparator)
                     file_index.extend([file_idx] * 2 * comparator)
                     tel_index.extend([tel_id] * 2 * comparator)
@@ -1844,7 +1834,7 @@ class DLRawTriggerReader(DLWaveformReader):
         column_order = batch.colnames
         new_order = column_order[:6] + ["patch_index", "cherenkov_pe", "patch_class"] + column_order[6:-3]
         batch = batch[new_order]
-        return(batch)
+        return batch
 
     def _get_raw_example(self,batch):
         """
@@ -1871,8 +1861,7 @@ class DLRawTriggerReader(DLWaveformReader):
         # Load the trigger settings.
         if "waveform" not in self.output_settings:
             self.trigger_settings = get_trigger_patches(
-                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
-                )
+                self.trigger_settings, self.image_mappers[self.cam_name].image_shape)
             patch_shape = self.trigger_settings["trigger_patch_size"][0]
             trigger_patches = self.trigger_settings["trigger_patches"]
         # Depending on the output repeat each event of the example identifiers rep times.
@@ -1909,20 +1898,16 @@ class DLRawTriggerReader(DLWaveformReader):
             with lock:
                 tel_table = f"tel_{tel_id:03d}"
                 sim_child = self.files[filename].root.simulation.event.telescope.images._f_get_child(
-                    tel_table
-                )
+                    tel_tables)
                 true_image = get_true_image(sim_child[table_idx])
                 mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
                 # Compute all the sums of Cherenkov p.e. per patch.
                 if "waveform" not in self.output_settings:               
-                    patch_sums = np.array([
-                        np.sum(
-                            mapped_true_image[
-                                int(patch["x"] - patch_shape / 2) : int(patch["x"] + patch_shape / 2),
-                                int(patch["y"] - patch_shape / 2) : int(patch["y"] + patch_shape / 2)
-                            ]
-                        )for patch in trigger_patches], dtype=np.int16
-                    )
+                    patch_sums = np.array([np.sum(
+                        mapped_true_image[
+                            int(patch["x"] - patch_shape / 2) : int(patch["x"] + patch_shape / 2),
+                            int(patch["y"] - patch_shape / 2) : int(patch["y"] + patch_shape / 2)]
+                            )for patch in trigger_patches], dtype=np.int16)
                     # For double random depending on the patch_class (0 cosmic, 1 nsb) we select one random patch_index.
                     if "double_random" in self.output_settings:
                         valid_patches = np.where(
@@ -1941,9 +1926,7 @@ class DLRawTriggerReader(DLWaveformReader):
                             np.argmax(mapped_true_image if self.hot_pixel_from_simulation else np.sum(mapped_waveform, axis=2)),
                             mapped_true_image.shape if self.hot_pixel_from_simulation else np.sum(mapped_waveform, axis=2).shape
                         )
-                        random_trigger_patch = (
-                            False if "hot_patch" in self.output_settings else np.random.choice([False, True], p=[0.5, 0.5])
-                        )
+                        random_trigger_patch = (False if "hot_patch" in self.output_settings else np.random.choice([False, True], p=[0.5, 0.5]))
                         # Select a random nsb trigger patch.
                         if random_trigger_patch:
                             nsb_patches = np.where(patch_sums <= self.trigger_settings["cpe_threshold"])[0]
