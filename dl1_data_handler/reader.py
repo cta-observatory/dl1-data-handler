@@ -1734,7 +1734,16 @@ class DLRawTriggerReader(DLWaveformReader):
             parent=parent,
             **kwargs,
         )
-
+        if "waveform" not in self.output_settings:
+            self.trigger_settings = get_trigger_patches(
+                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
+                )
+        if self.mode == "mono":
+            self.input_shape = (
+                self.trigger_settings["trigger_patch_size"][0],
+                self.trigger_settings["trigger_patch_size"][0],
+                self.sequence_length,
+            )
         with lock:
             wvf_table_v_attrs = (
                 self.files[self.first_file]
