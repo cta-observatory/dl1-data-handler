@@ -1785,68 +1785,62 @@ class DLRawTriggerReader(DLWaveformReader):
         file_index = []
         tel_index = []
         nsb_cosmic = []
-        # Compute trigger patches and its characteristics
+        # Load trigger settings.
         self.trigger_settings = get_trigger_patches(
-            self.trigger_settings, self.image_mappers[self.cam_name].image_shape
-        )
+                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
+                )
         patch_shape = self.trigger_settings["trigger_patch_size"][0]
         trigger_patches = self.trigger_settings["trigger_patches"]
-
-        filenames = list(self.files)
-        telescope_keys = list(self.selected_telescopes.keys())
-
-        with lock:
-            all_data = {filename: self.files[filename].root for filename in filenames}
 
         for file_idx, table_idx, tel_type_id, tel_id in batch.iterrows(
             "file_index", "table_index", "tel_type_id", "tel_id"
         ):
-            filename = filenames[file_idx]
-            camera_type = self._get_camera_type(telescope_keys[tel_type_id]
+            filename = list(self.files)[file_idx]
+            camera_type = self._get_camera_type(
+                list(self.selected_telescopes.keys())[tel_type_id]
             )
-            tel_table = f"tel_{tel_id:03d}"
-            root_data = all_data[
-                filename]
-
-            true_child = root_data.simulation.event.telescope.images._f_get_child(tel_table)
-            true_image = get_true_image(true_child[table_idx])
-            mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
-            # Get sums for all patches at once
-            true_sums = np.array([
-                    np.sum(
-                        mapped_true_image[
-                            int(patch["x"] - patch_shape / 2) : int(patch["x"] + patch_shape / 2),
-                            int(patch["y"] - patch_shape / 2) : int(patch["y"] + patch_shape / 2)
-                        ]
-                    )for patch in trigger_patches
-                ], dtype=int)
-            # Get indices of nsb and cosmic patches
-            cosmic_patches = np.where(true_sums > self.trigger_settings["cpe_threshold"])[0]
-            nsb_patches = np.where(true_sums <= self.trigger_settings["cpe_threshold"])[0]
-            # Balance nsb and cosmic patches
-            comparator = min(len(cosmic_patches), len(nsb_patches))
-            # Choose randomly and append the patches
-            if comparator >0:
-                temp_index_nsb = np.random.choice(nsb_patches, size=comparator, replace=False)
-                temp_index_cosmic = np.random.choice(cosmic_patches, size=comparator, replace=False)
-                temp_index = np.concatenate((temp_index_cosmic,temp_index_nsb))
-                temp_nsb_cosmic = np.concatenate([np.zeros(comparator, dtype=int), np.ones(comparator, dtype=int)])
-                patches_indexes.extend(temp_index.tolist())
-                cherenkov.extend(true_sums[temp_index].tolist())
-                nsb_cosmic.extend(temp_nsb_cosmic)
-                table_index.extend([table_idx] * 2 * comparator)
-                file_index.extend([file_idx] * 2 * comparator)
-                tel_index.extend([tel_id] * 2 * comparator)
-            # If there is no cosmic or nsb patches append random patch
-            else:
-                rand_index = np.random.randint(0, len(trigger_patches))
-                patches_indexes.append(rand_index)
-                cherenkov.append(true_sums[rand_index])
-                nsb_cosmic.append(1 if true_sums[rand_index]<= self.trigger_settings["cpe_threshold"] else 0)
-                table_index.append(table_idx)
-                file_index.append(file_idx)
-                tel_index.append(tel_id)
-        # Create a table and join with the example table so that the rows are added for a same event
+            # Load only the true image from simulation.
+            with lock:
+                tel_table = f"tel_{tel_id:03d}"
+                sim_child = self.files[filename].root.simulation.event.telescope.images._f_get_child(tel_table)
+                true_image = get_true_image(sim_child[table_idx])
+                mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
+                # Get sums for all patches at once.
+                true_sums = np.array([
+                        np.sum(
+                            mapped_true_image[
+                                int(patch["x"] - patch_shape / 2) : int(patch["x"] + patch_shape / 2),
+                                int(patch["y"] - patch_shape / 2) : int(patch["y"] + patch_shape / 2)
+                            ]
+                        )for patch in trigger_patches
+                    ], dtype=np.int16)
+                # Get indices of nsb and cosmic patches.
+                cosmic_patches = np.where(true_sums > self.trigger_settings["cpe_threshold"])[0]
+                nsb_patches = np.where(true_sums <= self.trigger_settings["cpe_threshold"])[0]
+                # Balance nsb and cosmic patches.
+                comparator = min(len(cosmic_patches), len(nsb_patches))
+                # Choose randomly and append the patches.
+                if comparator >0:
+                    temp_index_nsb = np.random.choice(nsb_patches, size=comparator, replace=False)
+                    temp_index_cosmic = np.random.choice(cosmic_patches, size=comparator, replace=False)
+                    temp_index = np.concatenate((temp_index_cosmic,temp_index_nsb))
+                    temp_nsb_cosmic = np.concatenate([np.zeros(comparator, dtype=np.int8), np.ones(comparator, dtype=np.int8)])
+                    patches_indexes.extend(temp_index.tolist())
+                    cherenkov.extend(true_sums[temp_index].tolist())
+                    nsb_cosmic.extend(temp_nsb_cosmic)
+                    table_index.extend([table_idx] * 2 * comparator)
+                    file_index.extend([file_idx] * 2 * comparator)
+                    tel_index.extend([tel_id] * 2 * comparator)
+                # If there is no cosmic or nsb patches append random patch.
+                else:
+                    rand_index = np.random.randint(0, len(trigger_patches))
+                    patches_indexes.append(rand_index)
+                    cherenkov.append(true_sums[rand_index])
+                    nsb_cosmic.append(1 if true_sums[rand_index]<= self.trigger_settings["cpe_threshold"] else 0)
+                    table_index.append(table_idx)
+                    file_index.append(file_idx)
+                    tel_index.append(tel_id)
+            # Create a table and join with the example table so that the rows are added for a same event.
         table_patches = Table(
             [file_index, table_index, tel_index, patches_indexes, cherenkov, nsb_cosmic],
             names=["file_index", "table_index", "tel_id", "patch_index", "cherenkov_pe", "patch_class"]
@@ -1857,13 +1851,119 @@ class DLRawTriggerReader(DLWaveformReader):
         batch = batch[new_order]
         return(batch)
 
+    def _get_raw_example(self,batch):
+        # Load the trigger settings.
+        if "waveform" not in self.output_settings:
+            self.trigger_settings = get_trigger_patches(
+                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
+                )
+            patch_shape = self.trigger_settings["trigger_patch_size"][0]
+            trigger_patches = self.trigger_settings["trigger_patches"]
+        # Depending on the output repeat each event of the example identifiers rep times.
+        # Create "patch_index" and "patch_column" to be able to iterate after.
+        rep = 1
+        if "double_random" in self.output_settings:
+            rep = 2
+            patch_classes = np.tile(np.arange(rep), len(batch))
+            patch_indices = np.zeros(2 * len(batch))
+        elif "all_patches" in self.output_settings:
+            rep = self.trigger_settings["number_of_trigger_patches"]**2
+            patch_indices = np.tile(np.arange(rep), len(batch))
+            patch_classes = np.zeros(rep * len(batch))
+        else:
+            patch_indices = np.zeros(len(batch))
+            patch_classes = np.zeros(len(batch))
+        # Add the cols to the ex identifiers.
+        batch = batch[np.repeat(np.arange(len(batch)), rep)]
+        batch.add_column(patch_indices, name="patch_index", index=6)
+        batch.add_column(patch_classes, name="patch_class", index=7)
+        # Initialise the lists with the real values of Cherenkov p.e., patch index and patch class.
+        patch_idx = []
+        chkovs = []
+        nsb_cosmic = []
+
+        for file_idx, table_idx, tel_type_id, tel_id, ptch_idx, ptch_clss in batch.iterrows(
+            "file_index", "table_index", "tel_type_id", "tel_id", "patch_index", "patch_class"
+        ):
+            filename = list(self.files)[file_idx]
+            camera_type = self._get_camera_type(
+                list(self.selected_telescopes.keys())[tel_type_id]
+            )
+            # Load only the true image from simulation.
+            with lock:
+                tel_table = f"tel_{tel_id:03d}"
+                sim_child = self.files[filename].root.simulation.event.telescope.images._f_get_child(
+                    tel_table
+                )
+                true_image = get_true_image(sim_child[table_idx])
+                mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
+                # Compute all the sums of Cherenkov p.e. per patch.
+                if "waveform" not in self.output_settings:               
+                    patch_sums = np.array([
+                        np.sum(
+                            mapped_true_image[
+                                int(patch["x"] - patch_shape / 2) : int(patch["x"] + patch_shape / 2),
+                                int(patch["y"] - patch_shape / 2) : int(patch["y"] + patch_shape / 2)
+                            ]
+                        )for patch in trigger_patches], dtype=np.int16
+                    )
+                    # For double random depending on the patch_class (0 cosmic, 1 nsb) we select one random patch_index.
+                    if "double_random" in self.output_settings:
+                        valid_patches = np.where(
+                            patch_sums > self.trigger_settings["cpe_threshold"] if ptch_clss == 0 else patch_sums <= self.trigger_settings["cpe_threshold"]
+                        )[0]
+                        n_patch = np.random.choice(valid_patches) if len(valid_patches) >0 else np.random.randint(
+                            self.trigger_settings["number_of_trigger_patches"]
+                        )
+                    # For all patches the patch_index is already specified.
+                    elif "all_patches" in self.output_settings:
+                        n_patch = ptch_idx
+                    # For hot_patch always the index nearer to the hot pixel.
+                    # For random_patch a random nsb patch or the hot patch. 
+                    elif "hot_patch" in self.output_settings or "random_patch" in self.output_settings:
+                        hot_spot = np.unravel_index(
+                            np.argmax(mapped_true_image if self.hot_pixel_from_simulation else np.sum(mapped_waveform, axis=2)),
+                            mapped_true_image.shape if self.hot_pixel_from_simulation else np.sum(mapped_waveform, axis=2).shape
+                        )
+                        random_trigger_patch = (
+                            False if "hot_patch" in self.output_settings else np.random.choice([False, True], p=[0.5, 0.5])
+                        )
+                        # Select a random nsb trigger patch.
+                        if random_trigger_patch:
+                            nsb_patches = np.where(patch_sums <= self.trigger_settings["cpe_threshold"])[0]
+                            #If no patches with only nsb take a random patch.
+                            n_patch = np.random.choice(nsb_patches) if len(nsb_patches) != 0 else np.random.randint(0, len(trigger_patches))
+                        # Select the patch nearer to the hot pixel.
+                        else:
+                            patches_x = np.array([patch["x"] for patch in self.trigger_settings["trigger_patches"]])
+                            patches_y = np.array([patch["y"] for patch in self.trigger_settings["trigger_patches"]])
+                            dist = np.abs(patches_x - hot_spot[0])**2 + np.abs(patches_y - hot_spot[1])**2
+                            n_patch = np.argmin(dist)
+                    # Append the computed patch_index, number of Cherenkov p.e. of the patch, and patch_class.
+                    patch_idx.append(n_patch)
+                    patch_true_image_sum = patch_sums[n_patch]
+                    chkovs.append(patch_true_image_sum)
+                    nsb_cosmic.append(int(patch_true_image_sum <= self.trigger_settings["cpe_threshold"]))
+                # For waveform only need the sum of Cherenkov and the class.
+                else:
+                    true_sum = np.sum((true_image), dtype=np.int16)
+                    chkovs.append(true_sum)
+                    nsb_cosmic.append(int(true_sum <= self.trigger_settings["cpe_threshold"]))
+        # Append number of Cherenkov per patch and refill patch_class and patch_index
+        batch.add_column(chkovs, name="cherenkov_pe", index=7)
+        batch["patch_class"] = nsb_cosmic
+        if "waveform" not in self.output_settings:
+            batch["patch_index"] = patch_idx
+
+        return batch
+
     def _append_features(self, batch) -> Table:
         """
         Append waveforms to a given batch as features.
 
         This method processes a batch of events to append waveforms as input features for the neural networks.
         It reads the waveform data from the specified files and maps the waveforms using the appropriate ``ImageMapper``.
-        Depending on the output settings, divides the waveform into patches, appends the patch index, the patch 
+        Divides the waveform into patches, appends the patch index, the patch 
         class (1 for nsb, 0 for cosmic), and computes and appends the number of true Cherenkov. Then.
 
         Parameters
@@ -1887,37 +1987,25 @@ class DLRawTriggerReader(DLWaveformReader):
             - ``cherenkov_pe``
         """
         waveforms = []
-        true_image_sums = []
-        nsb_cosmic = []
-        patch_nbr = []
-        
-        # Before the iteration so that we do not load it for every index
-        filenames = list(self.files)
-        telescope_keys = list(self.selected_telescopes.keys())
-        
-        with lock:
-            all_data = {filename: self.files[filename].root for filename in filenames}
-        
+        # Load the trigger settings.
         if "waveform" not in self.output_settings:
             self.trigger_settings = get_trigger_patches(
                 self.trigger_settings, self.image_mappers[self.cam_name].image_shape
                 )
             patch_shape = self.trigger_settings["trigger_patch_size"][0]
             trigger_patches = self.trigger_settings["trigger_patches"]
-            self.input_shape = (
-                patch_shape,
-                patch_shape,
-                self.sequence_length,
+        
+        for file_idx, table_idx, tel_type_id, tel_id, ptch_idx in batch.iterrows(
+            "file_index", "table_index", "tel_type_id", "tel_id", "patch_index"
+        ):
+            filename = list(self.files)[file_idx]
+            camera_type = self._get_camera_type(
+                list(self.selected_telescopes.keys())[tel_type_id]
             )
-        for idx, file_idx, table_idx,  tel_type_id, tel_id, patch_idx, nsb_idx  in batch.iterrows(
-            "index", "file_index", "table_index", "tel_type_id", "tel_id", "patch_index", "patch_class"
-            ):
-                filename = filenames[file_idx]
-                camera_type = self._get_camera_type(telescope_keys[tel_type_id])
+            # Load only the true image from simulation.
+            with lock:
                 tel_table = f"tel_{tel_id:03d}"
-                root_data = all_data[filename]
-
-                child = root_data.r0.event.telescope._f_get_child(tel_table)
+                child = self.files[filename].root.r0.event.telescope._f_get_child(tel_table)
                 unmapped_waveform = get_unmapped_waveform(
                     child[table_idx],
                     self.waveform_settings,
@@ -1925,72 +2013,10 @@ class DLRawTriggerReader(DLWaveformReader):
                     )
                 mapped_waveform = self.image_mappers[camera_type].map_image(
                     unmapped_waveform
-                    )
-                
-                # Load and compute the true image if not balanced patches since already computed.  
-                if "balanced_patches" not in self.output_settings:
-                    true_child = root_data.simulation.event.telescope.images._f_get_child(tel_table)
-                    true_image = get_true_image(true_child[table_idx])
-                    mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
-                    if "waveform" not in self.output_settings:               
-                        patch_sums = np.array([
-                            np.sum(
-                                mapped_true_image[
-                                    int(patch["x"] - patch_shape / 2) : int(patch["x"] + patch_shape / 2),
-                                    int(patch["y"] - patch_shape / 2) : int(patch["y"] + patch_shape / 2)
-                                ]
-                            )for patch in trigger_patches
-                        ], dtype=int)
-                # Start to append depending on the output setting
-                if "waveform" in self.output_settings:
-                    trigger_patch_true_image_sum = np.sum(true_image)
-                # We define the trigger patch selected and its index for each output setting
-                elif "hot_patch" in self.output_settings or "random_patch" in self.output_settings:
-                    hot_spot = np.unravel_index(
-                        np.argmax(mapped_true_image if self.hot_pixel_from_simulation else np.sum(mapped_waveform, axis=2)),
-                        mapped_true_image.shape if self.hot_pixel_from_simulation else np.sum(mapped_waveform, axis=2).shape
-                    )
-                    random_trigger_patch = (
-                        False if "hot_patch" in self.output_settings else np.random.choice([False, True], p=[0.5, 0.5])
-                    )
-                    # Select a random nsb trigger patch
-                    if random_trigger_patch:
-                        nsb_patches = np.where(patch_sums <= self.trigger_settings["cpe_threshold"])[0]
-                        #If no patches with only nsb take a random patch
-                        index = np.random.choice(nsb_patches) if len(nsb_patches) != 0 else np.random.randint(0, len(trigger_patches)) 
-                    # Select the patch nearer to the hot pixel
-                    else:
-                        patches_x = np.array([patch["x"] for patch in self.trigger_settings["trigger_patches"]])
-                        patches_y = np.array([patch["y"] for patch in self.trigger_settings["trigger_patches"]])
-                        dist = np.abs(patches_x - hot_spot[0])**2 + np.abs(patches_y - hot_spot[1])**2
-                        index = np.argmin(dist)
-
-                    trigger_patch_true_image_sum = patch_sums[index]                       
-                    trigger_patch_center = self.trigger_settings["trigger_patches"][index]
-
-                    patch_nbr.append(index)
-
-                elif "double_random" in self.output_settings:
-                    # Depending on the patch_class defined in the example identifiers select nsb or cosmic patch.
-                    valid_patches = np.where(
-                        patch_sums > self.trigger_settings["cpe_threshold"] if nsb_idx == 0 else patch_sums <= self.trigger_settings["cpe_threshold"]
-                    )[0]
-                    # If there is no nsb or cosmic patch selects a random patch.
-                    n_patch = np.random.choice(valid_patches) if len(valid_patches) >0 else np.random.randint(
-                        self.trigger_settings["number_of_trigger_patches"]
-                    )
-                    trigger_patch_center = trigger_patches[n_patch]
-                    trigger_patch_true_image_sum = patch_sums[n_patch]
-
-                    patch_nbr.append(n_patch)
-
-                elif "all_patches" in self.output_settings or "balanced_patches" in self.output_settings:
-                    trigger_patch_center = trigger_patches[patch_idx]
-                    if "all_patches" in self.output_settings:
-                        trigger_patch_true_image_sum = patch_sums[patch_idx]
-                        
-                # All output settings already defined their trigger_patch_center so crop all at once.
+                    ).astype(np.int16) 
+                # If the output setting is not waveform, crop the mapped waveform.
                 if "waveform" not in self.output_settings:
+                    trigger_patch_center = trigger_patches[ptch_idx]
                     mapped_waveform = mapped_waveform[
                                 int(trigger_patch_center["x"] - patch_shape / 2) : int(
                                     trigger_patch_center["x"] + patch_shape / 2
@@ -2006,25 +2032,11 @@ class DLRawTriggerReader(DLWaveformReader):
                     waveforms.append(mapped_waveform)
                 else:
                     waveforms.append(unmapped_waveform)
-                # Balanced patches has already the Cherenkov and patch class added in the example id.
-                if "balanced_patches" not in self.output_settings:
-                    true_image_sums.append(trigger_patch_true_image_sum)
-                    nsb_cosmic.append(int(trigger_patch_true_image_sum <= self.trigger_settings["cpe_threshold"]))
-        # Depending on the example id. of each setting add the patch index or the patch class.
-        if "hot_patch" in self.output_settings or "random_patch" in self.output_settings or "double_random" in self.output_settings:
-            batch["patch_index"] = patch_nbr
-
-        if "hot_patch" in self.output_settings or "random_patch" in self.output_settings or "all_patches" in self.output_settings or "waveform" in self.output_settings:
-            batch["patch_class"] = nsb_cosmic
-
         # Append everything to the selected batch
         batch.add_column(waveforms, name="waveform", index=8)
-        if "balanced_patches" not in self.output_settings:
-            batch.add_column(true_image_sums, name="cherenkov_pe", index=9)
         if "waveform" in self.output_settings:
             batch.remove_column("patch_index")
         return batch
-
 
 def get_feature_vectors(dl1_event, prefix, feature_vector_types) -> list:
     """
