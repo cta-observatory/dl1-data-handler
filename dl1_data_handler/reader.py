@@ -288,7 +288,7 @@ class DLDataReader(Component):
             self.subarray = self.subarray.select_subarray(selected_tel_ids)
         self.tel_ids = self.subarray.tel_ids
         # Copy the pixel rotation of the camera geometry for each telescope of the subarray
-        # in a variable since the ImageMapper will be derotated the pixels. The pixel rotation
+        # in a variable since the ImageMapper will derotate the pixels. The pixel rotation
         # is needed to create a rotated camera frame in order to transform the true Alt/Az
         # coordinates to correct camera coordinate offsets.
         self.pix_rotation = {}
