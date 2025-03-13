@@ -989,6 +989,10 @@ class DLDataReader(Component):
     def _get_balanced_patches(self, batch) -> Table:
         pass
 
+    @abstractmethod
+    def _get_raw_example(self, batch) -> Table:
+        pass
+
 def get_unmapped_image(dl1_event, channels, transforms) -> np.ndarray:
     """
     Generate unmapped image from a DL1 event.
