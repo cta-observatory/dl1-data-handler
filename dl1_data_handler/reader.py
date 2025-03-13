@@ -1902,6 +1902,15 @@ class DLRawTriggerReader(DLWaveformReader):
             # Load only the true image from simulation.
             with lock:
                 tel_table = f"tel_{tel_id:03d}"
+                child = self.files[filename].root.r0.event.telescope._f_get_child(tel_table)
+                unmapped_waveform = get_unmapped_waveform(
+                    child[table_idx],
+                    self.waveform_settings,
+                    self.image_mappers[camera_type].geometry,
+                    )
+                mapped_waveform = self.image_mappers[camera_type].map_image(
+                    unmapped_waveform
+                    ).astype(np.int16) 
                 sim_child = self.files[filename].root.simulation.event.telescope.images._f_get_child(
                     tel_table)
                 true_image = get_true_image(sim_child[table_idx])
