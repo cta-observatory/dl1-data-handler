@@ -1716,12 +1716,7 @@ class DLRawTriggerReader(DLWaveformReader):
             "``cpe_threshold``: Threshold in Cherenkov p.e.. A patch with cpe > threshold is considered as a cosmic patch."
             ),
     ).tag(config=True)
-
-    hot_pixel_from_simulation = Bool(
-        default_value=True,
-        help="Get the hot pixel index from the simulation (more Cherenkov p.e.) or the pixel with highest integrated signal",
-    ).tag(config=True)
-
+    
     def __init__(
         self,
         input_url_signal,
@@ -1937,8 +1932,8 @@ class DLRawTriggerReader(DLWaveformReader):
                     # For random_patch a random nsb patch or the hot patch. 
                     elif "hot_patch" in self.output_settings or "random_patch" in self.output_settings:
                         hot_spot = np.unravel_index(
-                            np.argmax(mapped_true_image if self.hot_pixel_from_simulation else np.sum(mapped_waveform, axis=2)),
-                            mapped_true_image.shape if self.hot_pixel_from_simulation else np.sum(mapped_waveform, axis=2).shape
+                            np.argmax(mapped_true_image),
+                            mapped_true_image.shape
                         )
                         random_trigger_patch = (False if "hot_patch" in self.output_settings else np.random.choice([False, True], p=[0.5, 0.5]))
                         # Select a random nsb trigger patch.
