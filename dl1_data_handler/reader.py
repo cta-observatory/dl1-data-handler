@@ -1722,7 +1722,7 @@ class DLRawTriggerReader(DLWaveformReader):
         default_value = False,
         allow_none = False,
         help=("Boolean variable to get the unmaped waveform")
-    )    
+    ).tag(config=True)    
 
     trigger_settings = Dict(
         default_value = None,
@@ -1759,11 +1759,13 @@ class DLRawTriggerReader(DLWaveformReader):
                     self.sequence_length,
                 )
         if "waveform" in self.output_settings and self.hexagonal_convolution==True:
-            neighbor_matrix = self.image_mappers[camera_type].geometry.neighbor_matrix
+            neighbor_matrix = self.image_mappers[self.cam_name].geometry.neighbor_matrix
             self.neighbor_dict = {}
             for i in range(neighbor_matrix.shape[0]):
                 neighbors = np.where(neighbor_matrix[i])[0]
                 self.neighbor_dict[i] = neighbors.tolist()
+        else:
+            self.neighbor_dict = None
 
             
             self.input_shape = (neighbor_matrix.shape[0], self.sequence_length)
