@@ -1708,6 +1708,13 @@ class DLRawTriggerReader(DLWaveformReader):
             "``all_patches``: extract the sequence of selected samples for all patches. "
         ),
     ).tag(config=True)
+
+    hexagonal_convolution = Bool(
+        default_value = False,
+        allow_none = False,
+        help=("Boolean variable to get the unmaped waveform")
+    )    
+
     trigger_settings = Dict(
         default_value = None,
         allow_none = True, 
@@ -1716,7 +1723,7 @@ class DLRawTriggerReader(DLWaveformReader):
             "``cpe_threshold``: Threshold in Cherenkov p.e.. A patch with cpe > threshold is considered as a cosmic patch."
             ),
     ).tag(config=True)
-    
+
     def __init__(
         self,
         input_url_signal,
@@ -1898,14 +1905,6 @@ class DLRawTriggerReader(DLWaveformReader):
             with lock:
                 tel_table = f"tel_{tel_id:03d}"
                 child = self.files[filename].root.r0.event.telescope._f_get_child(tel_table)
-                unmapped_waveform = get_unmapped_waveform(
-                    child[table_idx],
-                    self.waveform_settings,
-                    self.image_mappers[camera_type].geometry,
-                    )
-                mapped_waveform = self.image_mappers[camera_type].map_image(
-                    unmapped_waveform
-                    ).astype(np.int16) 
                 sim_child = self.files[filename].root.simulation.event.telescope.images._f_get_child(
                     tel_table)
                 true_image = get_true_image(sim_child[table_idx])
@@ -2034,7 +2033,7 @@ class DLRawTriggerReader(DLWaveformReader):
                             ]
                 # Apply the 'ImageMapper' whenever the index matrix is not None.
                 # Otherwise, return the unmapped image for the 'IndexedConv' package.
-                if self.image_mappers[camera_type].index_matrix is None:
+                if self.hexagonal_convolution is False:
                     waveforms.append(mapped_waveform)
                 else:
                     waveforms.append(unmapped_waveform)
