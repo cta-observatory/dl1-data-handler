@@ -1764,11 +1764,12 @@ class DLRawTriggerReader(DLWaveformReader):
             for i in range(neighbor_matrix.shape[0]):
                 neighbors = np.where(neighbor_matrix[i])[0]
                 self.neighbor_dict[i] = neighbors.tolist()
+                self.input_shape = (neighbor_matrix.shape[0], self.sequence_length)
         else:
             self.neighbor_dict = None
 
             
-            self.input_shape = (neighbor_matrix.shape[0], self.sequence_length)
+            
     def _get_balanced_patches(self, batch):
         """
         Computes the least common number between the nsb and cosmic patches per event.
