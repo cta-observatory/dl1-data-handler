@@ -34,6 +34,7 @@ from astropy.table import (
     vstack,
 )
 from astropy.time import Time
+from scipy.spatial import KDTree
 
 from ctapipe.coordinates import CameraFrame, NominalFrame
 from ctapipe.core import Component, QualityQuery
@@ -1618,7 +1619,7 @@ class DLWaveformReader(DLDataReader):
     def _get_raw_example(self,batch):
         pass
 
-def get_trigger_patches(trigger_settings, image_shape):
+def get_trigger_patches(trigger_settings, mapper):
     """
     Retrieve the trigger patch positions for a given number of patches.
 
@@ -1638,29 +1639,60 @@ def get_trigger_patches(trigger_settings, image_shape):
         Dictionary containing the computed trigger patches positions, and the
         size of the trigger patch.
     """
-    trigger_patches_xpos = np.linspace(
+    if trigger_settings["trigger_patch_type"] == "square":
+        trigger_patches_xpos = np.linspace(
+                                    0,
+                                    mapper.image_shape,
+                                    num = trigger_settings["number_of_trigger_patches"] + 1,
+                                    endpoint=False,
+                                    dtype=int,
+                                )[1:]
+        trigger_patches_ypos = np.linspace(
                                 0,
-                                image_shape,
-                                num = trigger_settings["number_of_trigger_patches"] + 1,
+                                mapper.image_shape,
+                                num= trigger_settings["number_of_trigger_patches"] + 1,
                                 endpoint=False,
                                 dtype=int,
                             )[1:]
-    trigger_patches_ypos = np.linspace(
-                            0,
-                            image_shape,
-                            num= trigger_settings["number_of_trigger_patches"] + 1,
-                            endpoint=False,
-                            dtype=int,
-                        )[1:]
-    trigger_settings["trigger_patch_size"] = [
-                                trigger_patches_xpos[0] * 2,
-                                trigger_patches_ypos[0] * 2,
-                            ]
-    trigger_settings["trigger_patches"] = []
-    for patches in np.array(np.meshgrid(trigger_patches_xpos, trigger_patches_ypos)).T:
-        for patch in patches:
-            trigger_settings["trigger_patches"].append({"x": patch[0], "y": patch[1]})
+        trigger_settings["trigger_patch_size"] = [
+                                    trigger_patches_xpos[0] * 2,
+                                    trigger_patches_ypos[0] * 2,
+                                ]
+        trigger_settings["trigger_patches"] = []
+        for patches in np.array(np.meshgrid(trigger_patches_xpos, trigger_patches_ypos)).T:
+            for patch in patches:
+                trigger_settings["trigger_patches"].append({"x": patch[0], "y": patch[1]})
 
+    elif trigger_settings["trigger_patch_type"] == "hexagonal":
+        num_pixels = mapper.geometry.n_pixels
+        flowers = np.zeros(num_pixels)
+        num_flowers = int(num_pixels / 7)
+        central_pixels = []
+        a, b= 0,7
+        #give a specific value to each flower
+        for i in range(num_flowers):
+            selected_pixels = np.arange(a, b)
+            central_pixels.append(a)
+            flowers[selected_pixels] = i 
+            a+=7
+            b+=7
+        pixel_pos = np.column_stack((mapper.pix_x, mapper.pix_y))
+        central_pixel_positions = pixel_pos[central_pixels]
+        kdtree = KDTree(central_pixel_positions)
+        k = trigger_settings["flowers_per_patch"]
+        distances, indices = kdtree.query(central_pixel_positions, k=k)
+        central_neighbor_indices = np.take(central_pixels, indices)
+        # avoid taking the patches that do not have the same geometry
+        valid_mask = np.all(distances[:, :] <= distances[0, k-1] + 0.001, axis=1)
+        indices = central_neighbor_indices[valid_mask]
+        trigger_settings["trigger_patch_size"] = k * 7
+        trigger_settings["number_of_trigger_patches"] = len(indices) 
+        trigger_settings["trigger_patches"] = []
+        for i, idx in enumerate(indices[:, 0]):
+            neighbor_values = flowers[indices[i, :]]
+            mask = np.isin(flowers, neighbor_values).astype(int)
+            if np.sum(mask) == (k) * 7:
+                trigger_settings["trigger_patches"].append(mask)
     return trigger_settings
 
 def get_true_image(sim_event) -> np.ndarray:
@@ -1681,7 +1713,7 @@ def get_true_image(sim_event) -> np.ndarray:
     true_image : np.ndarray
         The simulated image with only Cherenkov p.e.
     """
-    true_image = np.array(sim_event["true_image"], dtype=int).reshape(-1, 1)
+    true_image = np.abs(np.array(sim_event["true_image"], dtype=int).reshape(-1, 1))
 
     return true_image
 
@@ -1750,21 +1782,27 @@ class DLRawTriggerReader(DLWaveformReader):
         )
         if "waveform" not in self.output_settings:
             self.trigger_settings = get_trigger_patches(
-                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
+                self.trigger_settings, self.image_mappers[self.cam_name]
                 )
             if self.mode == "mono":
-                self.input_shape = (
-                    self.trigger_settings["trigger_patch_size"][0],
-                    self.trigger_settings["trigger_patch_size"][0],
-                    self.sequence_length,
-                )
+                if trigger_settings["trigger_patch_type"] == "square":
+                    self.input_shape = (
+                        self.trigger_settings["trigger_patch_size"][0],
+                        self.trigger_settings["trigger_patch_size"][0],
+                        self.sequence_length,
+                    )
+                elif trigger_settings["trigger_patch_type"] == "hexagonal":
+                    self.input_shape = (
+                        self.trigger_settings["trigger_patch_size"],
+                        self.sequence_length,
+                    )
         if "waveform" in self.output_settings and self.hexagonal_convolution==True:
             neighbor_matrix = self.image_mappers[self.cam_name].geometry.neighbor_matrix
             self.neighbor_dict = {}
             for i in range(neighbor_matrix.shape[0]):
                 neighbors = np.where(neighbor_matrix[i])[0]
                 self.neighbor_dict[i] = neighbors.tolist()
-                self.input_shape = (neighbor_matrix.shape[0], self.sequence_length)
+            self.input_shape = (neighbor_matrix.shape[0], self.sequence_length)
         else:
             self.neighbor_dict = None
 
@@ -1801,9 +1839,9 @@ class DLRawTriggerReader(DLWaveformReader):
         nsb_cosmic = []
         # Load trigger settings.
         self.trigger_settings = get_trigger_patches(
-                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
+                self.trigger_settings, self.image_mappers[self.cam_name]
                 )
-        patch_shape = self.trigger_settings["trigger_patch_size"][0]
+        patch_shape = self.trigger_settings["trigger_patch_size"]
         trigger_patches = self.trigger_settings["trigger_patches"]
 
         for file_idx, table_idx, tel_type_id, tel_id in batch.iterrows(
@@ -1820,13 +1858,21 @@ class DLRawTriggerReader(DLWaveformReader):
                 true_image = get_true_image(sim_child[table_idx])
                 mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
                 # Get sums for all patches at once.
-                true_sums = np.array([
-                    np.sum(
-                        mapped_true_image[
-                            int(patch["x"] - patch_shape / 2) : int(patch["x"] + patch_shape / 2),
-                            int(patch["y"] - patch_shape / 2) : int(patch["y"] + patch_shape / 2)]
-                            )for patch in trigger_patches
-                            ], dtype=np.int16)
+                if self.trigger_settings["trigger_patch_type"] == "square":
+                    true_sums = np.array([
+                        np.sum(
+                            mapped_true_image[
+                                int(patch["x"] - patch_shape[0] / 2) : int(patch["x"] + patch_shape[0] / 2),
+                                int(patch["y"] - patch_shape[0] / 2) : int(patch["y"] + patch_shape[0] / 2)]
+                                )for patch in trigger_patches
+                                ], dtype=np.int64)
+                    
+                elif self.trigger_settings["trigger_patch_type"] == "hexagonal":
+                    true_sums = np.array([
+                        np.sum(true_image * trigger_patches[patch]
+                        )for patch in np.arange(len(trigger_patches))
+                    ], dtype=np.int64)
+
                 # Get indices of nsb and cosmic patches.
                 cosmic_patches = np.where(true_sums > self.trigger_settings["cpe_threshold"])[0]
                 nsb_patches = np.where(true_sums <= self.trigger_settings["cpe_threshold"])[0]
@@ -1888,8 +1934,8 @@ class DLRawTriggerReader(DLWaveformReader):
         # Load the trigger settings.
         if "waveform" not in self.output_settings:
             self.trigger_settings = get_trigger_patches(
-                self.trigger_settings, self.image_mappers[self.cam_name].image_shape)
-            patch_shape = self.trigger_settings["trigger_patch_size"][0]
+                self.trigger_settings, self.image_mappers[self.cam_name])
+            patch_shape = self.trigger_settings["trigger_patch_size"]
             trigger_patches = self.trigger_settings["trigger_patches"]
         # Depending on the output repeat each event of the example identifiers rep times.
         # Create "patch_index" and "patch_column" to be able to iterate after.
@@ -1931,11 +1977,20 @@ class DLRawTriggerReader(DLWaveformReader):
                 mapped_true_image = self.image_mappers[camera_type].map_image(true_image)
                 # Compute all the sums of Cherenkov p.e. per patch.
                 if "waveform" not in self.output_settings:               
-                    patch_sums = np.array([np.sum(
-                        mapped_true_image[
-                            int(patch["x"] - patch_shape / 2) : int(patch["x"] + patch_shape / 2),
-                            int(patch["y"] - patch_shape / 2) : int(patch["y"] + patch_shape / 2)]
-                            )for patch in trigger_patches], dtype=np.int16)
+                    if self.trigger_settings["trigger_patch_type"] == "square":
+                        true_sums = np.array([
+                            np.sum(
+                                mapped_true_image[
+                                    int(patch["x"] - patch_shape[0] / 2) : int(patch["x"] + patch_shape[0] / 2),
+                                    int(patch["y"] - patch_shape[0] / 2) : int(patch["y"] + patch_shape[0] / 2)]
+                                    )for patch in trigger_patches
+                                    ], dtype=np.int64)
+                        
+                    elif self.trigger_settings["trigger_patch_type"] == "hexagonal":
+                        true_sums = np.array([
+                            np.sum(true_image * trigger_patches[patch]
+                            )for patch in np.arange(len(trigger_patches))
+                        ], dtype=np.int64)
                     # For double random depending on the patch_class (0 cosmic, 1 nsb) we select one random patch_index.
                     if "double_random" in self.output_settings:
                         valid_patches = np.where(
@@ -1950,10 +2005,16 @@ class DLRawTriggerReader(DLWaveformReader):
                     # For hot_patch always the index nearer to the hot pixel.
                     # For random_patch a random nsb patch or the hot patch. 
                     elif "hot_patch" in self.output_settings or "random_patch" in self.output_settings:
-                        hot_spot = np.unravel_index(
-                            np.argmax(mapped_true_image),
-                            mapped_true_image.shape
-                        )
+                        if self.trigger_settings["trigger_patch_type"] == "square":
+                            hot_spot = np.unravel_index(
+                                np.argmax(mapped_true_image),
+                                mapped_true_image.shape
+                            )
+                        elif self.trigger_settings["trigger_patch_type"] == "hexagonal":
+                            hot_spot = np.unravel_index(
+                                np.argmax(true_image),
+                                true_image.shape
+                            )
                         random_trigger_patch = (False if "hot_patch" in self.output_settings else np.random.choice([False, True], p=[0.5, 0.5]))
                         # Select a random nsb trigger patch.
                         if random_trigger_patch:
@@ -1973,7 +2034,7 @@ class DLRawTriggerReader(DLWaveformReader):
                     nsb_cosmic.append(int(patch_true_image_sum <= self.trigger_settings["cpe_threshold"]))
                 # For waveform only need the sum of Cherenkov and the class.
                 else:
-                    true_sum = np.sum((true_image), dtype=np.int16)
+                    true_sum = np.sum((true_image), dtype=np.int64)
                     chkovs.append(true_sum)
                     nsb_cosmic.append(int(true_sum <= self.trigger_settings["cpe_threshold"]))
         # Append number of Cherenkov per patch and refill patch_class and patch_index
@@ -2015,9 +2076,9 @@ class DLRawTriggerReader(DLWaveformReader):
         # Load the trigger settings.
         if "waveform" not in self.output_settings:
             self.trigger_settings = get_trigger_patches(
-                self.trigger_settings, self.image_mappers[self.cam_name].image_shape
+                self.trigger_settings, self.image_mappers[self.cam_name]
                 )
-            patch_shape = self.trigger_settings["trigger_patch_size"][0]
+            patch_shape = self.trigger_settings["trigger_patch_size"]
             trigger_patches = self.trigger_settings["trigger_patches"]
         
         for file_idx, table_idx, tel_type_id, tel_id, ptch_idx in batch.iterrows(
@@ -2038,19 +2099,23 @@ class DLRawTriggerReader(DLWaveformReader):
                     )
                 mapped_waveform = self.image_mappers[camera_type].map_image(
                     unmapped_waveform
-                    ).astype(np.int16) 
+                    ).astype(np.int64) 
                 # If the output setting is not waveform, crop the mapped waveform.
                 if "waveform" not in self.output_settings:
                     trigger_patch_center = trigger_patches[ptch_idx]
-                    mapped_waveform = mapped_waveform[
-                                int(trigger_patch_center["x"] - patch_shape / 2) : int(
-                                    trigger_patch_center["x"] + patch_shape / 2
+                    if self.trigger_settings["trigger_patch_type"] == "square":
+                            mapped_waveform = mapped_waveform[
+                                int(trigger_patch_center["x"] - patch_shape[0] / 2) : int(
+                                    trigger_patch_center["x"] + patch_shape[0] / 2
                                 ),
-                                int(trigger_patch_center["y"] - patch_shape / 2) : int(
-                                    trigger_patch_center["y"] + patch_shape / 2
+                                int(trigger_patch_center["y"] - patch_shape[0] / 2) : int(
+                                    trigger_patch_center["y"] + patch_shape[0] / 2
                                 ),
                                 :,
                             ]
+                        
+                    elif self.trigger_settings["trigger_patch_type"] == "hexagonal":
+                        unmapped_waveform = np.array(unmapped_waveform * trigger_patch_center, dtype=np.int64)
                 # Apply the 'ImageMapper' whenever the index matrix is not None.
                 # Otherwise, return the unmapped image for the 'IndexedConv' package.
                 if self.hexagonal_convolution is False:
