@@ -472,14 +472,21 @@ class DLDataReader(Component):
         and constructs identifiers based on the event and telescope IDs. These
         identifiers are used to uniquely reference each example in the dataset.
         """
-        simulation_info = []
-        example_identifiers = []
+        simulation_info, example_identifiers = [], []
         for file_idx, (filename, f) in enumerate(self.files.items()):
+            # Read the trigger table.
+            trigger_table = read_table(f, "/dl1/event/subarray/trigger")
             if self.process_type == ProcessType.Simulation:
                 # Read simulation information for each observation
                 simulation_info.append(read_table(f, "/configuration/simulation/run"))
                 # Construct the shower simulation table
                 simshower_table = read_table(f, "/simulation/event/subarray/shower")
+                # The shower simulation table is joined with the subarray trigger table.
+                trigger_table = join(
+                    left=trigger_table,
+                    right=simshower_table,
+                    keys=["obs_id", "event_id"],
+                )
 
             # Construct the table containing all events.
             # First, the telescope tables are joined with the shower simulation
@@ -495,7 +502,7 @@ class DLDataReader(Component):
                 if self.process_type == ProcessType.Simulation:
                     tel_table = join(
                         left=tel_table,
-                        right=simshower_table,
+                        right=trigger_table,
                         keys=["obs_id", "event_id"],
                     )
                     # Add the spherical offsets w.r.t. to the telescope pointing
@@ -581,8 +588,7 @@ class DLDataReader(Component):
         """
         # Extend the columns to keep in the example identifiers
         self.example_ids_keep_columns.extend(["hillas_intensity"])
-        simulation_info = []
-        example_identifiers = []
+        simulation_info, example_identifiers = [], []
         for file_idx, (filename, f) in enumerate(self.files.items()):
             # Read the trigger table.
             trigger_table = read_table(f, "/dl1/event/subarray/trigger")
