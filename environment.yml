@@ -1,6 +1,7 @@
 # conda env create -f environment.yml
 name: dl1dh
 channels:
+    - anaconda
     - conda-forge
 dependencies:
     - python>=3.10
