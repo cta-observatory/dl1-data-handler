@@ -23,7 +23,7 @@ DL1 Data Handler
 
 A package of utilities for reading, and applying image processing to `Cherenkov Telescope Array Observatory (CTAO) <https://www.ctao.org/>`_ R1/DL0/DL1 data in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data.
 
-Currently supports ctapipe v6.0.0 data format. 
+Currently supports ctapipe  >= v6.0.0 data format. 
 
 Previously named image-extractor (v0.1.0 - v0.6.0). Currently under development, intended for internal use only.
 
