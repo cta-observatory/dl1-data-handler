@@ -54,5 +54,5 @@
         }
     ], 
     "access_right": "open", 
-    "description": "<p>A package of utilities for writing, reading, and applying image processing to&nbsp;calibrated data from imaging atmospheric Cherenkov telescopes in a standardized format.</p>"
+    "description": "<p>A package of utilities for reading and applying image processing to&nbsp;calibrated data from imaging atmospheric Cherenkov telescopes in a standardized format.</p>"
 }
