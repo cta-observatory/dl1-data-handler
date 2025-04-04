@@ -46,9 +46,11 @@ from ctapipe.core.traits import (
     List,
     CaselessStrEnum,
     Unicode,
+    UseEnum,
     TelescopeParameter,
 )
 from ctapipe.instrument import SubarrayDescription
+from ctapipe.instrument.optics import FocalLengthKind
 from ctapipe.io import read_table
 from dl1_data_handler.image_mapper import ImageMapper
 
@@ -192,6 +194,21 @@ class DLDataReader(Component):
         ),
     ).tag(config=True)
 
+    focal_length_choice = UseEnum(
+        FocalLengthKind,
+        default_value=FocalLengthKind.EFFECTIVE,
+        help=(
+            "If both nominal and effective focal lengths are available in the"
+            " SimTelArray file, which one to use for the `~ctapipe.coordinates.CameraFrame`"
+            " attached to the `~ctapipe.instrument.CameraGeometry` instances in"
+            " the `~ctapipe.instrument.SubarrayDescription`, which will be used in"
+            " CameraFrame to TelescopeFrame coordinate transforms. "
+            " The 'nominal' focal length is the one used during "
+            " the simulation, the 'effective' focal length is computed using specialized "
+            " ray-tracing from a point light source"
+        ),
+    ).tag(config=True)
+
     min_telescopes = Int(
         default_value=1,
         help=(
@@ -270,7 +287,7 @@ class DLDataReader(Component):
             )
 
         # Set up the subarray
-        self.subarray = SubarrayDescription.from_hdf(self.first_file)
+        self.subarray = SubarrayDescription.from_hdf(self.first_file, focal_length_choice=self.focal_length_choice)
         selected_tel_ids = None
         if self.allowed_tels is not None:
             selected_tel_ids = np.array(list(self.allowed_tels), dtype=np.int16)
@@ -318,7 +335,7 @@ class DLDataReader(Component):
         # Check that all files have the same SubarrayDescription
         for filename in self.files:
             # Read SubarrayDescription from the new file
-            subarray = SubarrayDescription.from_hdf(filename)
+            subarray = SubarrayDescription.from_hdf(filename, focal_length_choice=self.focal_length_choice)
 
             # Filter subarray by selected telescopes
             if selected_tel_ids is not None:
@@ -817,9 +834,9 @@ class DLDataReader(Component):
             table["telescope_pointing_altitude"],
             frame=altaz,
         )
-        # Set the camera frame with the focal length and rotation of the camera
+        # Set a new camera frame with the pixel rotation of the camera
         camera_frame = CameraFrame(
-            focal_length=self.subarray.tel[tel_id].optics.equivalent_focal_length,
+            focal_length=self.subarray.tel[tel_id].camera.geometry.frame.focal_length,
             rotation=self.pix_rotation[tel_id],
             telescope_pointing=fix_tel_pointing,
         )
