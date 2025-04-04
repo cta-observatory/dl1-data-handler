@@ -5,7 +5,7 @@ channels:
     - conda-forge
     - cta-observatory
 dependencies:
-    - python>=3.11
+    - python>=0
     - astropy
     - setuptools
     - numpy
