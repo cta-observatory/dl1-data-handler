@@ -196,7 +196,7 @@ class DLDataReader(Component):
 
     focal_length_choice = UseEnum(
         FocalLengthKind,
-        default_value=FocalLengthKind.EQUIVALENT,
+        default_value=FocalLengthKind.EFFECTIVE,
         help=(
             "If both nominal and effective focal lengths are available in the"
             " SimTelArray file, which one to use for the `~ctapipe.coordinates.CameraFrame`"
