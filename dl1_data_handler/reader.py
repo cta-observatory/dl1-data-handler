@@ -709,7 +709,7 @@ class DLDataReader(Component):
                 )
         # Workaround for the missing multicolumn indexing in astropy:
         # Need this PR https://github.com/astropy/astropy/pull/15826
-        # waiting astropy v7.0.0
+        # waiting astropy v7.1.0
         # self.example_identifiers.add_index(["obs_id", "event_id"])
 
     def get_tel_pointing(self, file, tel_id) -> Table:
@@ -992,7 +992,7 @@ class DLDataReader(Component):
         # Retrieve the batch from the example identifiers via groupd by
         # Workaround for the missing multicolumn indexing in astropy:
         # Need this PR https://github.com/astropy/astropy/pull/15826
-        # waiting astropy v7.0.0
+        # waiting astropy v7.1.0
         # Once available, the batch_generation can be shared with "mono"
         batch = self.example_identifiers_grouped.groups[batch_indices]
         # This may returns a Rows object and not a Table if the batch is a single event.

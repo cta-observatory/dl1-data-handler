@@ -21,9 +21,9 @@ DL1 Data Handler
     :target: https://github.com/cta-observatory/dl1-data-handler/actions/workflows/python-package-conda.yml
     :alt: Continuos Integration
 
-A package of utilities for reading, and applying image processing to `Cherenkov Telescope Array Observatory (CTAO) <https://www.ctao.org/>`_ R1/DL0/DL1 data in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data.
+A package of utilities for reading and applying image processing to `Cherenkov Telescope Array Observatory (CTAO) <https://www.ctao.org/>`_ R1/DL0/DL1 data in a standardized format. Created primarily for testing machine learning image analysis techniques on IACT data.
 
-Currently supports ctapipe v6.0.0 data format. 
+Currently supports ctapipe  >= v6.0.0 data format. 
 
 Previously named image-extractor (v0.1.0 - v0.6.0). Currently under development, intended for internal use only.
 
@@ -43,7 +43,7 @@ necessary package channels, and install dl1-data-handler specified version and i
 
 .. code-block:: bash
 
-   DL1DH_VER=0.14.1
+   DL1DH_VER=0.14.2
    wget https://raw.githubusercontent.com/cta-observatory/dl1-data-handler/v$DL1DH_VER/environment.yml
    conda env create -n [ENVIRONMENT_NAME] -f environment.yml
    conda activate [ENVIRONMENT_NAME]

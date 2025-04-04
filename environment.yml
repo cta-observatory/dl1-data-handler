@@ -3,7 +3,6 @@ name: dl1dh
 channels:
     - anaconda
     - conda-forge
-    - cta-observatory
 dependencies:
     - python>=3.10
     - astropy
@@ -11,7 +10,7 @@ dependencies:
     - numpy
     - scipy
     - pip
-    - ctapipe==0.23.2
+    - ctapipe==0.24.0
     - traitlets
     - pyyaml
     - pandas
