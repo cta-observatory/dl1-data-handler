@@ -1841,7 +1841,7 @@ class DLRawTriggerReader(DLWaveformReader):
             **kwargs,
         )
         if "waveform" not in self.output_settings:
-            self.trigger_settings, _ = get_trigger_patches(
+            self.trigger_settings, self.dict_mapper = get_trigger_patches(
                 self.trigger_settings, self.image_mappers[self.cam_name]
                 )
             if self.mode == "mono":
@@ -1855,6 +1855,7 @@ class DLRawTriggerReader(DLWaveformReader):
                     self.input_shape = (
                         self.trigger_settings["trigger_patch_size"],
                         self.sequence_length,
+                        1,
                     )
         if "waveform" in self.output_settings and self.hexagonal_convolution==True:
             self.neighbor_matrix = self.image_mappers[self.cam_name].geometry.neighbor_matrix
@@ -1868,18 +1869,15 @@ class DLRawTriggerReader(DLWaveformReader):
             self.neighbor_array = np.full((num_pixels, 7), -1, dtype=int)
             for i, neighbors in enumerate(neighbor_lists):
                 self.neighbor_array[i, :len(neighbors)] = neighbors
-            self.input_shape = (self.neighbor_matrix.shape[0], self.sequence_length)
+            self.input_shape = (num_pixels, self.sequence_length, 1)
+        elif "waveform" in self.output_settings:
+            self.input_shape = (
+                self.image_mappers[self.cam_name].image_shape,
+                self.image_mappers[self.cam_name].image_shape,
+                self.sequence_length,
+                1,
+            )
 
-        elif self.trigger_settings["trigger_patch_type"] == "hexagonal":
-            self.neighbor_dict = {}
-            # file_path = os.path.join(self.dir_to_neighbors_per_patch, f"patch_neighbors_{self.trigger_settings['flowers_per_patch']}.h5")
-            # with h5py.File(file_patch, "r") as f:
-            #     for patch_key in f.keys():
-            #         keys = f[f"{patch_key}/keys"][:] 
-            #         values = f[f"{patch_key}/values"][:]
-            #         self.neighbor_dict.update({key: list(val) for key, val in zip(keys, values)})
-        else:
-            self.neighbor_dict = None
 
             
             
@@ -1964,7 +1962,7 @@ class DLRawTriggerReader(DLWaveformReader):
 
                 patches_indexes.extend(temp_index.tolist())
                 cherenkov.extend(true_sums[temp_index].tolist())
-                nsb_cosmic.extend(np.repeat([0, 1], comparator))
+                nsb_cosmic.extend([0] * comparator + [1] * comparator)
                 table_index.extend([table_idx] * 2 * comparator)
                 file_index.extend([file_idx] * 2 * comparator)
                 tel_index.extend([tel_id] * 2 * comparator)
@@ -2166,9 +2164,6 @@ class DLRawTriggerReader(DLWaveformReader):
         waveforms = []
         # Load the trigger settings.
         if "waveform" not in self.output_settings:
-            self.trigger_settings, dict_mapper = get_trigger_patches(
-                self.trigger_settings, self.image_mappers[self.cam_name]
-                )
             patch_shape = self.trigger_settings["trigger_patch_size"]
             trigger_patches = self.trigger_settings["trigger_patches"]
             neighbor_model = self.trigger_settings["patches_neighbor"]
@@ -2211,7 +2206,7 @@ class DLRawTriggerReader(DLWaveformReader):
                         patched_wf = unmapped_waveform[:, :][patch.astype(bool)]
                         # Reorder the array so that all patches have the same spatial order in index
                         unmapped_waveform = np.zeros((self.trigger_settings["trigger_patch_size"], self.sequence_length))
-                        for new, old in enumerate(dict_mapper[ptch_idx]):
+                        for new, old in enumerate(self.dict_mapper[ptch_idx]):
                             unmapped_waveform[new] = patched_wf[old]
                                                 
                 # Apply the 'ImageMapper' whenever the index matrix is not None.
