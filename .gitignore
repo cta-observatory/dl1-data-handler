@@ -9,3 +9,4 @@ dl1_data_handler/__pycache__
 build
 dist
 *.egg-info/
+notebooks/test_r0_reader.ipynb
