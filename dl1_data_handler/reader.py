@@ -185,6 +185,12 @@ class DLDataReader(Component):
         ),
     ).tag(config=True)
 
+    hexagonal_convolution = Bool(
+        default_value = False,
+        allow_none = False,
+        help=("Boolean variable to get the unmaped array")
+    ).tag(config=True) 
+
     image_mapper_type = TelescopeParameter(
         trait=Unicode(),
         default_value="BilinearMapper",
@@ -1229,11 +1235,14 @@ class DLImageReader(DLDataReader):
 
         # Set the input shape based on the selected mode
         if self.mode == "mono":
-            self.input_shape = (
-                self.image_mappers[self.cam_name].image_shape,
-                self.image_mappers[self.cam_name].image_shape,
-                len(self.channels),
-            )
+            if self.hexagonal_convolution == False:
+                self.input_shape = (
+                    self.image_mappers[self.cam_name].image_shape,
+                    self.image_mappers[self.cam_name].image_shape,
+                    len(self.channels),
+                )
+            else:
+                self.input_shape = (self.image_mappers[self.cam_name].geometry.n_pixels, len(self.channels))
         elif self.mode == "stereo":
             self.input_shape = {}
             for tel_type in self.selected_telescopes:
@@ -1274,6 +1283,23 @@ class DLImageReader(DLDataReader):
             self.transforms["peak_time_offset"] = img_table_v_attrs[
                 "CTAFIELD_4_TRANSFORM_OFFSET"
             ]
+        if self.hexagonal_convolution == True:
+            self.neighbor_matrix = self.image_mappers[self.cam_name].geometry.neighbor_matrix
+            num_pixels = self.neighbor_matrix.shape[0]
+            neighbor_lists = []
+            max_neighbors = 0
+            for i in range(num_pixels):
+                # Find indices where the row is True
+                neighbors = np.where(self.neighbor_matrix[i])[0]
+                neighbor_lists.append([i] + neighbors.tolist())    
+            self.neighbor_array = np.full((num_pixels, 7), -1, dtype=int)
+            for i, neighbors in enumerate(neighbor_lists):
+                self.neighbor_array[i, :len(neighbors)] = neighbors
+        else:
+            self.neighbor_array = None
+
+
+        
 
     def _append_features(self, batch) -> Table:
         """
@@ -1315,7 +1341,7 @@ class DLImageReader(DLDataReader):
             camera_type = self._get_camera_type(
                 list(self.selected_telescopes.keys())[tel_type_id]
             )
-            if self.image_mappers[camera_type].index_matrix is None:
+            if self.hexagonal_convolution == False:
                 images.append(self.image_mappers[camera_type].map_image(unmapped_image))
             else:
                 images.append(unmapped_image)
@@ -1553,7 +1579,7 @@ class DLWaveformReader(DLDataReader):
             self.waveform_settings["waveform_offset"] = wvf_table_v_attrs[
                 "CTAFIELD_5_TRANSFORM_OFFSET"
             ]
-
+        
     def _append_features(self, batch) -> Table:
         """
         Append waveforms to a given batch as features.
@@ -1805,11 +1831,11 @@ class DLRawTriggerReader(DLWaveformReader):
         ),
     ).tag(config=True)
 
-    hexagonal_convolution = Bool(
-        default_value = False,
+    convolution3d = Bool(
+        default_value = True,
         allow_none = False,
-        help=("Boolean variable to get the unmaped waveform")
-    ).tag(config=True)    
+        help=("Boolean variable to add or not an extra dummy dimension for the channel")
+    ).tag(config=True) 
 
     trigger_settings = Dict(
         default_value = None,
@@ -1820,11 +1846,6 @@ class DLRawTriggerReader(DLWaveformReader):
             ),
     ).tag(config=True)
 
-    dir_to_neighbors_per_patch = Unicode(
-        default_value = None,
-        allow_none=True,
-        help=("Path to the h5 whith the neighbours of each pixel per patch")
-    ).tag(confg=True)
     def __init__(
         self,
         input_url_signal,
@@ -1846,17 +1867,16 @@ class DLRawTriggerReader(DLWaveformReader):
                 )
             if self.mode == "mono":
                 if self.trigger_settings["trigger_patch_type"] == "square":
-                    self.input_shape = (
-                        self.trigger_settings["trigger_patch_size"][0],
-                        self.trigger_settings["trigger_patch_size"][0],
-                        self.sequence_length,
-                    )
-                elif self.trigger_settings["trigger_patch_type"] == "hexagonal":
-                    self.input_shape = (
-                        self.trigger_settings["trigger_patch_size"],
-                        self.sequence_length,
-                        1,
-                    )
+                        self.input_shape = (
+                            self.trigger_settings["trigger_patch_size"][0],
+                            self.trigger_settings["trigger_patch_size"][0],
+                            self.sequence_length,
+                        )
+                elif self.trigger_settings["trigger_patch_type"] == "hexagonal":                 
+                        self.input_shape = (
+                            self.trigger_settings["trigger_patch_size"],
+                            self.sequence_length,
+                        )               
         if "waveform" in self.output_settings and self.hexagonal_convolution==True:
             self.neighbor_matrix = self.image_mappers[self.cam_name].geometry.neighbor_matrix
             num_pixels = self.neighbor_matrix.shape[0]
@@ -1869,14 +1889,15 @@ class DLRawTriggerReader(DLWaveformReader):
             self.neighbor_array = np.full((num_pixels, 7), -1, dtype=int)
             for i, neighbors in enumerate(neighbor_lists):
                 self.neighbor_array[i, :len(neighbors)] = neighbors
-            self.input_shape = (num_pixels, self.sequence_length, 1)
-        elif "waveform" in self.output_settings:
+            self.input_shape = (num_pixels, self.sequence_length)
+        elif "waveform" in self.output_settings and self.hexagonal_convolution==False:
             self.input_shape = (
                 self.image_mappers[self.cam_name].image_shape,
                 self.image_mappers[self.cam_name].image_shape,
                 self.sequence_length,
-                1,
             )
+        if self.convolution3d:
+            self.input_shape = self.input_shape + (1,)
 
 
             
@@ -1951,7 +1972,7 @@ class DLRawTriggerReader(DLWaveformReader):
 
             # Get indices of nsb and cosmic patches.
             cosmic_patches = np.where(true_sums > self.trigger_settings["cpe_threshold"])[0]
-            nsb_patches = np.where(true_sums <= self.trigger_settings["cpe_threshold"])[0]
+            nsb_patches = np.where(true_sums == 0)[0]  #<= self.trigger_settings["cpe_threshold"]
 
             # Balance nsb and cosmic patches.
             comparator = min(len(cosmic_patches), len(nsb_patches))
@@ -2208,15 +2229,20 @@ class DLRawTriggerReader(DLWaveformReader):
                         unmapped_waveform = np.zeros((self.trigger_settings["trigger_patch_size"], self.sequence_length))
                         for new, old in enumerate(self.dict_mapper[ptch_idx]):
                             unmapped_waveform[new] = patched_wf[old]
+
                                                 
                 # Apply the 'ImageMapper' whenever the index matrix is not None.
                 # Otherwise, return the unmapped image for the 'IndexedConv' package.
                 if self.hexagonal_convolution is False:
+                    if self.convolution3d==True:
+                        mapped_waveform = np.expand_dims(mapped_waveform, axis=-1)
                     waveforms.append(mapped_waveform)
                 else:
+                    if self.convolution3d==True:
+                        unmapped_waveform = np.expand_dims(unmapped_waveform, axis=-1)
                     waveforms.append(unmapped_waveform)
         # Append everything to the selected batch
-        batch.add_column(waveforms, name="waveform", index=8)
+        batch.add_column(waveforms, name="features", index=8)
         if "waveform" in self.output_settings:
             batch.remove_column("patch_index")
         return batch
