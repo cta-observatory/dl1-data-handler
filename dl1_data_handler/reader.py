@@ -209,6 +209,18 @@ class DLDataReader(Component):
         ),
     ).tag(config=True)
 
+    force_dl1_lookup = Bool(
+        default_value=False,
+        allow_none=True,
+        help=(
+            "Force to retrieve the table indices from the DL1 image table. "
+            "Usually the table indices can be retrieved from the DL1 parameter table. "
+            "In case a scrict ordering can not be guaranteed, the DL1 image table "
+            "has to be used to retrieve the table indices. This results in a "
+            "significantly slower initializing."
+        ),
+    ).tag(config=True)
+
     min_telescopes = Int(
         default_value=1,
         help=(
@@ -513,9 +525,28 @@ class DLDataReader(Component):
                 tel_table = read_table(
                     f, f"/dl1/event/telescope/parameters/tel_{tel_id:03d}"
                 )
-                tel_table.add_column(
-                    np.arange(len(tel_table)), name="table_index", index=0
-                )
+                if self.force_dl1_lookup:
+                    # Read the DL1 image table
+                    dl1_tel_table = read_table(
+                        f, f"/dl1/event/telescope/images/tel_{tel_id:03d}",
+                    )
+                    # Keep only the columns needed for the join
+                    dl1_tel_table.keep_columns(["obs_id", "event_id", "tel_id"])
+                    # Add the table index to the DL1 image table
+                    dl1_tel_table.add_column(
+                        np.arange(len(dl1_tel_table)), name="table_index", index=0
+                    )
+                    # Join the DL1 image table with the DL1 parameter table
+                    tel_table = join(
+                        left=tel_table,
+                        right=dl1_tel_table,
+                        keys=["obs_id", "event_id", "tel_id"],
+                    )
+                else:
+                    # Add the table index to the DL1 parameter table
+                    tel_table.add_column(
+                        np.arange(len(tel_table)), name="table_index", index=0
+                    )
                 if self.process_type == ProcessType.Simulation:
                     tel_table = join(
                         left=tel_table,
@@ -631,9 +662,28 @@ class DLDataReader(Component):
                         f,
                         f"/dl1/event/telescope/parameters/tel_{tel_id:03d}",
                     )
-                    tel_table.add_column(
-                        np.arange(len(tel_table)), name="table_index", index=0
-                    )
+                    if self.force_dl1_lookup:
+                        # Read the DL1 image table
+                        dl1_tel_table = read_table(
+                            f, f"/dl1/event/telescope/images/tel_{tel_id:03d}",
+                        )
+                        # Keep only the columns needed for the join
+                        dl1_tel_table.keep_columns(["obs_id", "event_id", "tel_id"])
+                        # Add the table index to the DL1 image table
+                        dl1_tel_table.add_column(
+                            np.arange(len(dl1_tel_table)), name="table_index", index=0
+                        )
+                        # Join the DL1 image table with the DL1 parameter table
+                        tel_table = join(
+                            left=tel_table,
+                            right=dl1_tel_table,
+                            keys=["obs_id", "event_id", "tel_id"],
+                        )
+                    else:
+                        # Add the table index to the DL1 parameter table
+                        tel_table.add_column(
+                            np.arange(len(tel_table)), name="table_index", index=0
+                        )
                     # Initialize a boolean mask to True for all events
                     passes_quality_checks = np.ones(len(tel_table), dtype=bool)
                     # Quality selection based on the dl1b parameter and MC shower simulation tables
