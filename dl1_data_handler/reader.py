@@ -536,6 +536,8 @@ class DLDataReader(Component):
                     dl1_tel_table.add_column(
                         np.arange(len(dl1_tel_table)), name="table_index", index=0
                     )
+                    # Unique the table to remove unwanted duplication 
+                    dl1_tel_table = unique(dl1_tel_table, keys=["obs_id", "event_id", "tel_id"])
                     # Join the DL1 image table with the DL1 parameter table
                     tel_table = join(
                         left=tel_table,
@@ -673,6 +675,8 @@ class DLDataReader(Component):
                         dl1_tel_table.add_column(
                             np.arange(len(dl1_tel_table)), name="table_index", index=0
                         )
+                        # Unique the table to remove unwanted duplication
+                        dl1_tel_table = unique(dl1_tel_table, keys=["obs_id", "event_id", "tel_id"])
                         # Join the DL1 image table with the DL1 parameter table
                         tel_table = join(
                             left=tel_table,
