@@ -73,6 +73,7 @@ def test_dl1_hillas_parameter_extraction(dl1_gamma_file):
     # Test with full set of valid names
     hillas = reader.get_parameters_dict(batch, hillas_names_1)
     present_count = sum(name in hillas for name in hillas_names_1)
+    # nosec
     assert present_count == len(
         hillas_names_1
     ), f"Missing parameters: {set(hillas_names_1) - hillas.keys()}"
@@ -80,7 +81,9 @@ def test_dl1_hillas_parameter_extraction(dl1_gamma_file):
     # Test with one invalid parameter name included
     hillas_partial = reader.get_parameters_dict(batch, hillas_names_2)
     present_count_partial = sum(name in hillas_partial for name in hillas_names_2)
+    # nosec
     assert present_count_partial < len(
         hillas_names_2
     ), "Unexpected match for invalid parameter"
+    # nosec
     assert "NO_NAME" not in hillas_partial, "'NO_NAME' should not be in the result"
