@@ -536,7 +536,7 @@ class DLDataReader(Component):
                     dl1_tel_table.add_column(
                         np.arange(len(dl1_tel_table)), name="table_index", index=0
                     )
-                    # Unique the table to remove unwanted duplication 
+                    # Unique the table to remove unwanted duplication
                     dl1_tel_table = unique(dl1_tel_table, keys=["obs_id", "event_id", "tel_id"])
                     # Join the DL1 image table with the DL1 parameter table
                     tel_table = join(
@@ -960,6 +960,53 @@ class DLDataReader(Component):
         # Add the angular separation to the table
         table.add_column(angular_separation, name="angular_separation")
         return table
+
+    def get_parameters_dict(self, batch, parameter_list) -> Dict:
+        """
+        Retrieve a dictionary of existing DL1b parameters for a given batch.
+
+        Parameters
+        ----------
+        batch : astropy.table.Table
+            A Table containing the batch with columns `file_index`, `table_index`, and `tel_id`.
+        parameter_list : list
+            List of DL1b parameters to retrieve.
+
+        Returns
+        -------
+        param_dict : dict
+            Dictionary where keys are parameter names and values are lists of parameter values across the batch.
+        """
+        param_dict = {param: [] for param in parameter_list}
+        initialized = False
+        available_params = set()
+
+        for file_idx, table_idx, tel_id in batch.iterrows(
+            "file_index", "table_index", "tel_id"
+        ):
+            filename = list(self.files)[file_idx]
+            tel_table = f"tel_{tel_id:03d}"
+
+            with lock:
+                child = self.files[
+                    filename
+                ].root.dl1.event.telescope.parameters._f_get_child(tel_table)
+
+                if not initialized:
+                    available_params = set(child.dtype.names)
+                    param_dict = {
+                        param: []
+                        for param in parameter_list
+                        if param in available_params
+                    }
+                    initialized = True
+
+                row = child[table_idx]
+
+                for param in param_dict:
+                    param_dict[param].append(row[param])
+
+        return param_dict
 
     def get_parameters(self, batch, dl1b_parameter_list) -> np.array:
         """
