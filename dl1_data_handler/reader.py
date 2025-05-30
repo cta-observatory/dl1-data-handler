@@ -961,7 +961,7 @@ class DLDataReader(Component):
         table.add_column(angular_separation, name="angular_separation")
         return table
 
-    def get_parameters_dict(self, batch, parameter_list) -> Dict:
+    def get_parameters_dict(self, batch, parameter_list=None) -> Dict:
         """
         Retrieve a dictionary of existing DL1b parameters for a given batch.
 
@@ -977,6 +977,9 @@ class DLDataReader(Component):
         param_dict : dict
             Dictionary where keys are parameter names and values are lists of parameter values across the batch.
         """
+        if not parameter_list:
+            parameter_list = self.dl1b_parameter_colnames
+            
         param_dict = {param: [] for param in parameter_list}
         initialized = False
         available_params = set()
