@@ -53,6 +53,7 @@ from ctapipe.instrument import SubarrayDescription
 from ctapipe.instrument.optics import FocalLengthKind
 from ctapipe.io import read_table
 from dl1_data_handler.image_mapper import ImageMapper
+import warnings
 
 # Reference (dummy) time to insert in the SkyCoord object as the default time
 LST_EPOCH = Time("2018-10-01T00:00:00", scale="utc")
@@ -961,7 +962,7 @@ class DLDataReader(Component):
         table.add_column(angular_separation, name="angular_separation")
         return table
 
-    def get_parameters_dict(self, batch, parameter_list=None) -> Dict:
+    def get_parameters(self, batch, parameter_list=None) -> Dict:
         """
         Retrieve a dictionary of existing DL1b parameters for a given batch.
 
@@ -1009,39 +1010,10 @@ class DLDataReader(Component):
                 for param in param_dict:
                     param_dict[param].append(row[param])
 
+        if len(parameter_list) != (param_dict.keys()):
+            warnings.warn("The parameter list does not match with the output.")
+
         return param_dict
-
-    def get_parameters(self, batch, dl1b_parameter_list) -> np.array:
-        """
-        Retrieve DL1b parameters for a given batch of events.
-
-        This method extracts the specified DL1b parameters for each event in the batch.
-
-        Parameters:
-        -----------
-        batch : astropy.table.Table
-            A Table containing the batch with columns ``file_index``, ``table_index``, and ``tel_id``.
-        dl1b_parameter_list : list
-            A list of DL1b parameters to be retrieved for each event.
-
-        Returns:
-        --------
-        dl1b_parameters : np.array
-            An array of DL1b parameters for the batch of events.
-        """
-        dl1b_parameters = []
-        for file_idx, table_idx, tel_id in batch.iterrows(
-            "file_index", "table_index", "tel_id"
-        ):
-            filename = list(self.files)[file_idx]
-            with lock:
-                tel_table = f"tel_{tel_id:03d}"
-                child = self.files[
-                    filename
-                ].root.dl1.event.telescope.parameters._f_get_child(tel_table)
-            parameters = list(child[table_idx][dl1b_parameter_list])
-            dl1b_parameters.append([np.stack(parameters)])
-        return np.array(dl1b_parameters)
 
     def generate_mono_batch(self, batch_indices) -> Table:
         """

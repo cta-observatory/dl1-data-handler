@@ -105,7 +105,7 @@ def test_dl1_hillas_parameter_extraction(dl1_image_reader):
     batch = dl1_image_reader.generate_mono_batch([0])
 
     # Test with full set of valid names
-    hillas = dl1_image_reader.get_parameters_dict(batch, hillas_names_1)
+    hillas = dl1_image_reader.get_parameters(batch, hillas_names_1)
     present_count = sum(name in hillas for name in hillas_names_1)
 
     assert present_count == len(
@@ -113,7 +113,7 @@ def test_dl1_hillas_parameter_extraction(dl1_image_reader):
     ), f"Missing parameters: {set(hillas_names_1) - hillas.keys()}"  # nosec
 
     # Test with one invalid parameter name included
-    hillas_partial = dl1_image_reader.get_parameters_dict(batch, hillas_names_2)
+    hillas_partial = dl1_image_reader.get_parameters(batch, hillas_names_2)
     present_count_partial = sum(name in hillas_partial for name in hillas_names_2)
 
     assert present_count_partial < len(
@@ -123,3 +123,7 @@ def test_dl1_hillas_parameter_extraction(dl1_image_reader):
     assert (
         "NO_NAME" not in hillas_partial
     ), "'NO_NAME' should not be in the result"  # nosec
+
+    hillas_all = dl1_image_reader.get_parameters(batch)
+
+    assert len(hillas_all.keys())>0 # nosec
