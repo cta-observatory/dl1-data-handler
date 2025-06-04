@@ -53,7 +53,6 @@ from ctapipe.instrument import SubarrayDescription
 from ctapipe.instrument.optics import FocalLengthKind
 from ctapipe.io import read_table
 from dl1_data_handler.image_mapper import ImageMapper
-import warnings
 
 # Reference (dummy) time to insert in the SkyCoord object as the default time
 LST_EPOCH = Time("2018-10-01T00:00:00", scale="utc")
