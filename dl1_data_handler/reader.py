@@ -1010,9 +1010,9 @@ class DLDataReader(Component):
                 for param in param_dict:
                     param_dict[param].append(row[param])
 
-        if len(parameter_list) != (param_dict.keys()):
-            warnings.warn("The parameter list does not match with the output.")
-
+        if parameter_list != list(param_dict.keys()):
+            self.log.warning("The parameter list does not match with the output.")
+ 
         return param_dict
 
     def generate_mono_batch(self, batch_indices) -> Table:
