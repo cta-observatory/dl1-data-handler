@@ -126,4 +126,4 @@ def test_dl1_hillas_parameter_extraction(dl1_image_reader):
 
     hillas_all = dl1_image_reader.get_parameters(batch)
 
-    assert len(hillas_all.keys())>0 # nosec
+    assert list(hillas_all.keys()) == dl1_image_reader.dl1b_parameter_colnames  # nosec
