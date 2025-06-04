@@ -9,7 +9,7 @@ from collections import Counter, namedtuple
 
 from ctapipe.instrument.camera import PixelShape
 from ctapipe.core import TelescopeComponent
-from ctapipe.core.traits import Bool, Int
+from ctapipe.core.traits import Bool, Int, Unicode
 
 __all__ = [
     "ImageMapper",
@@ -21,6 +21,7 @@ __all__ = [
     "RebinMapper",
     "ShiftingMapper",
     "SquareMapper",
+    "HexagonalPatchMapper",
 ]
 
 class ImageMapper(TelescopeComponent):
@@ -646,6 +647,74 @@ class AxialMapper(ImageMapper):
         output_grid = np.column_stack([x_grid.ravel(), y_grid.ravel()])
 
         return input_grid, output_grid
+
+
+class HexagonalPatchMapper(ImageMapper):
+    """
+    HexagonalPatchMapper crops the images following the "sipm_patches.h5"
+    patches geometry and reorders the pixels.
+
+    This class extends the functionality of ImageMapper by implementing
+    methods to look up at the configuration file and perform the image cropping.
+    It is particularly useful for applications where we are working with waveforms
+    with high time dimension.
+    """
+    h5_patches_path = Unicode(
+        default_value="/lhome/ext/ucm147/ucm1473/cam_geom/sipm_patches.h5",
+        help=(
+            "Path for the h5 file with the information of the trigger patches, "
+            "the neighbor matrix of the central patch and the mapping per patch. "
+        ),
+    ).tag(config=True)
+
+    def __init__(
+        self,
+        geometry,
+        config=None,
+        parent=None,
+        **kwargs,
+    ):
+        super().__init__(
+            geometry=geometry,
+            config=config,
+            parent=parent,
+            **kwargs,
+        )
+        import h5py
+
+        if geometry.pix_type != PixelShape.HEXAGON:
+            raise ValueError(
+                f"HexagonalPatchMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
+            )
+        if geometry.name != "UNKNOWN-7987PX":
+            raise ValueError(
+                f"HexagonalPatchMapper is only available for the SiPMCa. Selected camera is '{geometry.name}'."
+            )
+
+        with h5py.File(self.h5_patches_path, "r") as f:
+            # patches
+            self.patch_coords = f["patches/centers"][:]        # shape (103, 2)
+            self.trigger_patches = f["patches/masks"][:]            # shape (103, 7987)
+            # mappings
+            self.index_map = f["mappings/index_map"][:]         # shape (103, 343)
+            # neighbor array
+            self.neighbor_array = f["mappings/mod_neighbors"][:]  # shape (343, 7)
+            self.cam_neighbor_array = f["mappings/cam_neighbors"][:] # shape (7987, 7)
+
+        self.num_patches = len(self.trigger_patches)
+        self.patch_size = len(self.index_map[0])
+
+    def get_reordered_patch(self, raw_vector, patch_index):
+        # Retrieve the patch needed
+        patch = self.trigger_patches[patch_index, :]
+        patched_wf = raw_vector[:, :][patch.astype(bool)]
+
+        # Reorder the array so that all patches have the same spatial order in index
+        unmapped_waveform = np.zeros_like(patched_wf)
+
+        for new, old in enumerate(self.index_map[patch_index]):
+            unmapped_waveform[new] = patched_wf[old]
+        return unmapped_waveform
 
 
 class ShiftingMapper(ImageMapper):
