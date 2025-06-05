@@ -185,12 +185,6 @@ class DLDataReader(Component):
         ),
     ).tag(config=True)
 
-    hexagonal_convolution = Bool(
-        default_value = False,
-        allow_none = False,
-        help=("Boolean variable to get the unmaped array")
-    ).tag(config=True) 
-
     image_mapper_type = TelescopeParameter(
         trait=Unicode(),
         default_value="BilinearMapper",
@@ -577,10 +571,7 @@ class DLDataReader(Component):
         # For the RawTriggerReader to have the required number of rows for each option
         # If balanced patches selected append the patches index and cherenkov p.e. to each event
         if isinstance(self,DLRawTriggerReader):
-            if "balanced_patches" in self.output_settings:
-                self.example_identifiers = self._get_balanced_patches(self.example_identifiers)
-            else:
-                self.example_identifiers = self._get_raw_example(self.example_identifiers)
+            self.example_identifiers = self._get_raw_example(self.example_identifiers)
 
         self.example_identifiers.sort(["obs_id", "event_id", "tel_id", "tel_type_id"])
         # Construct simulation information for all files
@@ -1091,10 +1082,6 @@ class DLDataReader(Component):
         pass
 
     @abstractmethod
-    def _get_balanced_patches(self, batch) -> Table:
-        pass
-
-    @abstractmethod
     def _get_raw_example(self, batch) -> Table:
         pass
     
@@ -1235,7 +1222,7 @@ class DLImageReader(DLDataReader):
 
         # Set the input shape based on the selected mode
         if self.mode == "mono":
-            if self.hexagonal_convolution == False:
+            if self.image_mappers[self.cam_name].cam_neighbor_array is not None and self.image_mappers[self.cam_name].index_matrix is None:
                 self.input_shape = (
                     self.image_mappers[self.cam_name].image_shape,
                     self.image_mappers[self.cam_name].image_shape,
@@ -1283,18 +1270,9 @@ class DLImageReader(DLDataReader):
             self.transforms["peak_time_offset"] = img_table_v_attrs[
                 "CTAFIELD_4_TRANSFORM_OFFSET"
             ]
-        if self.hexagonal_convolution == True:
-            self.neighbor_matrix = self.image_mappers[self.cam_name].geometry.neighbor_matrix
-            num_pixels = self.neighbor_matrix.shape[0]
-            neighbor_lists = []
-            max_neighbors = 0
-            for i in range(num_pixels):
-                # Find indices where the row is True
-                neighbors = np.where(self.neighbor_matrix[i])[0]
-                neighbor_lists.append([i] + neighbors.tolist())    
-            self.neighbor_array = np.full((num_pixels, 7), -1, dtype=int)
-            for i, neighbors in enumerate(neighbor_lists):
-                self.neighbor_array[i, :len(neighbors)] = neighbors
+        # If "HexagonalPatchMapper" retrieve the neighbor array of he complete camera.
+        if self.image_mappers[self.cam_name].cam_neighbor_array is not None:
+            self.neighbor_array = self.image_mappers[self.cam_name].cam_neighbor_array
         else:
             self.neighbor_array = None
 
@@ -1341,17 +1319,14 @@ class DLImageReader(DLDataReader):
             camera_type = self._get_camera_type(
                 list(self.selected_telescopes.keys())[tel_type_id]
             )
-            if self.hexagonal_convolution == False:
+            if self.image_mappers[camera_type].cam_neighbor_array is None and self.image_mappers[camera_type].index_matrix is None:
                 images.append(self.image_mappers[camera_type].map_image(unmapped_image))
             else:
                 images.append(unmapped_image)
         batch.add_column(images, name="features", index=7)
         return batch
 
-    def _get_balanced_patches(self, batch) -> Table:
-        pass
-
-    def _get_raw_example(self,batch):
+    def _get_raw_example(self,batch)-> Table:
         pass
 
 
@@ -1579,6 +1554,12 @@ class DLWaveformReader(DLDataReader):
             self.waveform_settings["waveform_offset"] = wvf_table_v_attrs[
                 "CTAFIELD_5_TRANSFORM_OFFSET"
             ]
+
+        # If "HexagonalPatchMapper" retrieve the neighbor array of he complete camera.
+        if self.image_mappers[self.cam_name].cam_neighbor_array is not None:
+            self.neighbor_array = self.image_mappers[self.cam_name].cam_neighbor_array
+        else:
+            self.neighbor_array = None
         
     def _append_features(self, batch) -> Table:
         """
@@ -1632,7 +1613,7 @@ class DLWaveformReader(DLDataReader):
                 )
             # Apply the 'ImageMapper' whenever the index matrix is not None.
             # Otherwise, return the unmapped image for the 'IndexedConv' package.
-            if self.image_mappers[camera_type].index_matrix is None:
+            if self.image_mappers[self.cam_name].cam_neighbor_array is None and self.image_mappers[camera_type].index_matrix is None:
                 waveforms.append(
                     self.image_mappers[camera_type].map_image(unmapped_waveform)
                 )
@@ -1641,9 +1622,7 @@ class DLWaveformReader(DLDataReader):
         batch.add_column(waveforms, name="features", index=7)
         return batch
 
-    def _get_balanced_patches(self, batch) -> Table:
-        pass
-    def _get_raw_example(self,batch):
+    def _get_raw_example(self,batch) -> Table:
         pass
 
 def get_true_image(sim_event) -> np.ndarray:
@@ -1697,20 +1676,11 @@ class DLRawTriggerReader(DLWaveformReader):
         ),
     ).tag(config=True)
 
-    convolution3d = Bool(
-        default_value = True,
+    add_dummy_channel = Bool(
+        default_value = False,
         allow_none = False,
         help=("Boolean variable to add or not an extra dummy dimension for the channel")
     ).tag(config=True) 
-
-    trigger_settings = Dict(
-        default_value = None,
-        allow_none = True, 
-        help=("Dict. for setting the number of trigger patches, Cherenkov p.e. threshold and saving other computed trigger_settings"
-            "``number_of_trigger_patches``: Number of squared trigger patches in the mapped image."
-            "``cpe_threshold``: Threshold in Cherenkov p.e.. A patch with cpe > threshold is considered as a cosmic patch."
-            ),
-    ).tag(config=True)
 
     cpe_threshold = Int(
         default_value = 0,
@@ -1733,16 +1703,13 @@ class DLRawTriggerReader(DLWaveformReader):
             parent=parent,
             **kwargs,
         )
-        if self.image_mapper_type == "HexagonalPatchMapper" and self.hexagonal_convolution == False:
-            raise ValueError("HexagonalPatchMapper only works for hexagonal data")
-        if self.image_mapper_type != "HexagonalPatchMapper" and self.output_settings in ["all_patches", "balanced_patches"]:
-            raise ValueError("Output options with patches only compatible with HexagonalPatchMapper")
+        
         # Load neighbors arrays and input shapes
         if self.output_settings in ["all_patches", "balanced_patches"]:                 
             self.input_shape = (self.image_mappers[self.cam_name].patch_size, self.sequence_length)  
             self.neighbor_array = self.image_mappers[self.cam_name].neighbor_array
-        else:
-            if self.hexagonal_convolution==True:
+        elif self.output_settings == "waveform":
+            if self.image_mappers[self.cam_name].cam_neighbor_array is not None:
                 self.input_shape = (self.image_mappers[self.cam_name].n_pixels, self.sequence_length)
                 self.neighbor_array = self.image_mappers[self.cam_name].cam_neighbor_array
             else:
@@ -1751,19 +1718,19 @@ class DLRawTriggerReader(DLWaveformReader):
                     self.image_mappers[self.cam_name].image_shape,
                     self.sequence_length,
                 )
+                self.neighbor_array = None
 
-        if self.convolution3d:
+        if self.add_dummy_channel:
             self.input_shape = self.input_shape + (1,)
 
-    def _get_balanced_patches(self, batch):
+    def _get_raw_example(self, batch):
         """
-        Computes the least common number between the nsb and cosmic patches per event.
+        Adds the patch_index, patch_class and cherenkov_pe columns to the example identifiers
+        depending on the seected 'output_settings'.
 
         This method processes the events in the example identifiers file and computes 
-        the least common number between the nsb and cosmic patches per event. Adding to 
-        the file a column with the patch index and true Cherenkov p.e. for each selected 
-        patch.
-
+        and adds to the file a column with the patch_index, patch_class and true Cherenkov p.e. 
+        for each selected output setting. It also repeat each event row the needed number of times.
         Parameters
         ----------
         batch : astropy.table.Table
@@ -1778,144 +1745,85 @@ class DLRawTriggerReader(DLWaveformReader):
         batch : astropy.table.Table
             The input batch with the appended patch index and true Cherenkov p.e.
         """
+        if self.image_mappers[self.cam_name].cam_neighbor_array is not None:
+            # Load the trigger patches
+            trigger_patches = self.image_mappers[self.cam_name].trigger_patches
+            trigger_patches_sparse = csr_matrix(trigger_patches)
+            n_patches = trigger_patches.shape[0]
+        # Create the lists to save the patch indices, cherenkov_pe, and labels of each entry
         patches_indexes = []
         cherenkov = []
-        table_index = []
-        file_index = []
-        tel_index = []
         nsb_cosmic = []
-        # Load the trigger patches
-        trigger_patches = self.image_mappers[self.cam_name].trigger_patches
-        trigger_patches_sparse = csr_matrix(trigger_patches)
+        # List that will indicate the number of times that we have to repeat each entry of the batch
+        # 1 for 'waveform', n_patches for 'all_patches' and dynamic number for 'balanced_patches'.
+        reps = []
+        # Create flags for cleaner code.
+        flag_waveform = (self.output_settings == "waveform")
+        flag_all = (self.output_settings == "all_patches")
+        flag_balanced = (self.output_settings == "balanced_patches")
 
         for file_idx, table_idx, tel_type_id, tel_id in batch.iterrows(
             "file_index", "table_index", "tel_type_id", "tel_id"
         ):
             filename = list(self.files)[file_idx]
-            camera_type = self._get_camera_type(
-                list(self.selected_telescopes.keys())[tel_type_id]
-            )
-
             # Load only the true image from simulation.
             with lock:
                 tel_table = f"tel_{tel_id:03d}"
                 sim_child = self.files[filename].root.simulation.event.telescope.images._f_get_child(tel_table)
                 true_image = get_true_image(sim_child[table_idx])
 
-            # Get sums for all patches at once.
-            true_sums = trigger_patches_sparse @ true_image
-            # Get indices of nsb and cosmic patches.
-            cosmic_patches = np.where(true_sums > self.cpe_threshold)[0]
-            nsb_patches = np.where(true_sums == 0)[0]  
-            # Balance nsb and cosmic patches.
-            comparator = min(len(cosmic_patches), len(nsb_patches))
-            if comparator > 0:
-                nsb_patches = np.random.choice(nsb_patches, size=comparator, replace=False)
-                cosmic_patches = np.random.choice(cosmic_patches, size=comparator, replace=False)
-                temp_index = np.concatenate((cosmic_patches, nsb_patches)).tolist()
-                labels = [0] * comparator + [1] * comparator
+            # For the waveform output option.
+            if flag_waveform:
+                cherenkov_per_event = np.sum(true_image)
+                labels = int(cherenkov_per_event <= self.cpe_threshold)
+                rep = 1
+                nsb_cosmic.append(labels)
+                cherenkov.append(cherenkov_per_event)
+                patches_indexes.append(0)
+
+            # For the patches options.
             else:
-                temp_index = [np.random.randint(0, len(trigger_patches))]
-                labels = [int(true_sums[temp_index]==0)]
-            # Append the features to the table
-            patches_indexes.extend(temp_index)
-            cherenkov.extend(true_sums[temp_index].tolist())
-            nsb_cosmic.extend(labels)
-            table_index.extend([table_idx] * len(temp_index))
-            file_index.extend([file_idx] * len(temp_index))
-            tel_index.extend([tel_id] * len(temp_index))
-
-        # Create a table and join with the example table so that the rows are added for a same event.
-        table_patches = Table(
-            [file_index, table_index, tel_index, patches_indexes, cherenkov, nsb_cosmic],
-            names=["file_index", "table_index", "tel_id", "patch_index", "cherenkov_pe", "patch_class"]
-        )
-        batch = join(left=batch, right=table_patches, keys=["file_index", "table_index", "tel_id"], join_type="right")
-        column_order = batch.colnames
-        new_order = column_order[:6] + ["patch_index", "cherenkov_pe", "patch_class"] + column_order[6:-3]
-        batch = batch[new_order]
-
-        return batch
-
-    def _get_raw_example(self,batch):
-        """
-        Adds the patch_index, patch_class and cherenkov_pe columns to the example identifiers.
-
-        This method processes the events in the example identifiers file and computes 
-        and adds to the file a column with the patch_index, patch_class and true Cherenkov p.e. 
-        for each selected output setting.
-
-        Parameters
-        ----------
-        batch : astropy.table.Table
-            A table containing information at minimum the following columns:
-            - ``file_index``: List of indices corresponding to the files.
-            - ``table_index``: List of indices corresponding to the event tables.
-            - ``tel_type_id``: List of telescope type IDs.
-            - ``tel_id``: List of telescope IDs.
-
-        Returns
-        -------
-        batch : astropy.table.Table
-            The input batch with the appended patch_index,  patch_class and true Cherenkov p.e.
-        """
-        # Load the trigger patches.
-        if "waveform" not in self.output_settings:
-            trigger_patches = self.image_mappers[self.cam_name].trigger_patches
-            
-        # Depending on the output repeat each event of the example identifiers rep times.
-        # Create "patch_index" and "patch_column" to be able to iterate after.
-        rep = 1
-        if "all_patches" in self.output_settings:
-            rep = self.image_mappers[self.cam_name].num_patches
-            patch_indices = np.tile(np.arange(rep), len(batch))
-        else:
-            patch_indices = np.zeros(len(batch))
-
-        batch = batch[np.repeat(np.arange(len(batch)), rep)]
-        batch.add_column(patch_indices, name="patch_index", index=6)
-        patch_classes = np.zeros(len(batch))
-        # Add the cols to the ex identifiers.
-        batch.add_column(patch_classes, name="patch_class", index=7)
-        # Initialise the lists with the real values of Cherenkov p.e., patch index and patch class.
-        patch_idx = []
-        chkovs = []
-        nsb_cosmic = []
-
-        for file_idx, table_idx, tel_type_id, tel_id, ptch_idx, ptch_clss in batch.iterrows(
-            "file_index", "table_index", "tel_type_id", "tel_id", "patch_index", "patch_class"
-        ):
-            filename = list(self.files)[file_idx]
-            camera_type = self._get_camera_type(
-                list(self.selected_telescopes.keys())[tel_type_id]
-            )
-            # Load only the true image from simulation.
-            with lock:
-                tel_table = f"tel_{tel_id:03d}"
-                child = self.files[filename].root.r0.event.telescope._f_get_child(tel_table)
-                sim_child = self.files[filename].root.simulation.event.telescope.images._f_get_child(
-                    tel_table)
-                true_image = get_true_image(sim_child[table_idx])
-                
-                # Compute all the sums of Cherenkov p.e. per patch.
-                if "all_patches" in self.output_settings:               
-                    patch_true_image_sum = np.dot(trigger_patches[ptch_idx], true_image)
-                    # Append the patch_index, number of Cherenkov p.e. of the patch, and patch_class.
-                    patch_idx.append(ptch_idx)
-                    chkovs.append(patch_true_image_sum)
-                    nsb_cosmic.append(int(patch_true_image_sum <= self.cpe_threshold))
-                # For waveform only need the sum of Cherenkov and the class.
-                else:
-                    true_sum = np.sum((true_image), dtype=np.int64)
-                    chkovs.append(true_sum)
-                    nsb_cosmic.append(int(true_sum <= self.cpe_threshold))
-        # Append number of Cherenkov per patch and refill patch_class and patch_index
-        batch.add_column(chkovs, name="cherenkov_pe", index=7)
-        batch["patch_class"] = nsb_cosmic
-        if "all_patches" in self.output_settings:
-            batch["patch_index"] = patch_idx
-
-        return batch
+                # Compute all sums at once.
+                true_sums = trigger_patches_sparse @ true_image
+                # Retrieve all patches.
+                if flag_all:
+                    cherenkov_per_event = true_sums.tolist()
+                    labels = (true_sums <= self.cpe_threshold).astype(int).tolist()
+                    idxs = list(range(n_patches))                    
+                    rep = n_patches
+                # Retrieve same number of cosmic and nsb patches.
+                elif flag_balanced:
+                    cosmic_idxs = np.where(true_sums > self.cpe_threshold)[0]
+                    nsb_idxs = np.where(true_sums == 0)[0]
+                    comparator = min(len(cosmic_idxs), len(nsb_idxs))
+                    if comparator > 0:
+                        nsb_idxs = np.random.choice(nsb_idxs, size=comparator, replace=False)
+                        cosmic_idxs = np.random.choice(cosmic_idxs, size=comparator, replace=False)
+                        idxs = np.concatenate((cosmic_idxs, nsb_idxs)).tolist()
+                        labels = [0] * comparator + [1] * comparator
+                        rep = 2 * comparator
+                    # In case there are not cosmic or nsb patches
+                    else:
+                        rep = 1
+                        idxs = [np.random.randint(0, len(trigger_patches))]
+                        labels = [int(true_sums[idxs[0]] <= self.cpe_threshold)]
+                    
+                    cherenkov_per_event = true_sums[idxs].tolist()
+                # Append indexes only common to patches options, and extend for lists
+                patches_indexes.extend(idxs)
+                nsb_cosmic.extend(labels)
+                cherenkov.extend(cherenkov_per_event)
+            # Append single values in the three output options.
+            reps.append(rep)
+        # Create the row indices repeated as computed per event
+        repeated_indices = np.repeat(np.arange(len(batch)), reps)
+        batch = batch[repeated_indices]
+        # Add the new columns to the batch
+        batch.add_column(cherenkov, name="cherenkov_pe", index=6)
+        batch.add_column(nsb_cosmic, name="patch_class", index=7)
+        batch.add_column(patches_indexes, name="patch_index", index=6)
+        
+        return batch 
 
     def _append_features(self, batch) -> Table:
         """
@@ -1964,25 +1872,21 @@ class DLRawTriggerReader(DLWaveformReader):
                     self.waveform_settings,
                     self.image_mappers[camera_type].geometry,
                     )
-                unmapped_waveform = unmapped_waveform.astype(np.int64)
-                if self.hexagonal_convolution == False:
-                    mapped_waveform = self.image_mappers[camera_type].map_image(
-                        unmapped_waveform
+                waveform = unmapped_waveform.astype(np.int64)
+                # Apply the 'ImageMapper' whenever the index matrix is not None or 'HexagonaPatchMapper' not called (only for the 'waveform' option).
+                # Otherwise, return the unmapped waveform if 'waveform' in ouput options.
+                if self.image_mappers[self.cam_name].cam_neighbor_array is None and self.image_mappers[camera_type].index_matrix is None:
+                    waveform = self.image_mappers[camera_type].map_image(
+                        waveform
                         ).astype(np.int64) 
-                # If the output setting is not waveform, crop the mapped waveform.
-                if "waveform" not in self.output_settings:             
-                    unmapped_waveform = self.image_mappers[self.cam_name].get_reordered_patch(unmapped_waveform, ptch_idx)
-                                                
-                # Apply the 'ImageMapper' whenever the index matrix is not None.
-                # Otherwise, return the unmapped image for the 'IndexedConv' package.
-                if self.hexagonal_convolution is False:
-                    if self.convolution3d==True:
-                        mapped_waveform = np.expand_dims(mapped_waveform, axis=-1)
-                    waveforms.append(mapped_waveform)
-                else:
-                    if self.convolution3d==True:
-                        unmapped_waveform = np.expand_dims(unmapped_waveform, axis=-1)
-                    waveforms.append(unmapped_waveform)
+                # If 'HexagonalPatchMapper' and one of the patches option, crop and reorder the image.
+                elif self.image_mappers[self.cam_name].cam_neighbor_array is not None and self.output_settings in ["all_patches", "balanced_patches"]:
+                    waveform = self.image_mappers[self.cam_name].get_reordered_patch(waveform, ptch_idx)
+                # Option to add a dummy channel to perform 3D convolutions
+                if self.add_dummy_channel:
+                    waveform = np.expand_dims(waveform, axis=-1)
+                waveforms.append(waveform)
+
         # Append everything to the selected batch
         batch.add_column(waveforms, name="features", index=8)
         if "waveform" in self.output_settings:

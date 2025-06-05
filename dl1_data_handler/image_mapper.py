@@ -57,6 +57,8 @@ class ImageMapper(TelescopeComponent):
         Multiplication factor used for rebinning.
     index_matrix : numpy.ndarray or None
         Matrix used for indexing, initialized to None.
+    cam_neighbor_array : numpy.ndarray or None
+        Matrix used for indexing, initialized to None.
 
     Methods
     -------
@@ -125,6 +127,7 @@ class ImageMapper(TelescopeComponent):
 
         # Set the indexed matrix to None
         self.index_matrix = None
+        self.cam_neighbor_array = None
 
     def map_image(self, raw_vector: np.array) -> np.array:
         """
@@ -651,7 +654,8 @@ class AxialMapper(ImageMapper):
 
 class HexagonalPatchMapper(ImageMapper):
     """
-    HexagonalPatchMapper crops the images following the "sipm_patches.h5"
+    HexagonalPatchMapper retrieves the necessary information to perform indexed 
+    convolutions, also allows croping the images following the "sipm_patches.h5"
     patches geometry and reorders the pixels.
 
     This class extends the functionality of ImageMapper by implementing
@@ -685,24 +689,33 @@ class HexagonalPatchMapper(ImageMapper):
         if geometry.pix_type != PixelShape.HEXAGON:
             raise ValueError(
                 f"HexagonalPatchMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
-            )
-        if geometry.name != "UNKNOWN-7987PX":
-            raise ValueError(
-                f"HexagonalPatchMapper is only available for the SiPMCa. Selected camera is '{geometry.name}'."
-            )
+             )
+        if geometry.name == "UNKNOWN-7987PX":
+            with h5py.File(self.h5_patches_path, "r") as f:
+                # patches
+                self.patch_coords = f["patches/centers"][:]        # shape (103, 2)
+                self.trigger_patches = f["patches/masks"][:]            # shape (103, 7987)
+                # mappings
+                self.index_map = f["mappings/index_map"][:]         # shape (103, 343)
+                # neighbor array
+                self.neighbor_array = f["mappings/mod_neighbors"][:]  # shape (343, 7)
+                self.cam_neighbor_array = f["mappings/cam_neighbors"][:] # shape (7987, 7)
 
-        with h5py.File(self.h5_patches_path, "r") as f:
-            # patches
-            self.patch_coords = f["patches/centers"][:]        # shape (103, 2)
-            self.trigger_patches = f["patches/masks"][:]            # shape (103, 7987)
-            # mappings
-            self.index_map = f["mappings/index_map"][:]         # shape (103, 343)
-            # neighbor array
-            self.neighbor_array = f["mappings/mod_neighbors"][:]  # shape (343, 7)
-            self.cam_neighbor_array = f["mappings/cam_neighbors"][:] # shape (7987, 7)
+            self.num_patches = len(self.trigger_patches)
+            self.patch_size = len(self.index_map[0])
 
-        self.num_patches = len(self.trigger_patches)
-        self.patch_size = len(self.index_map[0])
+        elif geometry.name == "LSTCam":
+            neighbor_matrix = geometry.neighbor_matrix
+            num_pixels = neighbor_matrix.shape[0]
+            neighbor_lists = []
+            for i in range(num_pixels):
+                # Find indices where the row is True
+                neighbors = np.where(neighbor_matrix[i])[0]
+                neighbor_lists.append([i] + neighbors.tolist())    
+
+            self.cam_neighbor_array = np.full((num_pixels, 7), -1, dtype=int)
+            for i, neighbors in enumerate(neighbor_lists):
+                self.cam_neighbor_array[i, :len(neighbors)] = neighbors
 
     def get_reordered_patch(self, raw_vector, patch_index):
         # Retrieve the patch needed
