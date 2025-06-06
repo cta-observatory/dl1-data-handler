@@ -11,6 +11,9 @@ from ctapipe.instrument.camera import PixelShape
 from ctapipe.core import TelescopeComponent
 from ctapipe.core.traits import Bool, Int, Unicode
 
+import h5py
+from importlib.resources import files
+
 __all__ = [
     "ImageMapper",
     "AxialMapper",
@@ -664,11 +667,13 @@ class HexagonalPatchMapper(ImageMapper):
     with high time dimension.
     """
     h5_patches_path = Unicode(
-        default_value="/lhome/ext/ucm147/ucm1473/cam_geom/sipm_patches.h5",
+        default_value=None,
+        allow_none=True,
         help=(
-            "Path for the h5 file with the information of the trigger patches, "
-            "the neighbor matrix of the central patch and the mapping per patch. "
-        ),
+            "Path to the HDF5 file with trigger patches, neighbors and mapping info. "
+            "If not specified, the default resource file will be used."
+            "For hexagonal convolutions only it computes the neghbor array if not the SiPM cam."
+        )
     ).tag(config=True)
 
     def __init__(
@@ -684,14 +689,19 @@ class HexagonalPatchMapper(ImageMapper):
             parent=parent,
             **kwargs,
         )
-        import h5py
 
         if geometry.pix_type != PixelShape.HEXAGON:
             raise ValueError(
                 f"HexagonalPatchMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
              )
+
+        if self.h5_patches_path is not None:
+            path = self.h5_patches_path
+        else:
+            path = files("dl1_data_handler.ressources").joinpath("sipm_patches.h5")
+
         if geometry.name == "UNKNOWN-7987PX":
-            with h5py.File(self.h5_patches_path, "r") as f:
+            with h5py.File(path, "r") as f:
                 # patches
                 self.patch_coords = f["patches/centers"][:]        # shape (103, 2)
                 self.trigger_patches = f["patches/masks"][:]            # shape (103, 7987)
