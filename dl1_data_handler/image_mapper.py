@@ -704,7 +704,7 @@ class HexagonalPatchMapper(ImageMapper):
             self.num_patches = len(self.trigger_patches)
             self.patch_size = len(self.index_map[0])
 
-        elif geometry.name == "LSTCam":
+        else:
             neighbor_matrix = geometry.neighbor_matrix
             num_pixels = neighbor_matrix.shape[0]
             neighbor_lists = []
@@ -716,6 +716,7 @@ class HexagonalPatchMapper(ImageMapper):
             self.cam_neighbor_array = np.full((num_pixels, 7), -1, dtype=int)
             for i, neighbors in enumerate(neighbor_lists):
                 self.cam_neighbor_array[i, :len(neighbors)] = neighbors
+            print("Computed neighbor array is", self.cam_neighbor_array)
 
     def get_reordered_patch(self, raw_vector, patch_index):
         # Retrieve the patch needed

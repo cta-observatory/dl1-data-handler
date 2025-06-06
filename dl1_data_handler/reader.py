@@ -1222,7 +1222,7 @@ class DLImageReader(DLDataReader):
 
         # Set the input shape based on the selected mode
         if self.mode == "mono":
-            if self.image_mappers[self.cam_name].cam_neighbor_array is not None and self.image_mappers[self.cam_name].index_matrix is None:
+            if self.image_mappers[self.cam_name].cam_neighbor_array is None:
                 self.input_shape = (
                     self.image_mappers[self.cam_name].image_shape,
                     self.image_mappers[self.cam_name].image_shape,
@@ -1230,6 +1230,7 @@ class DLImageReader(DLDataReader):
                 )
             else:
                 self.input_shape = (self.image_mappers[self.cam_name].geometry.n_pixels, len(self.channels))
+                
         elif self.mode == "stereo":
             self.input_shape = {}
             for tel_type in self.selected_telescopes:
@@ -1512,11 +1513,14 @@ class DLWaveformReader(DLDataReader):
 
         # Set the input shape based on the selected mode
         if self.mode == "mono":
-            self.input_shape = (
-                self.image_mappers[self.cam_name].image_shape,
-                self.image_mappers[self.cam_name].image_shape,
-                self.sequence_length,
-            )
+            if self.image_mappers[self.cam_name].cam_neighbor_array is None:
+                self.input_shape = (
+                    self.image_mappers[self.cam_name].image_shape,
+                    self.image_mappers[self.cam_name].image_shape,
+                    self.sequence_length,
+                )
+            else:
+                self.input_shape = (self.image_mappers[self.cam_name].geometry.n_pixels, self.sequence_length)
         elif self.mode == "stereo":
             self.input_shape = {}
             for tel_type in self.selected_telescopes:
