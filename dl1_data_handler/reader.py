@@ -536,7 +536,7 @@ class DLDataReader(Component):
                     dl1_tel_table.add_column(
                         np.arange(len(dl1_tel_table)), name="table_index", index=0
                     )
-                    # Unique the table to remove unwanted duplication 
+                    # Unique the table to remove unwanted duplication
                     dl1_tel_table = unique(dl1_tel_table, keys=["obs_id", "event_id", "tel_id"])
                     # Join the DL1 image table with the DL1 parameter table
                     tel_table = join(
@@ -961,37 +961,58 @@ class DLDataReader(Component):
         table.add_column(angular_separation, name="angular_separation")
         return table
 
-    def get_parameters(self, batch, dl1b_parameter_list) -> np.array:
+    def get_parameters(self, batch, parameter_list=None) -> Dict:
         """
-        Retrieve DL1b parameters for a given batch of events.
+        Retrieve a dictionary of existing DL1b parameters for a given batch.
 
-        This method extracts the specified DL1b parameters for each event in the batch.
-
-        Parameters:
-        -----------
+        Parameters
+        ----------
         batch : astropy.table.Table
-            A Table containing the batch with columns ``file_index``, ``table_index``, and ``tel_id``.
-        dl1b_parameter_list : list
-            A list of DL1b parameters to be retrieved for each event.
+            A Table containing the batch with columns `file_index`, `table_index`, and `tel_id`.
+        parameter_list : list
+            List of DL1b parameters to retrieve.
 
-        Returns:
-        --------
-        dl1b_parameters : np.array
-            An array of DL1b parameters for the batch of events.
+        Returns
+        -------
+        param_dict : dict
+            Dictionary where keys are parameter names and values are lists of parameter values across the batch.
         """
-        dl1b_parameters = []
+        if not parameter_list:
+            parameter_list = self.dl1b_parameter_colnames
+            
+        param_dict = {param: [] for param in parameter_list}
+        initialized = False
+        available_params = set()
+
         for file_idx, table_idx, tel_id in batch.iterrows(
             "file_index", "table_index", "tel_id"
         ):
             filename = list(self.files)[file_idx]
+            tel_table = f"tel_{tel_id:03d}"
+
             with lock:
-                tel_table = f"tel_{tel_id:03d}"
                 child = self.files[
                     filename
                 ].root.dl1.event.telescope.parameters._f_get_child(tel_table)
-            parameters = list(child[table_idx][dl1b_parameter_list])
-            dl1b_parameters.append([np.stack(parameters)])
-        return np.array(dl1b_parameters)
+
+                if not initialized:
+                    available_params = set(child.dtype.names)
+                    param_dict = {
+                        param: []
+                        for param in parameter_list
+                        if param in available_params
+                    }
+                    initialized = True
+
+                row = child[table_idx]
+
+                for param in param_dict:
+                    param_dict[param].append(row[param])
+
+        if parameter_list != list(param_dict.keys()):
+            self.log.warning("The parameter list does not match with the output.")
+ 
+        return param_dict
 
     def generate_mono_batch(self, batch_indices) -> Table:
         """
