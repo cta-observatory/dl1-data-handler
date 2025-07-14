@@ -712,7 +712,7 @@ class HexagonalPatchMapper(ImageMapper):
                 self.cam_neighbor_array = f["mappings/cam_neighbors"][:] # shape (7987, 7)
 
             self.num_patches = len(self.trigger_patches)
-            self.patch_size = len(self.index_map[0])
+            self.patch_size = len(self.neighbor_array[0])
 
         else:
             neighbor_matrix = geometry.neighbor_matrix
@@ -739,6 +739,19 @@ class HexagonalPatchMapper(ImageMapper):
         for new, old in enumerate(self.index_map[patch_index]):
             unmapped_waveform[new] = patched_wf[old]
         return unmapped_waveform
+
+    def get_reordered_patch_image(self, image, patch_index):
+        # Retrieve the patch needed
+        image = np.squeeze(image)
+        patch = self.trigger_patches[patch_index, :]
+        patched_im = image[:][patch.astype(bool)]
+
+        # Reorder the array so that all patches have the same spatial order in index
+        unmapped_im = np.zeros_like(patched_im)
+
+        for new, old in enumerate(self.index_map[patch_index]):
+            unmapped_im[new] = patched_im[old]
+        return unmapped_im
 
 
 class ShiftingMapper(ImageMapper):
