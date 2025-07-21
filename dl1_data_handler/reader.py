@@ -1590,7 +1590,7 @@ class DLWaveformReader(DLDataReader):
         # Read the readout length from the first file
         self.readout_length = int(
             self.files[self.first_file]
-            .root.r1.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
+            .root.r0.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
             .coldescrs["waveform"]
             .shape[-1]
         )
@@ -1642,7 +1642,7 @@ class DLWaveformReader(DLDataReader):
         with lock:
             wvf_table_v_attrs = (
                 self.files[self.first_file]
-                .root.r1.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
+                .root.r0.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
                 ._v_attrs
             )
         if "CTAFIELD_5_TRANSFORM_SCALE" in wvf_table_v_attrs:
@@ -1789,7 +1789,7 @@ def apply_low_trigger(x, mapper, trigger_type, output_setting, l1_settings, tdsc
     elif output_setting == 'binary':
         output = bin_pixels
     elif output_setting == 'stack':
-        output = np.stack([x, binary_pixels], axis=-1) # shape: (n_pixels, time, 2)
+        output = np.stack([x, bin_pixels], axis=-1) # shape: (n_pixels, time, 2)
 
     return output
 
