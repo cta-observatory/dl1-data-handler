@@ -6,12 +6,12 @@ import numpy as np
 from scipy import spatial
 from scipy.sparse import csr_matrix
 from collections import Counter, namedtuple
+import tables
 
 from ctapipe.instrument.camera import PixelShape
 from ctapipe.core import TelescopeComponent
 from ctapipe.core.traits import Bool, Int, Unicode
 
-import h5py
 from importlib.resources import files
 
 __all__ = [
@@ -672,7 +672,7 @@ class HexagonalPatchMapper(ImageMapper):
         help=(
             "Path to the HDF5 file with trigger patches, neighbors and mapping info. "
             "If not specified, the default resource file will be used."
-            "For hexagonal convolutions only it computes the neghbor array if not the SiPM cam."
+            "For hexagonal convolutions only it computes the neighbor array if not the SiPM cam."
         )
     ).tag(config=True)
 
@@ -699,20 +699,32 @@ class HexagonalPatchMapper(ImageMapper):
             path = self.h5_patches_path
         else:
             path = files("dl1_data_handler.ressources").joinpath("sipm_patches.h5")
+            path_fl_neigh = files("dl1_data_handler.ressources").joinpath("CTA_LST_Pixels_info_epsilon_1.csv")
+            path_patch0_fl_neigh = files("dl1_data_handler.ressources").joinpath("flower_neighbors_central_patch.csv")
 
         if geometry.name == "UNKNOWN-7987PX":
-            with h5py.File(path, "r") as f:
-                # patches
-                self.patch_coords = f["patches/centers"][:]        # shape (103, 2)
-                self.trigger_patches = f["patches/masks"][:]            # shape (103, 7987)
-                # mappings
-                self.index_map = f["mappings/index_map"][:]         # shape (103, 343)
-                # neighbor array
-                self.neighbor_array = f["mappings/mod_neighbors"][:]  # shape (343, 7)
-                self.cam_neighbor_array = f["mappings/cam_neighbors"][:] # shape (7987, 7)
+            with tables.open_file(path, mode="r") as f:
+                self.patch_coords = f.root.patches.centers[:]
+                self.trigger_patches = f.root.patches.masks[:]
+                self.index_map = f.root.mappings.index_map[:]
+                self.neighbor_array = f.root.mappings.mod_neighbors[:]
+                self.cam_neighbor_array = f.root.mappings.cam_neighbors[:]
 
             self.num_patches = len(self.trigger_patches)
             self.patch_size = len(self.neighbor_array[0])
+
+            self.fl_neighbor_array, self.fl_neighbor_patch0_array = [], []
+            with open(path_fl_neigh, "r") as f:
+                next(f)  # skip header
+                for line in f:
+                    # Split, strip newline, convert to int
+                    neighbors = list(map(int, line.strip().split(",")))
+                    self.fl_neighbor_array.append(np.array(neighbors, dtype=np.int32))
+            with open(path_patch0_fl_neigh, "r") as f:
+                for line in f:
+                    # Split, strip newline, convert to int
+                    neighbors = list(map(int, line.strip().split(",")))
+                    self.fl_neighbor_patch0_array.append(np.array(neighbors, dtype=np.int32))
 
         else:
             neighbor_matrix = geometry.neighbor_matrix

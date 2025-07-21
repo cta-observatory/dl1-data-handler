@@ -456,13 +456,7 @@ class DLDataReader(Component):
         # The sum of the weights of all examples stays the same.
         self.class_weight = None
         if self.process_type == ProcessType.Simulation:
-            if self.input_url_background:
-                self.class_weight = {
-                    0: (1.0 / self.n_bkg_events) * (self._get_n_events() / 2.0),
-                    1: (1.0 / self.n_signal_events) * (self._get_n_events() / 2.0),
-                }
-            # Allow also classification between nsb, gamma and cosmic patches.
-            if isinstance(self,DLRawTriggerReader):
+            if self.input_url_background or isinstance(self,DLRawTriggerReader):
                 self.class_weight = {
                     0: (1.0 / self.n_bkg_events) * (self._get_n_events() / 2.0),
                     1: (1.0 / self.n_signal_events) * (self._get_n_events() / 2.0),
@@ -566,10 +560,8 @@ class DLDataReader(Component):
             example_identifiers.append(events)
         # Constrcut the example identifiers for all files
         self.example_identifiers = vstack(example_identifiers)
-        
-
-        # For the RawTriggerReader to have the required number of rows for each option
-        # If balanced patches selected append the patches index and cherenkov p.e. to each event
+        # For the RawTriggerReader patches option we need extra columns and rows to retrieve 
+        # more than one patch per event.
         if isinstance(self,DLRawTriggerReader):
             self.example_identifiers = self._get_raw_example(self.example_identifiers)
 
@@ -1654,22 +1646,49 @@ def get_true_image(sim_event) -> np.ndarray:
     return true_image
 
 
-def apply_l1_trigger(x, settings, threshold=2140):
-    
+def apply_low_trigger(x, mapper, trigger_type, output_setting, l1_settings, tdscan_settings):
     n_pixels, time = x.shape
-    assert n_pixels % 7 == 0, "Number of pixels must be divisible by 7"
     # Reshape to (n_flowers, t, time)
     flowers = x.reshape(-1, 7, time)
-    # Sum over group dimension
+    # Sum over group dimension  ####CAMBIAR PARA PERMITIR FLOR O SUPERFLOR DEPENDE DEL ARCHIVO QUE SE LE META
     flower_sums = np.sum(flowers, axis=1)  
     # Thresholding (broadcast back to each pixel in group)
-    binary_flower = (flower_sums > threshold).astype(int)  # shape: (n_flowers, time)
-    binary_pixels = np.repeat((flower_sums > threshold).astype(int), 7, axis=0)  # shape: (n_pixels, time)
-    if settings == 'mask':
-        output = x * binary_pixels # shape: (n_pixels, time)
-    elif settings == 'only_mask':
-        output = binary_pixels
-    else:
+    bin_flowers = (flower_sums > l1_settings["threshold"]).astype(int)  # shape: (n_flowers, time)
+    # TDSCAN mask cleaning:
+    if trigger_type == "tdscan":
+        ##load depending on epsxy the correct neighbor info
+        num_flowers = len(bin_flowers)
+        tdscan_flowers = np.zeros((num_flowers, time), dtype=np.float32)
+        # Precompute cumulative sum over time for each pixel
+        cumsum_l1 = np.pad(np.cumsum(bin_flowers, axis=1), ((0, 0), (1, 0)))  # pad to handle start_t = 0 cleanly
+        if n_pixels == 343:
+            eps_xy_neighbors = mapper.fl_neighbor_patch0_array
+        else:
+            eps_xy_neighbors = mapper.fl_neighbor_array
+        for i in range(num_flowers):
+            neighbors = eps_xy_neighbors[i]
+            if len(neighbors) == 0:
+                continue
+            # Compute rolling sum using cumsum
+            start = np.arange(time) - tdscan_settings["eps_t"]
+            end = np.arange(time) + tdscan_settings["eps_t"] + 1
+
+            start = np.clip(start, 0, time)
+            end = np.clip(end, 0, time)
+
+            # Get total values in the window for each time frame using broadcasting
+            total = cumsum_l1[neighbors][:, end] - cumsum_l1[neighbors][:, start]  # shape: (num_neighbors, time)
+            total_sum = np.sum(total, axis=0)  # sum across neighbors
+            tdscan_flowers[i] = ((total_sum >= tdscan_settings["min_pts"]) & (bin_flowers[i] == 1)).astype(np.float32)
+        bin_flowers = tdscan_flowers
+
+    bin_pixels = np.repeat(bin_flowers, 7, axis=0)  # shape: (n_pixels, time)
+
+    if output_setting == 'mask':
+        output = x * bin_pixels # shape: (n_pixels, time)
+    elif output_setting == 'binary':
+        output = bin_pixels
+    elif output_setting == 'stack':
         output = np.stack([x, binary_pixels], axis=-1) # shape: (n_pixels, time, 2)
 
     return output
@@ -1710,22 +1729,47 @@ class DLRawTriggerReader(DLWaveformReader):
         help=("Boolean variable to add or not an extra dummy dimension for the channel")
     ).tag(config=True) 
 
-    l1_trigger = CaselessStrEnum(
-        ["mask", "stack", "only_mask"],
+    apply_trigger = CaselessStrEnum(
+        ["l1", "tdscan"],
         default_value = None,
         allow_none = True,
         help=(
-            "Variable to apply or not an l1 sum trigger per flower on the waveforms."
-            "``mask``: Mask the input waveform with the flowers with positive trigger. "
-            "``stack``: Add the l1 mask as a second channel. "
+            "Variable to apply or not a low level trigger on the waveform patches."
+            "``l1``: Apply a l1 sum trigger (per flower or superflower) on the waveforms. "
+            "``tdscan``: Apply on top of the l1 trigger a Trigger Distributed Spatial Convolution Accelerator Network. "
         ),
     ).tag(config=True) 
 
-    l1_threshold = Int(
-        default_value = 2140,
+    trigger_output = CaselessStrEnum(
+        ["mask", "stack", "only_mask"],
+        default_value = "mask",
         allow_none = True,
-        help=("Threshold in ADC counts above which flowers are going to be considered as triggered")
+        help=(
+            "If apply trigger not none, variable to define the trigger output."
+            "``mask``: Mask the input waveform with the flowers with positive trigger. "
+            "``stack``: Add the trigger mask as a second channel. "
+            "``binary``: Take exclusively the trigger mask as an output. "
+        ),
     ).tag(config=True) 
+
+    l1_settings = Dict(
+        default_value ={"eps": "flower", "threshold": 2160},
+        allow_none = True,
+        help=(
+            "Set the L1 trigger settings, only required when apply_trigger is not None. "
+            "``eps``: Set whether to perform the ADC digital sum per ``flower`` or per ``superflower`` centered in each flower. "
+            "``threshold``: Threshold in ADC counts above which flowers are going to be considered as triggered. ")
+    ).tag(config=True)
+
+    tdscan_settings = Dict(
+        default_value ={"eps_xy":1, "eps_t":1, "min_pts":7},
+        allow_none = True,
+        help=(
+            "Set the TDSCAN trigger settings, only required when apply_trigger is tdscan. "
+            "``eps_xy``: Set the flower neighboring level to consider in the convolution. "
+            "``eps_t``: Set the the number of samples before and after to consider in the convolution. "
+            "``min_pts``: Threshold in binary flower counts above which the convolution is going to keep the central flower. ")
+    ).tag(config=True)
 
     cpe_threshold = Int(
         default_value = 0,
@@ -1767,17 +1811,84 @@ class DLRawTriggerReader(DLWaveformReader):
 
         if self.add_dummy_channel:
             self.input_shape = self.input_shape + (1,)
-        elif self.l1_trigger == 'stack':
+        elif self.trigger_output == 'stack':
             self.input_shape = self.input_shape + (2,)
+
+    def _waveform_mode(self, true_image, true_shower):
+        # Retrieves the complete waveform.
+        pe = np.int64(true_image.sum())
+        if self.input_url_background:
+            lbl = np.int64(1 - true_shower)
+        else:
+            lbl = np.int64(pe > self.cpe_threshold)
+        return dict(
+            patch_idx=[0],
+            cherenkov=[pe],
+            classes=[lbl]
+        )
+
+    def _all_patches_mode(self, true_image, sparse, n_patches):
+        # Retrieves all patches per event.
+        sums = sparse @ true_image
+        labels = (sums > self.cpe_threshold).astype(np.int64)
+        idxs = np.arange(n_patches, dtype=np.int64)
+        return dict(
+            patch_idx=idxs,
+            cherenkov=sums.astype(np.int64),
+            classes=labels
+        )
+
+    def _balanced_patches_mode(self, true_image, sparse, n_patches):
+        # Retrieves the maximum equal number of NSB and cosmic patches per event.
+        sums = sparse @ true_image
+        nsb = np.where(sums == 0)[0]
+        shwr = np.where(sums > self.cpe_threshold)[0]
+        cnt = min(len(nsb), len(shwr))
+        if cnt > 0:
+            idxs = np.concatenate([
+                np.random.choice(shwr, cnt, False),
+                np.random.choice(nsb, cnt, False)
+            ])
+            classes = np.array([int(sums[i] > self.cpe_threshold) for i in idxs], np.int64)
+        else:
+            idxs = np.array([np.random.randint(0, n_patches)], np.int64)
+            classes = np.array([int(sums[idxs[0]] > self.cpe_threshold)], np.int64)
+        return dict(
+            patch_idx=idxs,
+            cherenkov=sums[idxs].astype(np.int64),
+            classes=classes
+        )
+
+    def _double_patches_mode(self, true_image, sparse, n_patches):
+        # Retrieves the bright patch and a random nsb patch per event.
+        sums = sparse @ true_image
+        # find brightest patch and one random NSB or fallback
+        bright = np.argmax(true_image)
+        coords = np.vstack([self.image_mappers[self.cam_name].pix_x,
+                            self.image_mappers[self.cam_name].pix_y]).T
+        dist = np.linalg.norm(self.image_mappers[self.cam_name].patch_coords - coords[bright], axis=1)
+        nearest = np.argmin(dist)
+        idxs, labels = [], []
+        if sums[nearest] > self.cpe_threshold:
+            idxs.append(nearest); labels.append(1)
+        elif np.max(sums) > self.cpe_threshold:
+            idxs.append(np.argmax(sums)); labels.append(1)
+        nsb = np.where(sums == 0)[0]
+        if nsb.size:
+            idxs.append(np.random.choice(nsb)); labels.append(0)
+        return dict(
+            patch_idx=np.array(idxs, np.int64),
+            cherenkov=sums[idxs].astype(np.int64),
+            classes=np.array(labels, np.int64)
+        )
 
     def _get_raw_example(self, batch):
         """
         Adds the patch_index, patch_class and cherenkov_pe columns to the example identifiers
-        depending on the seected 'output_settings'.
+        depending on the selected 'output_settings'.
 
-        This method processes the events in the example identifiers file and computes 
-        and adds to the file a column with the patch_index, patch_class and true Cherenkov p.e. 
-        for each selected output setting. It also repeat each event row the needed number of times.
+        This method processes the events in the example identifiers file and computes and adds to the 
+        file a column with the patch_index, patch_class and true Cherenkov p.e. for each selected output setting. 
         Parameters
         ----------
         batch : astropy.table.Table
@@ -1790,136 +1901,40 @@ class DLRawTriggerReader(DLWaveformReader):
         Returns
         -------
         batch : astropy.table.Table
-            The input batch with the appended patch index and true Cherenkov p.e.
+            The input batch with the appended patch index, class and true Cherenkov p.e.
         """
-        if self.image_mappers[self.cam_name].cam_neighbor_array is not None:
-            # Load the trigger patches
-            trigger_patches = self.image_mappers[self.cam_name].trigger_patches
-            trigger_patches_sparse = csr_matrix(trigger_patches)
-            n_patches = trigger_patches.shape[0]
-        # Create the lists to save the patch indices, cherenkov_pe, and labels of each entry
-        patches_indexes = []
-        cherenkov = []
-        nsb_cosmic = []
-        true_image_patches = []
-        # List that will indicate the number of times that we have to repeat each entry of the batch
-        # 1 for 'waveform', n_patches for 'all_patches' and dynamic number for 'balanced_patches'.
-        reps = []
-        # Create flags for cleaner code.
-        flag_waveform = (self.output_settings == "waveform")
-        flag_all = (self.output_settings == "all_patches")
-        flag_balanced = (self.output_settings == "balanced_patches")
-        flag_double = (self.output_settings == "double_patches")
-
-        for file_idx, table_idx, tel_type_id, tel_id, true_shower in batch.iterrows(
-            "file_index", "table_index", "tel_type_id", "tel_id", "true_shower_primary_id"
+        mapper = self.image_mappers[self.cam_name]
+        sparse = None
+        n_patches = 0
+        if mapper.cam_neighbor_array is not None:
+            sparse = csr_matrix(mapper.trigger_patches)
+            n_patches = mapper.trigger_patches.shape[0]
+        records = []
+        for row_idx, (file_idx, table_idx, tel_type_id, tel_id, true_shower) in enumerate(batch.iterrows(
+            "file_index", "table_index", "tel_type_id", "tel_id", "true_shower_primary_id")
         ):
             filename = list(self.files)[file_idx]
-            # Load only the true image from simulation.
+            tel_table = f"tel_{tel_id:03d}"
             with lock:
-                tel_table = f"tel_{tel_id:03d}"
                 sim_child = self.files[filename].root.simulation.event.telescope.images._f_get_child(tel_table)
-                true_image = get_true_image(sim_child[table_idx])
+                true_img = get_true_image(sim_child[table_idx])
 
-            # For the waveform output option 1 for gammas 0 for protons 
-            if flag_waveform:
-                cherenkov_per_event = np.int64(np.sum(true_image))
-                if self.input_url_background:
-                    if true_shower==0:
-                        labels = np.int64(1)
-                    else:
-                        labels =  np.int64(0)
-                else:
-                    labels =  np.int64(int(cherenkov_per_event > self.cpe_threshold))
-                rep = 1
-                nsb_cosmic.append(np.array([labels], dtype=np.int64))
-                cherenkov.append(np.array([cherenkov_per_event], dtype=np.int64))
-                patches_indexes.append(np.array([0], dtype=np.int64))
-
-            # For the patches options.
+            mode = self.output_settings
+            if mode == 'waveform':
+                out = self._waveform_mode(true_img, true_shower)
             else:
-                # Compute all sums at once.
-                true_sums = trigger_patches_sparse @ true_image
-                # Retrieve all patches.
-                if flag_all:
-                    cherenkov_per_event = true_sums.astype(np.int64)
-                    # If the event has more p.e than threshold patch_class is 1 and 0 for nsb.
-                    labels = ((true_sums > self.cpe_threshold).astype(int))
-                    idxs = np.arange(n_patches, dtype=np.int64)
-                    # for p_idx in idxs:
-                    #         image = self.image_mappers[self.cam_name].get_reordered_patch_image(true_image, p_idx)
-                    #         true_image_patches.append(np.array(image, dtype=np.int64))            
-                    rep = n_patches
-                else:
-                    nsb_idxs = np.where(true_sums == 0)[0] 
-                    cosmic_idxs = np.where(true_sums > self.cpe_threshold)[0]
-                    if flag_double:
-                        pix_idx_max = np.argmax(true_image)
-                        pixel_coord = np.array(
-                            [self.image_mappers[self.cam_name].pix_x[pix_idx_max], 
-                            self.image_mappers[self.cam_name].pix_y[pix_idx_max]]
-                        )
-                        patches_coords = self.image_mappers[self.cam_name].patch_coords
-                        distances = np.linalg.norm(patches_coords - pixel_coord, axis=1)
-                        nearest_patch_idx = np.argmin(distances)
-                        idxs = []
-                        labels = []
-                        if true_sums[nearest_patch_idx] >= self.cpe_threshold:
-                            idxs.append(nearest_patch_idx)
-                            labels.append(1)
-                        elif np.argmax(true_sums)>=self.cpe_threshold:
-                            idxs.append(np.argmax(true_sums))
-                            labels.append(1)
-                        if len(nsb_idxs) != 0:
-                            idxs.append(np.random.choice(nsb_idxs))
-                            labels.append(0)
-                        idxs = np.array(idxs, dtype=np.int64)
-                        labels = np.array(labels, dtype=np.int64)
-                        rep = len(idxs)
-                        cherenkov_per_event = true_sums[idxs].astype(np.int64)
-                    # Else balanced_patches, retrieve same number of cosmic and nsb patches.
-                    else:                                                           
-                        comparator = min(len(cosmic_idxs), len(nsb_idxs))
-                        if comparator > 0:
-                            nsb_idxs = np.random.choice(nsb_idxs, size=comparator, replace=False)
-                            cosmic_idxs = np.random.choice(cosmic_idxs, size=comparator, replace=False)
-                            idxs = np.concatenate((cosmic_idxs, nsb_idxs)).astype(np.int64)
-                            labels = np.concatenate((np.ones(comparator, dtype=np.int64), np.zeros(comparator, dtype=np.int64)))
-                            rep = 2 * comparator
-                            cherenkov_per_event = true_sums[idxs].astype(np.int64)
-                            # for p_idx in idxs:
-                            #     image = self.image_mappers[self.cam_name].get_reordered_patch_image(true_image, p_idx)
-                            #     true_image_patches.append(np.array(image, dtype=np.int64)) 
-                        # In case there are not cosmic or nsb patches
-                        else:
-                            rep = 1
-                            idxs = np.array([np.random.randint(0, n_patches)], dtype=np.int64)
-                            ts = true_sums[idxs[0]]
-                            labels = np.array([int(ts > self.cpe_threshold)], dtype=np.int64)
-                            cherenkov_per_event = np.array([np.int64(ts)], dtype=np.int64)
-                            # image = self.image_mappers[self.cam_name].get_reordered_patch_image(true_image, idxs[0])
-                            # true_image_patches.append(np.array(image, dtype=np.int64))
+                out = getattr(self, f"_{mode}_mode")(true_img, sparse, n_patches)
 
-                # Append indexes only common to patches options
-                patches_indexes.append(idxs)
-                nsb_cosmic.append(labels)
-                cherenkov.append(cherenkov_per_event)
-            # Append single values in the three output options.
-            reps.append(rep)
+            for p, pe, cl in zip(out['patch_idx'], out['cherenkov'], out['classes']):
+                records.append((row_idx, p, pe, cl))
 
-        patches_indexes = np.concatenate(patches_indexes)
-        cherenkov = np.concatenate(cherenkov)
-        nsb_cosmic = np.concatenate(nsb_cosmic)
-        # Create the row indices repeated as computed per event
-        repeated_indices = np.repeat(np.arange(len(batch)), reps)
-        batch = batch[repeated_indices]
-        # Add the new columns to the batch
-        batch.add_column(cherenkov, name="cherenkov_pe", index=6)
-        batch.add_column(nsb_cosmic, name="patch_class", index=7)
-        batch.add_column(patches_indexes, name="patch_index", index=6)
-        # batch.add_column(true_image_patches, name="true_image", index=9)
-        
-        return batch 
+        idxs, patch_idxs, ch_pe, patch_cls = zip(*records)
+        batch = batch[list(idxs)]
+        batch.add_column(np.array(ch_pe),   name="cherenkov_pe", index=6)
+        batch.add_column(np.array(patch_cls),name="patch_class", index=7)
+        batch.add_column(np.array(patch_idxs),name="patch_index", index=6)
+        return batch
+
 
     def _append_features(self, batch) -> Table:
         """
@@ -1972,14 +1987,19 @@ class DLRawTriggerReader(DLWaveformReader):
                 # Apply the 'ImageMapper' whenever the index matrix is not None or 'HexagonaPatchMapper' not called (only for the 'waveform' option).
                 # Otherwise, return the unmapped waveform if 'waveform' in ouput options.
                 if self.image_mappers[self.cam_name].cam_neighbor_array is None and self.image_mappers[camera_type].index_matrix is None:
-                    waveform = self.image_mappers[camera_type].map_image(
-                        waveform
-                        ).astype(np.int64) 
+                    waveform = self.image_mappers[camera_type].map_image(waveform).astype(np.int64) 
                 # If 'HexagonalPatchMapper' and one of the patches option, crop and reorder the image.
                 elif self.image_mappers[self.cam_name].cam_neighbor_array is not None and self.output_settings in ["all_patches", "balanced_patches", "double_patches"]:
                     waveform = self.image_mappers[self.cam_name].get_reordered_patch(waveform, ptch_idx)
-                    if self.l1_trigger:
-                        waveform = apply_l1_trigger(waveform, settings = self.l1_trigger, threshold = self.l1_threshold)
+                if self.apply_trigger:
+                    waveform = apply_low_trigger(
+                        waveform, 
+                        mapper=self.image_mappers[camera_type],
+                        trigger_type=self.apply_trigger,
+                        output_setting=self.trigger_output, 
+                        l1_settings=self.l1_settings, 
+                        tdscan_settings=self.tdscan_settings,
+                    )
                 # Option to add a dummy channel to perform 3D convolutions
                 if self.add_dummy_channel:
                     waveform = np.expand_dims(waveform, axis=-1)
