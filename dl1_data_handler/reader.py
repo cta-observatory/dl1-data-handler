@@ -12,6 +12,8 @@ __all__ = [
     "get_unmapped_waveform",
     "clean_waveform",
     "DLRawTriggerReader",
+    "get_true_image",
+    "apply_low_trigger",
     "DLFeatureVectorReader",
     "get_feature_vectors",
 ]
@@ -23,7 +25,6 @@ from enum import Enum
 import numpy as np
 import tables
 import threading
-import os
 from astropy import units as u
 from astropy.coordinates.earth import EarthLocation
 from astropy.coordinates import AltAz, SkyCoord
@@ -34,7 +35,6 @@ from astropy.table import (
     vstack,
 )
 from astropy.time import Time
-from scipy.spatial import KDTree
 from scipy.sparse import csr_matrix
 
 from ctapipe.coordinates import CameraFrame, NominalFrame
@@ -49,9 +49,11 @@ from ctapipe.core.traits import (
     List,
     CaselessStrEnum,
     Unicode,
+    UseEnum,
     TelescopeParameter,
 )
 from ctapipe.instrument import SubarrayDescription
+from ctapipe.instrument.optics import FocalLengthKind
 from ctapipe.io import read_table
 from dl1_data_handler.image_mapper import ImageMapper
 
@@ -195,6 +197,33 @@ class DLDataReader(Component):
         ),
     ).tag(config=True)
 
+    focal_length_choice = UseEnum(
+        FocalLengthKind,
+        default_value=FocalLengthKind.EFFECTIVE,
+        help=(
+            "If both nominal and effective focal lengths are available in the"
+            " SimTelArray file, which one to use for the `~ctapipe.coordinates.CameraFrame`"
+            " attached to the `~ctapipe.instrument.CameraGeometry` instances in"
+            " the `~ctapipe.instrument.SubarrayDescription`, which will be used in"
+            " CameraFrame to TelescopeFrame coordinate transforms. "
+            " The 'nominal' focal length is the one used during "
+            " the simulation, the 'effective' focal length is computed using specialized "
+            " ray-tracing from a point light source"
+        ),
+    ).tag(config=True)
+
+    force_dl1_lookup = Bool(
+        default_value=False,
+        allow_none=True,
+        help=(
+            "Force to retrieve the table indices from the DL1 image table. "
+            "Usually the table indices can be retrieved from the DL1 parameter table. "
+            "In case a scrict ordering can not be guaranteed, the DL1 image table "
+            "has to be used to retrieve the table indices. This results in a "
+            "significantly slower initializing."
+        ),
+    ).tag(config=True)
+
     min_telescopes = Int(
         default_value=1,
         help=(
@@ -218,7 +247,10 @@ class DLDataReader(Component):
 
     quality_cuts = Bool(
         default_value=True,
-        help="Require quality cuts by ``TableQualityQuery``. False for nsb trigger.").tag(config=True)
+        help=(
+            "Require quality cuts by ``TableQualityQuery``. False for nsb trigger."
+        ),
+    ).tag(config=True)
 
     def __init__(
         self,
@@ -280,7 +312,7 @@ class DLDataReader(Component):
             )
 
         # Set up the subarray
-        self.subarray = SubarrayDescription.from_hdf(self.first_file)
+        self.subarray = SubarrayDescription.from_hdf(self.first_file, focal_length_choice=self.focal_length_choice)
         selected_tel_ids = None
         if self.allowed_tels is not None:
             selected_tel_ids = np.array(list(self.allowed_tels), dtype=np.int16)
@@ -328,7 +360,7 @@ class DLDataReader(Component):
         # Check that all files have the same SubarrayDescription
         for filename in self.files:
             # Read SubarrayDescription from the new file
-            subarray = SubarrayDescription.from_hdf(filename)
+            subarray = SubarrayDescription.from_hdf(filename, focal_length_choice=self.focal_length_choice)
 
             # Filter subarray by selected telescopes
             if selected_tel_ids is not None:
@@ -482,14 +514,21 @@ class DLDataReader(Component):
         and constructs identifiers based on the event and telescope IDs. These
         identifiers are used to uniquely reference each example in the dataset.
         """
-        simulation_info = []
-        example_identifiers = []
+        simulation_info, example_identifiers = [], []
         for file_idx, (filename, f) in enumerate(self.files.items()):
+            # Read the trigger table.
+            trigger_table = read_table(f, "/dl1/event/subarray/trigger")
             if self.process_type == ProcessType.Simulation:
                 # Read simulation information for each observation
                 simulation_info.append(read_table(f, "/configuration/simulation/run"))
                 # Construct the shower simulation table
                 simshower_table = read_table(f, "/simulation/event/subarray/shower")
+                # The shower simulation table is joined with the subarray trigger table.
+                trigger_table = join(
+                    left=trigger_table,
+                    right=simshower_table,
+                    keys=["obs_id", "event_id"],
+                )
 
             # Construct the table containing all events.
             # First, the telescope tables are joined with the shower simulation
@@ -499,13 +538,34 @@ class DLDataReader(Component):
                 tel_table = read_table(
                     f, f"/dl1/event/telescope/parameters/tel_{tel_id:03d}"
                 )
-                tel_table.add_column(
-                    np.arange(len(tel_table)), name="table_index", index=0
-                )
+                if self.force_dl1_lookup:
+                    # Read the DL1 image table
+                    dl1_tel_table = read_table(
+                        f, f"/dl1/event/telescope/images/tel_{tel_id:03d}",
+                    )
+                    # Keep only the columns needed for the join
+                    dl1_tel_table.keep_columns(["obs_id", "event_id", "tel_id"])
+                    # Add the table index to the DL1 image table
+                    dl1_tel_table.add_column(
+                        np.arange(len(dl1_tel_table)), name="table_index", index=0
+                    )
+                    # Unique the table to remove unwanted duplication
+                    dl1_tel_table = unique(dl1_tel_table, keys=["obs_id", "event_id", "tel_id"])
+                    # Join the DL1 image table with the DL1 parameter table
+                    tel_table = join(
+                        left=tel_table,
+                        right=dl1_tel_table,
+                        keys=["obs_id", "event_id", "tel_id"],
+                    )
+                else:
+                    # Add the table index to the DL1 parameter table
+                    tel_table.add_column(
+                        np.arange(len(tel_table)), name="table_index", index=0
+                    )
                 if self.process_type == ProcessType.Simulation:
                     tel_table = join(
                         left=tel_table,
-                        right=simshower_table,
+                        right=trigger_table,
                         keys=["obs_id", "event_id"],
                     )
                     # Add the spherical offsets w.r.t. to the telescope pointing
@@ -603,8 +663,7 @@ class DLDataReader(Component):
         """
         # Extend the columns to keep in the example identifiers
         self.example_ids_keep_columns.extend(["hillas_intensity"])
-        simulation_info = []
-        example_identifiers = []
+        simulation_info, example_identifiers = [], []
         for file_idx, (filename, f) in enumerate(self.files.items()):
             # Read the trigger table.
             trigger_table = read_table(f, "/dl1/event/subarray/trigger")
@@ -630,9 +689,30 @@ class DLDataReader(Component):
                         f,
                         f"/dl1/event/telescope/parameters/tel_{tel_id:03d}",
                     )
-                    tel_table.add_column(
-                        np.arange(len(tel_table)), name="table_index", index=0
-                    )
+                    if self.force_dl1_lookup:
+                        # Read the DL1 image table
+                        dl1_tel_table = read_table(
+                            f, f"/dl1/event/telescope/images/tel_{tel_id:03d}",
+                        )
+                        # Keep only the columns needed for the join
+                        dl1_tel_table.keep_columns(["obs_id", "event_id", "tel_id"])
+                        # Add the table index to the DL1 image table
+                        dl1_tel_table.add_column(
+                            np.arange(len(dl1_tel_table)), name="table_index", index=0
+                        )
+                        # Unique the table to remove unwanted duplication
+                        dl1_tel_table = unique(dl1_tel_table, keys=["obs_id", "event_id", "tel_id"])
+                        # Join the DL1 image table with the DL1 parameter table
+                        tel_table = join(
+                            left=tel_table,
+                            right=dl1_tel_table,
+                            keys=["obs_id", "event_id", "tel_id"],
+                        )
+                    else:
+                        # Add the table index to the DL1 parameter table
+                        tel_table.add_column(
+                            np.arange(len(tel_table)), name="table_index", index=0
+                        )
                     # Initialize a boolean mask to True for all events
                     passes_quality_checks = np.ones(len(tel_table), dtype=bool)
                     # Quality selection based on the dl1b parameter and MC shower simulation tables
@@ -725,7 +805,7 @@ class DLDataReader(Component):
                 )
         # Workaround for the missing multicolumn indexing in astropy:
         # Need this PR https://github.com/astropy/astropy/pull/15826
-        # waiting astropy v7.0.0
+        # waiting astropy v7.1.0
         # self.example_identifiers.add_index(["obs_id", "event_id"])
 
     def get_tel_pointing(self, file, tel_id) -> Table:
@@ -833,9 +913,9 @@ class DLDataReader(Component):
             table["telescope_pointing_altitude"],
             frame=altaz,
         )
-        # Set the camera frame with the focal length and rotation of the camera
+        # Set a new camera frame with the pixel rotation of the camera
         camera_frame = CameraFrame(
-            focal_length=self.subarray.tel[tel_id].optics.equivalent_focal_length,
+            focal_length=self.subarray.tel[tel_id].camera.geometry.frame.focal_length,
             rotation=self.pix_rotation[tel_id],
             telescope_pointing=fix_tel_pointing,
         )
@@ -906,37 +986,58 @@ class DLDataReader(Component):
         table.add_column(angular_separation, name="angular_separation")
         return table
 
-    def get_parameters(self, batch, dl1b_parameter_list) -> np.array:
+    def get_parameters(self, batch, parameter_list=None) -> Dict:
         """
-        Retrieve DL1b parameters for a given batch of events.
+        Retrieve a dictionary of existing DL1b parameters for a given batch.
 
-        This method extracts the specified DL1b parameters for each event in the batch.
-
-        Parameters:
-        -----------
+        Parameters
+        ----------
         batch : astropy.table.Table
-            A Table containing the batch with columns ``file_index``, ``table_index``, and ``tel_id``.
-        dl1b_parameter_list : list
-            A list of DL1b parameters to be retrieved for each event.
+            A Table containing the batch with columns `file_index`, `table_index`, and `tel_id`.
+        parameter_list : list
+            List of DL1b parameters to retrieve.
 
-        Returns:
-        --------
-        dl1b_parameters : np.array
-            An array of DL1b parameters for the batch of events.
+        Returns
+        -------
+        param_dict : dict
+            Dictionary where keys are parameter names and values are lists of parameter values across the batch.
         """
-        dl1b_parameters = []
+        if not parameter_list:
+            parameter_list = self.dl1b_parameter_colnames
+            
+        param_dict = {param: [] for param in parameter_list}
+        initialized = False
+        available_params = set()
+
         for file_idx, table_idx, tel_id in batch.iterrows(
             "file_index", "table_index", "tel_id"
         ):
             filename = list(self.files)[file_idx]
+            tel_table = f"tel_{tel_id:03d}"
+
             with lock:
-                tel_table = f"tel_{tel_id:03d}"
                 child = self.files[
                     filename
                 ].root.dl1.event.telescope.parameters._f_get_child(tel_table)
-            parameters = list(child[table_idx][dl1b_parameter_list])
-            dl1b_parameters.append([np.stack(parameters)])
-        return np.array(dl1b_parameters)
+
+                if not initialized:
+                    available_params = set(child.dtype.names)
+                    param_dict = {
+                        param: []
+                        for param in parameter_list
+                        if param in available_params
+                    }
+                    initialized = True
+
+                row = child[table_idx]
+
+                for param in param_dict:
+                    param_dict[param].append(row[param])
+
+        if parameter_list != list(param_dict.keys()):
+            self.log.warning("The parameter list does not match with the output.")
+ 
+        return param_dict
 
     def generate_mono_batch(self, batch_indices) -> Table:
         """
@@ -969,7 +1070,6 @@ class DLDataReader(Component):
         if self.mode != "mono":
             raise ValueError("Mono batch generation is not supported in stereo mode.")
         # Retrieve the batch from the example identifiers via indexing
-        self.batch_indices = batch_indices
         batch = self.example_identifiers.loc[batch_indices]
         # If the batch is a single event loc returns a Rows object and not a Table.
         # Convert the batch to a Table in order to append the features later
@@ -1009,7 +1109,7 @@ class DLDataReader(Component):
         # Retrieve the batch from the example identifiers via groupd by
         # Workaround for the missing multicolumn indexing in astropy:
         # Need this PR https://github.com/astropy/astropy/pull/15826
-        # waiting astropy v7.0.0
+        # waiting astropy v7.1.0
         # Once available, the batch_generation can be shared with "mono"
         batch = self.example_identifiers_grouped.groups[batch_indices]
         # This may returns a Rows object and not a Table if the batch is a single event.
@@ -1383,9 +1483,9 @@ def get_unmapped_waveform(
         if settings["seq_position"] == "center":
             sequence_position = waveform.shape[1] // 2 - 1
         elif settings["seq_position"] == "maximum":
-            # sequence_position = np.argmax(np.sum(waveform, axis=0))
-            max_index_flat = np.argmax(waveform)
-            pixel_index, sequence_position = np.unravel_index(max_index_flat, waveform.shape)
+            sequence_position = np.argmax(np.sum(waveform, axis=0))
+            # max_index_flat = np.argmax(waveform)
+            # pixel_index, sequence_position = np.unravel_index(max_index_flat, waveform.shape)
         # Calculate start and stop positions
         start = int(1 + sequence_position - settings["seq_length"] / 2)
         stop =  int(1 + sequence_position + settings["seq_length"] / 2)
@@ -1490,7 +1590,7 @@ class DLWaveformReader(DLDataReader):
         # Read the readout length from the first file
         self.readout_length = int(
             self.files[self.first_file]
-            .root.r0.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
+            .root.r1.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
             .coldescrs["waveform"]
             .shape[-1]
         )
@@ -1542,7 +1642,7 @@ class DLWaveformReader(DLDataReader):
         with lock:
             wvf_table_v_attrs = (
                 self.files[self.first_file]
-                .root.r0.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
+                .root.r1.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
                 ._v_attrs
             )
         if "CTAFIELD_5_TRANSFORM_SCALE" in wvf_table_v_attrs:

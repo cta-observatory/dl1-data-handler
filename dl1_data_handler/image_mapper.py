@@ -7,12 +7,11 @@ from scipy import spatial
 from scipy.sparse import csr_matrix
 from collections import Counter, namedtuple
 import tables
+from importlib.resources import files
 
 from ctapipe.instrument.camera import PixelShape
 from ctapipe.core import TelescopeComponent
-from ctapipe.core.traits import Bool, Int, Unicode
-
-from importlib.resources import files
+from ctapipe.core.traits import Bool, Int
 
 __all__ = [
     "ImageMapper",
@@ -666,15 +665,6 @@ class HexagonalPatchMapper(ImageMapper):
     It is particularly useful for applications where we are working with waveforms
     with high time dimension.
     """
-    h5_patches_path = Unicode(
-        default_value=None,
-        allow_none=True,
-        help=(
-            "Path to the HDF5 file with trigger patches, neighbors and mapping info. "
-            "If not specified, the default resource file will be used."
-            "For hexagonal convolutions only it computes the neighbor array if not the SiPM cam."
-        )
-    ).tag(config=True)
 
     def __init__(
         self,
@@ -695,12 +685,9 @@ class HexagonalPatchMapper(ImageMapper):
                 f"HexagonalPatchMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
              )
 
-        if self.h5_patches_path is not None:
-            path = self.h5_patches_path
-        else:
-            path = files("dl1_data_handler.ressources").joinpath("sipm_patches.h5")
-            path_fl_neigh = files("dl1_data_handler.ressources").joinpath("CTA_LST_Pixels_info_epsilon_1.csv")
-            path_patch0_fl_neigh = files("dl1_data_handler.ressources").joinpath("flower_neighbors_central_patch.csv")
+        path = files("dl1_data_handler.ressources").joinpath("sipm_patches.h5")
+        path_fl_neigh = files("dl1_data_handler.ressources").joinpath("CTA_LST_Pixels_info_epsilon_1.csv")
+        path_patch0_fl_neigh = files("dl1_data_handler.ressources").joinpath("flower_neighbors_central_patch.csv")
 
         if geometry.name == "UNKNOWN-7987PX":
             with tables.open_file(path, mode="r") as f:
