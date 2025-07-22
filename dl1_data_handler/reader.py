@@ -1571,6 +1571,8 @@ class DLWaveformReader(DLDataReader):
         ),
     ).tag(config=True)
 
+    data_level = "r1"
+
     def __init__(
         self,
         input_url_signal,
@@ -1588,9 +1590,10 @@ class DLWaveformReader(DLDataReader):
         )
 
         # Read the readout length from the first file
+        data_group = getattr(self.files[self.first_file].root, self.data_level)
         self.readout_length = int(
-            self.files[self.first_file]
-            .root.r0.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
+            data_group
+            .event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
             .coldescrs["waveform"]
             .shape[-1]
         )
@@ -1641,8 +1644,8 @@ class DLWaveformReader(DLDataReader):
         self.waveform_settings["waveform_offset"] = 0
         with lock:
             wvf_table_v_attrs = (
-                self.files[self.first_file]
-                .root.r0.event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
+                data_group
+                .event.telescope._f_get_child(f"tel_{self.tel_ids[0]:03d}")
                 ._v_attrs
             )
         if "CTAFIELD_5_TRANSFORM_SCALE" in wvf_table_v_attrs:
@@ -1876,6 +1879,8 @@ class DLRawTriggerReader(DLWaveformReader):
         allow_none = False,
         help=("Threshold in simulated number of photoelectrons above which events are going to be labelled as shower or NSB")
     ).tag(config=True) 
+
+    data_level = "r0"
 
     def __init__(
         self,
