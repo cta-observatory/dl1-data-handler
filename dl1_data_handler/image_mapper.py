@@ -6,6 +6,8 @@ import numpy as np
 from scipy import spatial
 from scipy.sparse import csr_matrix
 from collections import Counter, namedtuple
+import tables
+from importlib.resources import files
 
 from ctapipe.instrument.camera import PixelShape
 from ctapipe.core import TelescopeComponent
@@ -21,6 +23,7 @@ __all__ = [
     "RebinMapper",
     "ShiftingMapper",
     "SquareMapper",
+    "HexagonalPatchMapper",
 ]
 
 class ImageMapper(TelescopeComponent):
@@ -55,6 +58,8 @@ class ImageMapper(TelescopeComponent):
     rebinning_mult_factor : int
         Multiplication factor used for rebinning.
     index_matrix : numpy.ndarray or None
+        Matrix used for indexing, initialized to None.
+    cam_neighbor_array : numpy.ndarray or None
         Matrix used for indexing, initialized to None.
 
     Methods
@@ -124,6 +129,7 @@ class ImageMapper(TelescopeComponent):
 
         # Set the indexed matrix to None
         self.index_matrix = None
+        self.cam_neighbor_array = None
 
     def map_image(self, raw_vector: np.array) -> np.array:
         """
@@ -646,6 +652,105 @@ class AxialMapper(ImageMapper):
         output_grid = np.column_stack([x_grid.ravel(), y_grid.ravel()])
 
         return input_grid, output_grid
+
+
+class HexagonalPatchMapper(ImageMapper):
+    """
+    HexagonalPatchMapper retrieves the necessary information to perform indexed 
+    convolutions, also allows croping the images following the "sipm_patches.h5"
+    patches geometry and reorders the pixels.
+
+    This class extends the functionality of ImageMapper by implementing
+    methods to look up at the configuration file and perform the image cropping.
+    It is particularly useful for applications where we are working with waveforms
+    with high time dimension.
+    """
+
+    def __init__(
+        self,
+        geometry,
+        config=None,
+        parent=None,
+        **kwargs,
+    ):
+        super().__init__(
+            geometry=geometry,
+            config=config,
+            parent=parent,
+            **kwargs,
+        )
+
+        if geometry.pix_type != PixelShape.HEXAGON:
+            raise ValueError(
+                f"HexagonalPatchMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
+             )
+
+        path = files("dl1_data_handler.ressources").joinpath("sipm_patches.h5")
+        path_fl_neigh = files("dl1_data_handler.ressources").joinpath("CTA_LST_Pixels_info_epsilon_1.csv")
+        path_patch0_fl_neigh = files("dl1_data_handler.ressources").joinpath("flower_neighbors_central_patch.csv")
+
+        if geometry.name == "UNKNOWN-7987PX":
+            with tables.open_file(path, mode="r") as f:
+                self.patch_coords = f.root.patches.centers[:]
+                self.trigger_patches = f.root.patches.masks[:]
+                self.index_map = f.root.mappings.index_map[:]
+                self.neighbor_array = f.root.mappings.mod_neighbors[:]
+                self.cam_neighbor_array = f.root.mappings.cam_neighbors[:]
+
+            self.num_patches = len(self.trigger_patches)
+            self.patch_size = len(self.neighbor_array[0])
+
+            self.fl_neighbor_array, self.fl_neighbor_patch0_array = [], []
+            with open(path_fl_neigh, "r") as f:
+                next(f)  # skip header
+                for line in f:
+                    # Split, strip newline, convert to int
+                    neighbors = list(map(int, line.strip().split(",")))
+                    self.fl_neighbor_array.append(np.array(neighbors, dtype=np.int32))
+            with open(path_patch0_fl_neigh, "r") as f:
+                for line in f:
+                    # Split, strip newline, convert to int
+                    neighbors = list(map(int, line.strip().split(",")))
+                    self.fl_neighbor_patch0_array.append(np.array(neighbors, dtype=np.int32))
+
+        else:
+            neighbor_matrix = geometry.neighbor_matrix
+            num_pixels = neighbor_matrix.shape[0]
+            neighbor_lists = []
+            for i in range(num_pixels):
+                # Find indices where the row is True
+                neighbors = np.where(neighbor_matrix[i])[0]
+                neighbor_lists.append([i] + neighbors.tolist())    
+
+            self.cam_neighbor_array = np.full((num_pixels, 7), -1, dtype=int)
+            for i, neighbors in enumerate(neighbor_lists):
+                self.cam_neighbor_array[i, :len(neighbors)] = neighbors
+            print("Computed neighbor array is", self.cam_neighbor_array)
+
+    def get_reordered_patch(self, raw_vector, patch_index):
+        # Retrieve the patch needed
+        patch = self.trigger_patches[patch_index, :]
+        patched_wf = raw_vector[:, :][patch.astype(bool)]
+
+        # Reorder the array so that all patches have the same spatial order in index
+        unmapped_waveform = np.zeros_like(patched_wf)
+
+        for new, old in enumerate(self.index_map[patch_index]):
+            unmapped_waveform[new] = patched_wf[old]
+        return unmapped_waveform
+
+    def get_reordered_patch_image(self, image, patch_index):
+        # Retrieve the patch needed
+        image = np.squeeze(image)
+        patch = self.trigger_patches[patch_index, :]
+        patched_im = image[:][patch.astype(bool)]
+
+        # Reorder the array so that all patches have the same spatial order in index
+        unmapped_im = np.zeros_like(patched_im)
+
+        for new, old in enumerate(self.index_map[patch_index]):
+            unmapped_im[new] = patched_im[old]
+        return unmapped_im
 
 
 class ShiftingMapper(ImageMapper):
