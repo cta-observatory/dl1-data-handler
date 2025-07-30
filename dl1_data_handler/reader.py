@@ -1749,12 +1749,18 @@ def get_true_image(sim_event) -> np.ndarray:
     return true_image
 
 
-def apply_low_trigger(x, mapper, trigger_type, output_setting, l1_settings, tdscan_settings):
+def apply_low_trigger(x, mapper, trigger_type, output_setting, l1_settings, tdscan_settings, subtract):
     n_pixels, time = x.shape
-    # Reshape to (n_flowers, t, time)
-    flowers = x.reshape(-1, 7, time)
-    # Sum over group dimension  ####CAMBIAR PARA PERMITIR FLOR O SUPERFLOR DEPENDE DEL ARCHIVO QUE SE LE META
-    flower_sums = np.sum(flowers, axis=1)  
+    # Assign the l1 neighbor list, summing on flowers or superflowers for each flower.
+    l1_list = (
+        mapper.fl_neighbor_l1_list 
+        if l1_settings["eps"] == "flower" 
+        else mapper.supfl_neighbor_l1_list
+    )
+    flower_sums = np.array(
+        [np.sum(wf[l1_list[i]], axis=0) 
+        for i in np.arange(0, len(l1_list))]
+    )
     # Thresholding (broadcast back to each pixel in group)
     bin_flowers = (flower_sums > l1_settings["threshold"]).astype(int)  # shape: (n_flowers, time)
     # TDSCAN mask cleaning:
@@ -1764,10 +1770,12 @@ def apply_low_trigger(x, mapper, trigger_type, output_setting, l1_settings, tdsc
         tdscan_flowers = np.zeros((num_flowers, time), dtype=np.float32)
         # Precompute cumulative sum over time for each pixel
         cumsum_l1 = np.pad(np.cumsum(bin_flowers, axis=1), ((0, 0), (1, 0)))  # pad to handle start_t = 0 cleanly
-        if n_pixels == 343:
-            eps_xy_neighbors = mapper.fl_neighbor_patch0_array
-        else:
-            eps_xy_neighbors = mapper.fl_neighbor_array
+        # Select the neighbor list depending on epsxy
+        eps_xy_neighbors = (
+            mapper.neighbor_tdscan_eps1_list
+            if tdscan_settings["epsxy"] == 1
+            else mapper.neighbor_tdscan_eps2_list
+        )
         for i in range(num_flowers):
             neighbors = eps_xy_neighbors[i]
             if len(neighbors) == 0:
@@ -1783,18 +1791,24 @@ def apply_low_trigger(x, mapper, trigger_type, output_setting, l1_settings, tdsc
             total = cumsum_l1[neighbors][:, end] - cumsum_l1[neighbors][:, start]  # shape: (num_neighbors, time)
             total_sum = np.sum(total, axis=0)  # sum across neighbors
             tdscan_flowers[i] = ((total_sum >= tdscan_settings["min_pts"]) & (bin_flowers[i] == 1)).astype(np.float32)
-        bin_flowers = tdscan_flowers
+        bin_flowers = tdscan_flowers # shape: (n_flowers, time)
 
     bin_pixels = np.repeat(bin_flowers, 7, axis=0)  # shape: (n_pixels, time)
-
+    if subtract:
+        x = x - subtract
     if output_setting == 'mask':
         output = x * bin_pixels # shape: (n_pixels, time)
     elif output_setting == 'binary':
         output = bin_pixels
     elif output_setting == 'stack':
         output = np.stack([x, bin_pixels], axis=-1) # shape: (n_pixels, time, 2)
+    else: #waveform
+        output = x
 
-    return output
+    patches = csr_matrix(mapper.trigger_patches)
+    trigger_per_patch = patches @ true_image
+
+    return output, trigger_per_patch
 
 
 class DLRawTriggerReader(DLWaveformReader):
@@ -1832,6 +1846,12 @@ class DLRawTriggerReader(DLWaveformReader):
         help=("Boolean variable to add or not an extra dummy dimension for the channel")
     ).tag(config=True) 
 
+    subtract_mean = Int(
+        default_value = None,
+        allow_none = True,
+        help=("Value to subtract to the waveform")
+    ).tag(config=True) 
+
     apply_trigger = CaselessStrEnum(
         ["l1", "tdscan"],
         default_value = None,
@@ -1844,8 +1864,8 @@ class DLRawTriggerReader(DLWaveformReader):
     ).tag(config=True) 
 
     trigger_output = CaselessStrEnum(
-        ["mask", "stack", "only_mask"],
-        default_value = "mask",
+        ["waveform", "mask", "stack", "only_mask"],
+        default_value = "waveform",
         allow_none = True,
         help=(
             "If apply trigger not none, variable to define the trigger output."
@@ -1918,6 +1938,15 @@ class DLRawTriggerReader(DLWaveformReader):
             self.input_shape = self.input_shape + (1,)
         elif self.trigger_output == 'stack':
             self.input_shape = self.input_shape + (2,)
+
+        if self.apply_trigger and self.cam_name != "UNKNOWN-7987PX":
+            raise ValueError(
+                f"Apply trigger option only valid for the Adv SiPM camera, currently using '{self.cam_name}'."
+            )
+        if self.output_settings != "waveform" and self.cam_name != "UNKNOWN-7987PX":
+            raise ValueError(
+                f"Patches options are only valid for the Adv SiPM camera, currently using '{self.cam_name}'."
+            )
 
     def _waveform_mode(self, true_image, true_shower):
         # Retrieves the complete waveform.
@@ -2072,6 +2101,8 @@ class DLRawTriggerReader(DLWaveformReader):
         # Load the trigger settings.
         if "waveform" not in self.output_settings:
             trigger_patches = self.image_mappers[self.cam_name].trigger_patches
+        if self.apply_trigger:
+            triggers = []
         for file_idx, table_idx, tel_type_id, tel_id, ptch_idx in batch.iterrows(
             "file_index", "table_index", "tel_type_id", "tel_id", "patch_index"
         ):
@@ -2089,22 +2120,32 @@ class DLRawTriggerReader(DLWaveformReader):
                     self.image_mappers[camera_type].geometry,
                     )
                 waveform = unmapped_waveform.astype(np.int64)
-                # Apply the 'ImageMapper' whenever the index matrix is not None or 'HexagonaPatchMapper' not called (only for the 'waveform' option).
-                # Otherwise, return the unmapped waveform if 'waveform' in ouput options.
-                if self.image_mappers[self.cam_name].cam_neighbor_array is None and self.image_mappers[camera_type].index_matrix is None:
-                    waveform = self.image_mappers[camera_type].map_image(waveform).astype(np.int64) 
-                # If 'HexagonalPatchMapper' and one of the patches option, crop and reorder the image.
-                elif self.image_mappers[self.cam_name].cam_neighbor_array is not None and self.output_settings in ["all_patches", "balanced_patches", "double_patches"]:
-                    waveform = self.image_mappers[self.cam_name].get_reordered_patch(waveform, ptch_idx)
+                # Apply trigger option for the complete waveform always, also valid for image mapping methods
                 if self.apply_trigger:
-                    waveform = apply_low_trigger(
+                    waveform, trigger_per_patch = apply_low_trigger(
                         waveform, 
                         mapper=self.image_mappers[camera_type],
                         trigger_type=self.apply_trigger,
                         output_setting=self.trigger_output, 
                         l1_settings=self.l1_settings, 
                         tdscan_settings=self.tdscan_settings,
+                        subtract=self.subtract_mean,
                     )
+                    if "waveform" in self.output_settings:
+                        triggers.append(int(np.any(trigger_per_patch)))
+                    else:
+                        triggers.append(trigger_per_patch[ptch_idx])
+                elif self.subtract_mean:
+                    waveform = waveform - self.subtract_mean
+                # Apply the 'ImageMapper' whenever the index matrix is not None or 'HexagonalPatchMapper' not called (only for the 'waveform' option).
+                # Otherwise, return the unmapped waveform if 'waveform' in ouput options.
+                if self.image_mappers[self.cam_name].cam_neighbor_array is None and self.image_mappers[camera_type].index_matrix is None:
+                    waveform = self.image_mappers[camera_type].map_image(waveform).astype(np.int64) 
+                # If 'HexagonalPatchMapper' and one of the patches option, crop and reorder the image.
+                elif self.image_mappers[self.cam_name].cam_neighbor_array is not None 
+                and self.output_settings in ["all_patches", "balanced_patches", "double_patches"]:
+                    waveform = self.image_mappers[self.cam_name].get_reordered_patch(waveform, ptch_idx)
+                
                 # Option to add a dummy channel to perform 3D convolutions
                 if self.add_dummy_channel:
                     waveform = np.expand_dims(waveform, axis=-1)
@@ -2112,6 +2153,8 @@ class DLRawTriggerReader(DLWaveformReader):
 
         # Append everything to the selected batch
         batch.add_column(waveforms, name="features", index=8)
+        if self.apply_trigger:
+            batch.add_column(triggers, name="l1_trigger", index=9)
         if "waveform" in self.output_settings:
             batch.remove_column("patch_index")
         return batch

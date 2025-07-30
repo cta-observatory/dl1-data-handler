@@ -96,7 +96,11 @@ class ImageMapper(TelescopeComponent):
         self.camera_type = self.geometry.name
         self.n_pixels = self.geometry.n_pixels
         # Rotate the pixel positions by the pixel to align
-        self.geometry.rotate(self.geometry.pix_rotation)
+        if self.camera_type == "UNKNOWN-7987PX":
+            self.geometry.pix_rotation = 8.213 * u.deg
+            self.geometry.rotate(2 * 8.213 * u.deg)
+        else:
+            self.geometry.rotate(self.geometry.pix_rotation)
 
         self.pix_x = np.around(
             self.geometry.pix_x.value, decimals=self.constants.decimal_precision
@@ -685,33 +689,41 @@ class HexagonalPatchMapper(ImageMapper):
                 f"HexagonalPatchMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
              )
 
-        path = files("dl1_data_handler.ressources").joinpath("sipm_patches.h5")
-        path_fl_neigh = files("dl1_data_handler.ressources").joinpath("CTA_LST_Pixels_info_epsilon_1.csv")
-        path_patch0_fl_neigh = files("dl1_data_handler.ressources").joinpath("flower_neighbors_central_patch.csv")
+        path = files("dl1_data_handler.ressources").joinpath("newcam_sipm_patches.h5")
+        # path_fl_neigh = files("dl1_data_handler.ressources").joinpath("CTA_LST_Pixels_info_epsilon_1.csv")
+        # path_patch0_fl_neigh = files("dl1_data_handler.ressources").joinpath("flower_neighbors_central_patch.csv")
 
         if geometry.name == "UNKNOWN-7987PX":
             with tables.open_file(path, mode="r") as f:
-                self.patch_coords = f.root.patches.centers[:]
+                self.patch_coords = f.root.patches.centers_coords[:]
                 self.trigger_patches = f.root.patches.masks[:]
                 self.index_map = f.root.mappings.index_map[:]
-                self.neighbor_array = f.root.mappings.mod_neighbors[:]
-                self.cam_neighbor_array = f.root.mappings.cam_neighbors[:]
+                self.neighbor_array = f.root.neighbors.patch0_neighbors[:]
+                self.cam_neighbor_array = f.root.neighbors.camera_neighbors[:]
+                self.fl_neighbor_array_tdscan = f.root.neighbors.flower_neighbors_tdscan[:]
+                self.fl_neighbor_array_l1 = f.root.neighbors.flower_neighbors_l1[:]
+                self.supfl_neighbor_array_l1 = f.root.neighbors.superflower_neighbors_l1[:]
+                # Remove -1 padding from each row
+                self.neighbor_tdscan_eps1_list = [row[row != -1].tolist() for row in self.fl_neighbor_array_tdscan]
+                self.fl_neighbor_l1_list = [row[row != -1].tolist() for row in self.fl_neighbor_array_l1]
+                self.supfl_neighbor_l1_list = [row[row != -1].tolist() for row in self.supfl_neighbor_array_l1]
+
 
             self.num_patches = len(self.trigger_patches)
-            self.patch_size = len(self.neighbor_array[0])
+            self.patch_size = self.neighbor_array.shape[0]
 
-            self.fl_neighbor_array, self.fl_neighbor_patch0_array = [], []
-            with open(path_fl_neigh, "r") as f:
-                next(f)  # skip header
-                for line in f:
-                    # Split, strip newline, convert to int
-                    neighbors = list(map(int, line.strip().split(",")))
-                    self.fl_neighbor_array.append(np.array(neighbors, dtype=np.int32))
-            with open(path_patch0_fl_neigh, "r") as f:
-                for line in f:
-                    # Split, strip newline, convert to int
-                    neighbors = list(map(int, line.strip().split(",")))
-                    self.fl_neighbor_patch0_array.append(np.array(neighbors, dtype=np.int32))
+            # self.fl_neighbor_array, self.fl_neighbor_patch0_array = [], []
+            # with open(path_fl_neigh, "r") as f:
+            #     next(f)  # skip header
+            #     for line in f:
+            #         # Split, strip newline, convert to int
+            #         neighbors = list(map(int, line.strip().split(",")))
+            #         self.fl_neighbor_array.append(np.array(neighbors, dtype=np.int32))
+            # with open(path_patch0_fl_neigh, "r") as f:
+            #     for line in f:
+            #         # Split, strip newline, convert to int
+            #         neighbors = list(map(int, line.strip().split(",")))
+            #         self.fl_neighbor_patch0_array.append(np.array(neighbors, dtype=np.int32))
 
         else:
             neighbor_matrix = geometry.neighbor_matrix
