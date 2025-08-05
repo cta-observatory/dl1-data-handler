@@ -8,6 +8,7 @@ from scipy.sparse import csr_matrix
 from collections import Counter, namedtuple
 import tables
 from importlib.resources import files
+import astropy.units as u
 
 from ctapipe.instrument.camera import PixelShape
 from ctapipe.core import TelescopeComponent
@@ -98,9 +99,7 @@ class ImageMapper(TelescopeComponent):
         # Rotate the pixel positions by the pixel to align
         if self.camera_type == "UNKNOWN-7987PX":
             self.geometry.pix_rotation = 8.213 * u.deg
-            self.geometry.rotate(2 * 8.213 * u.deg)
-        else:
-            self.geometry.rotate(self.geometry.pix_rotation)
+        self.geometry.rotate(self.geometry.pix_rotation)
 
         self.pix_x = np.around(
             self.geometry.pix_x.value, decimals=self.constants.decimal_precision
@@ -115,7 +114,7 @@ class ImageMapper(TelescopeComponent):
         # Additional smooth the ticks for 'DigiCam', 'RealLSTCam' and 'CHEC' cameras
         if self.camera_type in ["DigiCam", "RealLSTCam"]:
             self.pix_y, self.y_ticks = self._smooth_ticks(self.pix_y, self.y_ticks)
-        if self.camera_type == "CHEC":
+        if self.camera_type in ["CHEC",  "UNKNOWN-7987PX"]:
             self.pix_x, self.x_ticks = self._smooth_ticks(self.pix_x, self.x_ticks)
             self.pix_y, self.y_ticks = self._smooth_ticks(self.pix_y, self.y_ticks)
 
