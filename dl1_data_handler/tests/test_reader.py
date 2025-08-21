@@ -24,7 +24,9 @@ def test_dl1_image_reading(dl1_image_reader):
     # Check that the columns that are kept have no NaN values
     for col in dl1_image_reader.example_ids_keep_columns:
         assert not np.isnan(mono_batch[col][0])  # nosec
-
+    # Check that the transformation is also present and has no NaN values
+    assert not np.isnan(mono_batch["log_true_energy"][0])  # nosec
+    assert not np.isnan(mono_batch["impact_radius"][0])  # nosec
 
 def test_r1_waveform_reading(r1_tmp_path, r1_gamma_file):
     """check reading from pixel-wise waveform data files"""
