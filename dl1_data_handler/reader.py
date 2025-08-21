@@ -459,6 +459,10 @@ class DLDataReader(Component):
                     "cam_coord_offset_x",
                     "cam_coord_offset_y",
                     "cam_coord_distance",
+                    "true_core_x",
+                    "true_core_y",
+                    "true_h_first_int",
+                    "true_x_max"
                 ]
             )
         elif self.process_type == ProcessType.Observation:

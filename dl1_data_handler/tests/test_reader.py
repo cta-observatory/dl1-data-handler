@@ -1,5 +1,6 @@
 import pytest
 from traitlets.config.loader import Config
+import numpy as np
 
 from dl1_data_handler.reader import DLImageReader, DLWaveformReader
 
@@ -20,6 +21,9 @@ def test_dl1_image_reading(dl1_image_reader):
     mono_batch = dl1_image_reader.generate_mono_batch([0])
     assert mono_batch["tel_id"] == 4  # nosec
     assert mono_batch["features"].shape == (1, 110, 110, 2)  # nosec
+    # Check that the columns that are kept have no NaN values
+    for col in dl1_image_reader.example_ids_keep_columns:
+        assert not np.isnan(mono_batch[col][0])  # nosec
 
 
 def test_r1_waveform_reading(r1_tmp_path, r1_gamma_file):
