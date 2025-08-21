@@ -459,6 +459,10 @@ class DLDataReader(Component):
                     "cam_coord_offset_x",
                     "cam_coord_offset_y",
                     "cam_coord_distance",
+                    "true_core_x",
+                    "true_core_y",
+                    "true_h_first_int",
+                    "true_x_max"
                 ]
             )
         elif self.process_type == ProcessType.Observation:
@@ -591,6 +595,8 @@ class DLDataReader(Component):
                 events = self._transform_to_sky_spher_offsets(events)
                 # Add the logarithm of the true energy in TeV
                 events = self._transform_to_log_energy(events)
+                # Add the impact radius
+                events = self._transform_to_impact_radius(events)
                 # Add the true shower primary class to the table based on the filename
                 # is signal or background input file list
                 true_shower_primary_class = (
@@ -739,6 +745,8 @@ class DLDataReader(Component):
             if self.process_type == ProcessType.Simulation:
                 # Add the logarithm of the true energy in TeV
                 events = self._transform_to_log_energy(events)
+                # Add the impact radius
+                events = self._transform_to_impact_radius(events)
                 # Add the true shower primary class to the table based on the filename
                 # is signal or background input file list
                 true_shower_primary_class = (
@@ -852,6 +860,30 @@ class DLDataReader(Component):
             A Table with the logarithmic energy values added as a new column.
         """
         table.add_column(np.log10(table["true_energy"]), name="log_true_energy")
+        return table
+
+    def _transform_to_impact_radius(self, table) -> Table:
+        """
+        Transform core coordinates to impact radius.
+
+        This method calculates the impact radius from the core coordinates
+        in the provided table. The impact radius is the distance from the
+        true core position to the subarray center.
+
+        Parameters:
+        -----------
+        table : astropy.table.Table
+            A Table containing the true core coordinates.
+
+        Returns:
+        --------
+        table : astropy.table.Table
+            A Table with the impact radius added as a new column.
+        """
+        # Calculate the impact radius
+        impact_radius = np.sqrt(table["true_core_x"]**2 + table["true_core_y"]**2)
+        # Add the impact radius to the table
+        table.add_column(impact_radius, name="impact_radius")
         return table
 
     def _transform_to_cam_coord_offsets(self, table) -> Table:
