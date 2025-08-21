@@ -25,8 +25,13 @@ def test_dl1_image_reading(dl1_image_reader):
     for col in dl1_image_reader.example_ids_keep_columns:
         assert not np.isnan(mono_batch[col][0])  # nosec
     # Check that the transformation is also present and has no NaN values
-    assert not np.isnan(mono_batch["log_true_energy"][0])  # nosec
-    assert not np.isnan(mono_batch["impact_radius"][0])  # nosec
+    assert mono_batch["log_true_energy"][0] == np.log10(
+        mono_batch["true_energy"][0]
+    )  # nosec
+    assert mono_batch["impact_radius"][0] == np.sqrt(
+        mono_batch["true_core_y"][0] ** 2 + mono_batch["true_core_x"][0] ** 2
+    )  # nosec
+
 
 def test_r1_waveform_reading(r1_tmp_path, r1_gamma_file):
     """check reading from pixel-wise waveform data files"""
@@ -52,7 +57,7 @@ def test_r1_waveform_reading(r1_tmp_path, r1_gamma_file):
 def test_dl1_hillas_parameter_extraction(dl1_image_reader):
     """Test DL1 reader extracts hillas parameters correctly and handles missing keys."""
 
-    hillas_names_1 =  dl1_image_reader.dl1b_parameter_colnames
+    hillas_names_1 = dl1_image_reader.dl1b_parameter_colnames
 
     hillas_names_2 = [
         "obs_id",
