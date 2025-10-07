@@ -10,7 +10,7 @@ dependencies:
     - numpy
     - scipy
     - pip
-    - ctapipe==0.25.1
+    - ctapipe>=0.22,<0.26
     - traitlets
     - pyyaml
     - pandas
