@@ -10,12 +10,7 @@ on:
 
 jobs:
   condapublish:
-    strategy:
-      matrix:
-        os: [ubuntu-22.04]
-        pyv: ["3.10"]
-      max-parallel: 5
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-22.04
     permissions:
       id-token: write
       contents: write
@@ -37,9 +32,9 @@ jobs:
         run: conda env create -f environment.yml
 
       - name: Build conda package
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
         run: |
-          conda install -n dl1_data_handler conda-build anaconda-client -y
+          conda install -n dl1dh conda-build anaconda-client -y
           PACKAGE_FILE=$(conda build . --output)
           anaconda upload "$PACKAGE_FILE" --user ctlearn-project --label main --force
-        env:
-          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
