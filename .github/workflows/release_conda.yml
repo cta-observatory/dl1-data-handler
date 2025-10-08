@@ -56,6 +56,6 @@ jobs:
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
         run: |
-          PACKAGE_FILE=$(conda build . --output)
+          PACKAGE_FILE=$( conda build .github/conda --output)
           # Usamos conda run para asegurar que el comando anaconda esté disponible
           conda run -n base anaconda upload "$PACKAGE_FILE" --user ctlearn-project --label main --force
