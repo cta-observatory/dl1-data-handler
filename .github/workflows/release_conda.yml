@@ -20,73 +20,51 @@ jobs:
       checks: read
 
     steps:
-      # 1️⃣ Clonar el repositorio
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 0  # necesario para git describe y tags
 
-      # 2️⃣ Instalar Miniconda (sin tocar el entorno base)
+      - name: Cache Conda packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.conda/pkgs
+          key: ${{ runner.os }}-conda-${{ hashFiles('environment.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-conda-
+
       - name: Set up Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
           miniconda-version: latest
           auto-update-conda: true
-          use-mamba: false        # usa solver clásico
-          activate-environment: build
-          environment-file: environment.yml
-          auto-activate-base: false
+          use-mamba: true   # usar mamba para instalar dependencias mucho más rápido
 
-      # 3️⃣ Configurar canales y solver
-      - name: Configure Conda
-        shell: bash -l {0}
-        run: |
-          conda config --add channels conda-forge
-          conda config --add channels defaults
-          conda config --set channel_priority strict
-          conda config --set always_yes true
-          conda config --set report_errors false
-          # Instalar libmamba si disponible (no rompe en classic)
-          conda install -n build conda-libmamba-solver -c conda-forge || true
-          echo "✅ Conda configured successfully."
+      - name: Create conda environment
+        run: mamba env create -f environment.yml
 
-      # 4️⃣ Instalar herramientas de build
       - name: Install conda-build and anaconda-client
-        shell: bash -l {0}
-        run: |
-          conda install -n build -c conda-forge conda-build anaconda-client -y --solver classic
-          echo "✅ Build tools installed."
+        run: mamba install -c conda-forge conda-build anaconda-client -y
 
-      # 5️⃣ Obtener versión desde el tag de Git
       - name: Determine version from Git tag
         id: git_version
-        run: |
-          echo "GIT_DESCRIBE_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
+        run: echo "GIT_DESCRIBE_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
 
-      # 6️⃣ Sustituir versión en meta.yaml dinámicamente
       - name: Set dynamic version in meta.yaml
-        shell: bash -l {0}
         run: |
           VERSION_NUMBER="${GIT_DESCRIBE_TAG#v}"  # elimina la 'v' inicial
           sed -i "s|^{% set version.*%}|{% set version = \"$VERSION_NUMBER\" %}|" .github/conda/meta.yaml
-          echo "✅ Version set to $VERSION_NUMBER"
 
-      # 7️⃣ Construir el paquete Conda
       - name: Build conda package
-        shell: bash -l {0}
         run: |
           PACKAGE_FILE=$(conda build .github/conda --output)
-          echo "📦 Package will be built at: $PACKAGE_FILE"
+          echo "Package will be built at: $PACKAGE_FILE"
           conda build .github/conda
-          echo "✅ Package built successfully."
 
-      # 8️⃣ Subir el paquete a Anaconda.org
       - name: Upload package to Anaconda.org
-        shell: bash -l {0}
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
         run: |
           PACKAGE_FILE=$(conda build .github/conda --output)
-          echo "🚀 Uploading package: $PACKAGE_FILE"
+          echo "Uploading package: $PACKAGE_FILE"
           anaconda upload "$PACKAGE_FILE" --user ctlearn-project --label main --force
-          echo "✅ Upload completed successfully."
