@@ -689,12 +689,9 @@ class HexagonalPatchMapper(ImageMapper):
              )
 
         path = files("dl1_data_handler.ressources").joinpath("newcam_sipm_patches.h5")
-        # path_fl_neigh = files("dl1_data_handler.ressources").joinpath("CTA_LST_Pixels_info_epsilon_1.csv")
-        # path_patch0_fl_neigh = files("dl1_data_handler.ressources").joinpath("flower_neighbors_central_patch.csv")
 
         if geometry.name == "UNKNOWN-7987PX":
             with tables.open_file(path, mode="r") as f:
-                self.patch_coords = f.root.patches.centers_coords[:]
                 self.trigger_patches = f.root.patches.masks[:]
                 self.index_map = f.root.mappings.index_map[:]
                 self.neighbor_array = f.root.neighbors.patch0_neighbors[:]
@@ -702,6 +699,10 @@ class HexagonalPatchMapper(ImageMapper):
                 self.fl_neighbor_array_tdscan = f.root.neighbors.flower_neighbors_tdscan[:]
                 self.fl_neighbor_array_l1 = f.root.neighbors.flower_neighbors_l1[:]
                 self.supfl_neighbor_array_l1 = f.root.neighbors.superflower_neighbors_l1[:]
+                self.sectors_bool = f.root.sectors.mask[:]
+                self.sectors_indices = f.root.sectors.sectors_indices[:]
+                self.sect0_neighbors = f.root.sectors.sect0_neighbors[:]
+                self.sector_mappings = f.root.sectors.mapping[:]
                 # Remove -1 padding from each row
                 self.neighbor_tdscan_eps1_list = [row[row != -1].tolist() for row in self.fl_neighbor_array_tdscan]
                 self.fl_neighbor_l1_list = [row[row != -1].tolist() for row in self.fl_neighbor_array_l1]
@@ -710,20 +711,10 @@ class HexagonalPatchMapper(ImageMapper):
 
             self.num_patches = len(self.trigger_patches)
             self.patch_size = self.neighbor_array.shape[0]
+            self.sector_size = self.sect0_neighbors.shape[0]
 
-            # self.fl_neighbor_array, self.fl_neighbor_patch0_array = [], []
-            # with open(path_fl_neigh, "r") as f:
-            #     next(f)  # skip header
-            #     for line in f:
-            #         # Split, strip newline, convert to int
-            #         neighbors = list(map(int, line.strip().split(",")))
-            #         self.fl_neighbor_array.append(np.array(neighbors, dtype=np.int32))
-            # with open(path_patch0_fl_neigh, "r") as f:
-            #     for line in f:
-            #         # Split, strip newline, convert to int
-            #         neighbors = list(map(int, line.strip().split(",")))
-            #         self.fl_neighbor_patch0_array.append(np.array(neighbors, dtype=np.int32))
-
+            self.supfl_neighbor_l1_mask = self.supfl_neighbor_array_l1 >= 0
+        # Retrieve the camera neighbor array to perform convolutions with cameras different from AdvSiPMCam.
         else:
             neighbor_matrix = geometry.neighbor_matrix
             num_pixels = neighbor_matrix.shape[0]
@@ -736,32 +727,17 @@ class HexagonalPatchMapper(ImageMapper):
             self.cam_neighbor_array = np.full((num_pixels, 7), -1, dtype=int)
             for i, neighbors in enumerate(neighbor_lists):
                 self.cam_neighbor_array[i, :len(neighbors)] = neighbors
-            print("Computed neighbor array is", self.cam_neighbor_array)
+            print("Computed neighbor array for: ", geometry.name)
 
-    def get_reordered_patch(self, raw_vector, patch_index):
-        # Retrieve the patch needed
-        patch = self.trigger_patches[patch_index, :]
-        patched_wf = raw_vector[:, :][patch.astype(bool)]
-
-        # Reorder the array so that all patches have the same spatial order in index
-        unmapped_waveform = np.zeros_like(patched_wf)
-
-        for new, old in enumerate(self.index_map[patch_index]):
-            unmapped_waveform[new] = patched_wf[old]
+    def get_reordered_patch(self, raw_vector, patch_index, out_size):
+        # Retrieve the patch needed remapped to a standarized patch order.
+        if out_size == "patch":
+            mapper = self.index_map
+        elif out_size == "sector":
+            mapper = self.sector_mappings
+        mapper = mapper[patch_index]
+        unmapped_waveform=raw_vector[mapper]
         return unmapped_waveform
-
-    def get_reordered_patch_image(self, image, patch_index):
-        # Retrieve the patch needed
-        image = np.squeeze(image)
-        patch = self.trigger_patches[patch_index, :]
-        patched_im = image[:][patch.astype(bool)]
-
-        # Reorder the array so that all patches have the same spatial order in index
-        unmapped_im = np.zeros_like(patched_im)
-
-        for new, old in enumerate(self.index_map[patch_index]):
-            unmapped_im[new] = patched_im[old]
-        return unmapped_im
 
 
 class ShiftingMapper(ImageMapper):

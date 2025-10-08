@@ -486,6 +486,7 @@ class DLDataReader(Component):
         # Handling the class weights calculation.
         # Scaling by total/2 helps keep the loss to a similar magnitude.
         # The sum of the weights of all examples stays the same.
+        # The RawTriggerReader in patch/sector mode retrieves the bkg from the signal events.
         self.class_weight = None
         if self.process_type == ProcessType.Simulation:
             if self.input_url_background or isinstance(self,DLRawTriggerReader):
@@ -625,9 +626,18 @@ class DLDataReader(Component):
         if isinstance(self,DLRawTriggerReader):
             if self.input_trigger_files:
                 self.example_identifiers = self._add_tdscan_table(self.example_identifiers)
+                # Keep only the events that passed the low level trigger (digital sum or digital sum + tdscan).
                 if self.trigger_cuts:
-                    mask = self.example_identifiers['low_trigger'] == 1
-                    self.example_identifiers = self.example_identifiers[mask]
+                    # For the waveform option keep all the nsb events (as only ~1% survive) 
+                    if self.output_settings == "waveform":
+                        mask = (self.example_identifiers['patch_class'] == 0) | \
+                               ((self.example_identifiers['patch_class'] == 1) & 
+                                (self.example_identifiers['low_trigger'] == 1))
+                        self.example_identifiers = self.example_identifiers[mask]
+                    else:
+                        mask = self.example_identifiers['low_trigger'] == 1
+                        self.example_identifiers = self.example_identifiers[mask]
+            # Retrieve the example identifiers for multiple patches option.
             self.example_identifiers = self._get_raw_example(self.example_identifiers)
 
         self.example_identifiers.sort(["obs_id", "event_id", "tel_id", "tel_type_id"])
@@ -1770,6 +1780,9 @@ def apply_low_trigger(x, mapper, trigger_type, l1_settings, tdscan_settings):
     This method applies a low level trigger to the raw waveform, the trigger options are a digital sum
     per flower or superflower named ``l1``, or a ``tdscan`` algorithm.
 
+    For the training with multiple patches the TDSCAN method may be to slow, as a solution load the 
+    TDSCAN mask from an external file.
+
     Parameters
     ----------
     x : r0_event : np.ndarray
@@ -1780,7 +1793,7 @@ def apply_low_trigger(x, mapper, trigger_type, l1_settings, tdscan_settings):
         String indicating which kind of trigger to apply, l1 or l1+tdscan.
     l1_settings : dict
         Dictionary with the digital sum trigger settings.
-            - ``eps`` : 1 to perform digital sum on flowers, 2 for superflowers.
+            - ``eps`` : `flower`` to perform digital sum on flowers, ``superflower`` for superflowers.
             - ``threshold`` : threshold in ADC counts for the digital sum.
     tdscan_settings : dict
         Dictionary with the tdscan trigger settings.
@@ -1792,25 +1805,22 @@ def apply_low_trigger(x, mapper, trigger_type, l1_settings, tdscan_settings):
 
     Returns
     -------
-    output : np.ndarray
-        The waveform with the extra trigger information in the selected format.
-    trigger_per_patch : np.ndarray
-        Trigger signal per trigger patch.
+    bin_flowers : np.ndarray
+        The trigger mask from the selected trigger algorithm, with shape (num_flowers, time).
     """
     n_pixels, time = x.shape
     # Assign the l1 neighbor list, summing on flowers or superflowers for each flower.
-    l1_list = (
-        mapper.fl_neighbor_l1_list 
-        if l1_settings["eps"] == "flower" 
-        else mapper.supfl_neighbor_l1_list
-    )
-    # flower_sums = np.array(
-    #     [np.sum(x[l1_list[i]], axis=0) 
-    #     for i in np.arange(0, len(l1_list))]
-    # )
-    flower_sums = x[np.array(l1_list)].sum(axis=1)
-    # Thresholding (broadcast back to each pixel in group)
-    bin_flowers = (flower_sums > l1_settings["threshold"]).astype(int)  # shape: (n_flowers, time)
+    # For the superflowers, the outter flowers may not have 6 flower neighbors so need to mask.
+    if l1_settings["eps"] == "flower":
+        l1_list = mapper.fl_neighbor_array_l1
+        flower_sums = x[np.array(l1_list)].sum(axis=1) # shape: (n_flowers, time)
+    else:
+        l1_list = mapper.supfl_neighbor_array_l1
+        l1_mask = mapper.supfl_neighbor_l1_mask
+        flower_sums = (x[l1_list] * l1_mask[..., None]).sum(axis=1) # shape: (n_flowers, time)
+        
+    # Thresholding
+    bin_flowers = (flower_sums > l1_settings["threshold"]).astype(int)
     # TDSCAN mask cleaning:
     if trigger_type == "tdscan":
         num_flowers = len(bin_flowers)
@@ -1861,16 +1871,28 @@ class DLRawTriggerReader(DLWaveformReader):
     """
 
     output_settings = CaselessStrEnum(
-        ["waveform", "balanced_patches", "all_patches", "double_patches"],
+        ["waveform", "balanced_patches", "all_patches", "double_patches", "max_patches"],
         default_value="waveform",
         help=(
-            "Set the type of data in feature vector. "
+            "Set the way to retrieve data from each event. "
             "``waveform``: extract the sequence of selected samples for the complete camera. "
             "``balanced_patches``: extract the sequence of selected samples for equilibrated number of cosmic and nsb patches. "
             "``all_patches``: extract the sequence of selected samples for all patches. "
             "``double_patches``: extract the sequence of selected samples for a random nsb patch and the patch containing the brightest pixel. "
+            "``max_patches``: extract all the nsb patches and all the patches above the cpe_threshold. "
         ),
     ).tag(config=True)
+
+    output_size = CaselessStrEnum(
+        ["patch", "sector", "camera"],
+        default_value = "camera",
+        help=(
+            "Set the number of pixels in the output vector, patch and sector only available for the Advanced SiPM camera. "
+            "``patch``: 343 pixels trigger patches."
+            "``sector``: 29898 pixels patches, approx. 1/3 of the camera. "
+            "``camera``: complete camera. "
+        ),
+    ).tag(config=True) 
 
     add_dummy_channel = Bool(
         default_value = False,
@@ -1922,7 +1944,7 @@ class DLRawTriggerReader(DLWaveformReader):
     ).tag(config=True) 
 
     l1_settings = Dict(
-        default_value ={"eps": "flower", "threshold": 2155},
+        default_value = {"eps": "flower", "threshold": 2140},
         allow_none = True,
         help=(
             "Set the L1 trigger settings, only required when apply_trigger is not None. "
@@ -1965,10 +1987,18 @@ class DLRawTriggerReader(DLWaveformReader):
         )
         
         # Load neighbors arrays and input shapes
-        if self.output_settings in ["all_patches", "balanced_patches", "double_patches"]:                 
-            self.input_shape = (self.image_mappers[self.cam_name].patch_size, self.sequence_length)  
-            self.neighbor_array = self.image_mappers[self.cam_name].neighbor_array
+        if self.output_settings in ["all_patches", "balanced_patches", "double_patches", "max_patches"]:
+            if self.output_size == "patch":                 
+                self.input_shape = (self.image_mappers[self.cam_name].patch_size, self.sequence_length)  
+                self.neighbor_array = self.image_mappers[self.cam_name].neighbor_array
+            elif self.output_size == "sector":
+                self.input_shape = (self.image_mappers[self.cam_name].sector_size, self.sequence_length)
+                self.neighbor_array = self.image_mappers[self.cam_name].sect0_neighbors
+            else:
+                raise ValueError(f"Output settings cannot be in patches mode: {self.output_settings} with output size in camera mode: {self.output_size}.")
+
         elif self.output_settings == "waveform":
+            # Different shapes in case HexagonalPatchMapper or other square pixel mapper is selected.
             if self.image_mappers[self.cam_name].cam_neighbor_array is not None:
                 self.input_shape = (self.image_mappers[self.cam_name].n_pixels, self.sequence_length)
                 self.neighbor_array = self.image_mappers[self.cam_name].cam_neighbor_array
@@ -1979,7 +2009,6 @@ class DLRawTriggerReader(DLWaveformReader):
                     self.sequence_length,
                 )
                 self.neighbor_array = None
-
         if self.add_dummy_channel:
             self.input_shape = self.input_shape + (1,)
         elif self.trigger_output == 'stack':
@@ -1995,7 +2024,7 @@ class DLRawTriggerReader(DLWaveformReader):
             )
 
     def _waveform_mode(self, true_image, true_shower):
-        # Retrieves the complete waveform.
+        # Retrieves the complete waveform, adds the number of pe and the class depending on pe.
         pe = np.int64(true_image.sum())
         if self.input_url_background:
             lbl = np.int64(1 - true_shower)
@@ -2008,7 +2037,7 @@ class DLRawTriggerReader(DLWaveformReader):
         )
 
     def _all_patches_mode(self, true_image, sparse, n_patches):
-        # Retrieves all patches per event.
+        # Retrieves all patches per event, adds the number of pe and the class depending on pe.
         sums = sparse @ true_image
         labels = (sums > self.cpe_threshold).astype(np.int64)
         idxs = np.arange(n_patches, dtype=np.int64)
@@ -2020,6 +2049,7 @@ class DLRawTriggerReader(DLWaveformReader):
 
     def _balanced_patches_mode(self, true_image, sparse, n_patches):
         # Retrieves the maximum equal number of NSB and cosmic patches per event.
+        # Adds the number of pe and the class depending on pe.
         sums = sparse @ true_image
         nsb = np.where(sums == 0)[0]
         shwr = np.where(sums > self.cpe_threshold)[0]
@@ -2039,23 +2069,48 @@ class DLRawTriggerReader(DLWaveformReader):
             classes=classes
         )
 
+    def _max_patches_mode(self, true_image, sparse, n_patches):
+        # Retrieves all the nsb patches and all the patches with pe above a threshold.
+        # Adds the number of pe and the class depending on pe.
+        sums = sparse @ true_image
+        bright = np.argmax(sums)
+        nsb = np.where(sums == 0)[0]
+        above_thr = np.where(sums >= self.cpe_threshold)[0]
+        idxs, labels = [], []
+        # all nsb patches
+        if nsb.size:
+            idxs.extend(nsb.tolist())
+            labels.extend([0] * nsb.size)
+        #  all above threshold patches
+        if above_thr.size:
+            idxs.extend(above_thr.tolist())
+            labels.extend([1] * above_thr.size)
+        # if none, add the brightest sector
+        if len(idxs) == 0:
+            idxs.append(bright)
+            labels.append(1)
+        return dict(
+            patch_idx=np.array(idxs, np.int64),
+            cherenkov=sums[idxs].astype(np.int64),
+            classes=np.array(labels, np.int64)
+        )
+
     def _double_patches_mode(self, true_image, sparse, n_patches):
-        # Retrieves the bright patch and a random nsb patch per event.
+        # Retrieves the brightest patch and a random nsb patch per event.
         sums = sparse @ true_image
         # find brightest patch and one random NSB or fallback
-        bright = np.argmax(true_image)
-        coords = np.vstack([self.image_mappers[self.cam_name].pix_x,
-                            self.image_mappers[self.cam_name].pix_y]).T
-        dist = np.linalg.norm(self.image_mappers[self.cam_name].patch_coords - coords[bright], axis=1)
-        nearest = np.argmin(dist)
+        bright = np.argmax(sums)
         idxs, labels = [], []
-        if sums[nearest] > self.cpe_threshold:
-            idxs.append(nearest); labels.append(1)
-        elif np.max(sums) > self.cpe_threshold:
-            idxs.append(np.argmax(sums)); labels.append(1)
+        T = False
+        if sums[bright] > self.cpe_threshold:
+            idxs.append(bright); labels.append(1)
+            T = True
         nsb = np.where(sums == 0)[0]
         if nsb.size:
             idxs.append(np.random.choice(nsb)); labels.append(0)
+            T = True
+        if T is not True:
+            idxs.append(bright); labels.append(1)
         return dict(
             patch_idx=np.array(idxs, np.int64),
             cherenkov=sums[idxs].astype(np.int64),
@@ -2063,11 +2118,17 @@ class DLRawTriggerReader(DLWaveformReader):
         )
 
     def _add_tdscan_table(self, batch):
+        # Add to the example identifiers the precomputed trigger information.
+        # The h5 trigger files can be generated with the code in https://github.com/jbuces/low_trigger
         tdscan_tables = []
-        n_pixels = 1141
-        n_times = 30
-        bits = n_pixels * n_times
-        packed_len = (bits + 7) // 8
+
+        # Packing info
+        with tables.open_file(self.input_trigger_files[0], 'r') as h5file:
+            node = h5file.get_node('/table')
+            self._trigger_mask_shape = tuple(node._v_attrs.trigger_mask_shape)
+            self._trigger_mask_bits = int(node._v_attrs.trigger_mask_bits)
+            self._trigger_mask_packed_len = int(node._v_attrs.trigger_mask_packed_len)
+            self._trigger_mask_bitorder = str(node._v_attrs.trigger_mask_bitorder)
 
         for file_idx, trigger_file in enumerate(self.input_trigger_files):
             tdscan_table = read_table(trigger_file, "/table")
@@ -2075,30 +2136,14 @@ class DLRawTriggerReader(DLWaveformReader):
                 tdscan_table.remove_column("trigger_per_patch")
             # Add file index column
             tdscan_table.add_column(file_idx, name="file_index", index=0)
-
-            n_rows = len(tdscan_table)
-            packed_arr = np.empty((n_rows, packed_len), dtype=np.uint8)
-            for ii, m in enumerate(tdscan_table["trigger_mask"]):
-                arr = np.asarray(m, dtype=np.uint8).ravel(order="C")   # 0/1 flat
-                p = np.packbits(arr, bitorder="big")
-                # p debería tener tamaño packed_len; si no, rellenar con ceros
-                if p.size < packed_len:
-                    temp = np.zeros(packed_len, dtype=np.uint8)
-                    temp[: p.size] = p
-                    p = temp
-                packed_arr[ii, :] = p
-            # reemplaza la columna por la empaquetada
-            tdscan_table.remove_column("trigger_mask")
-            tdscan_table.add_column(packed_arr, name="trigger_mask")
-
             tdscan_tables.append(tdscan_table)
-
+            
         # Stack all trigger tables
         tdscan_table_all = vstack(tdscan_tables)
-        # Packing info
-        self._trigger_mask_shape = (n_pixels, n_times)
-        self._trigger_mask_bits = bits
-        self._trigger_mask_packed_len = packed_len
+
+        n_rows = len(tdscan_table_all)
+        if n_rows != len(batch):
+            raise ValueError("The events tables and the loaded trigger tables have not the same length!")
         # Join stacked trigger table to batch
         merged = join(
             left=batch,
@@ -2106,7 +2151,6 @@ class DLRawTriggerReader(DLWaveformReader):
             keys=["file_index", "obs_id", "event_id", "tel_id", "table_index"],
             join_type="left"
         )
-
         return merged
 
     def _get_raw_example(self, batch):
@@ -2133,9 +2177,14 @@ class DLRawTriggerReader(DLWaveformReader):
         mapper = self.image_mappers[self.cam_name]
         sparse = None
         n_patches = 0
+        # Load the patches/sector info.
         if mapper.cam_neighbor_array is not None:
-            sparse = csr_matrix(mapper.trigger_patches)
-            n_patches = mapper.trigger_patches.shape[0]
+            if self.output_size == "patch":
+                sparse = csr_matrix(mapper.trigger_patches)
+                n_patches = mapper.trigger_patches.shape[0]
+            elif self.output_size == "sector":
+                sparse = csr_matrix(mapper.sectors_bool)
+                n_patches = mapper.sectors_bool.shape[0]
         records = []
         for row_idx, (file_idx, table_idx, tel_type_id, tel_id, true_shower) in enumerate(batch.iterrows(
             "file_index", "table_index", "tel_type_id", "tel_id", "true_shower_primary_id")
@@ -2145,7 +2194,7 @@ class DLRawTriggerReader(DLWaveformReader):
             with lock:
                 sim_child = self.files[filename].root.simulation.event.telescope.images._f_get_child(tel_table)
                 true_img = get_true_image(sim_child[table_idx])
-
+            # Call functions depending on the output settings.
             mode = self.output_settings
             if mode == 'waveform':
                 out = self._waveform_mode(true_img, true_shower)
@@ -2155,8 +2204,8 @@ class DLRawTriggerReader(DLWaveformReader):
             for p, pe, cl in zip(out['patch_idx'], out['cherenkov'], out['classes']):
                 records.append((row_idx, p, pe, cl))
 
-        idxs, patch_idxs, ch_pe, patch_cls = zip(*records)
-        batch = batch[list(idxs)]
+        row_idxs, patch_idxs, ch_pe, patch_cls = zip(*records)
+        batch = batch[list(row_idxs)]
         batch.add_column(np.array(patch_idxs),name="patch_index", index=6)
         batch.add_column(np.array(ch_pe),   name="cherenkov_pe", index=7)
         batch.add_column(np.array(patch_cls),name="patch_class", index=8)
@@ -2199,7 +2248,7 @@ class DLRawTriggerReader(DLWaveformReader):
             camera_type = self._get_camera_type(
                 list(self.selected_telescopes.keys())[tel_type_id]
             )
-            # Load only the true image from simulation.
+            # Load only the r0 waveform.
             with lock:
                 tel_table = f"tel_{tel_id:03d}"
                 child = self.files[filename].root.r0.event.telescope._f_get_child(tel_table)
@@ -2209,16 +2258,16 @@ class DLRawTriggerReader(DLWaveformReader):
                     self.image_mappers[camera_type].geometry,
                     )
                 waveform = unmapped_waveform.astype(np.int64)
-                # Apply trigger option for the complete waveform always, also valid for image mapping methods
+                # If requested apply trigger option for the complete waveform always (not patches), also valid for image mapping methods.
                 if self.apply_trigger:
-                    if self.input_trigger_files and self.apply_trigger=="tdscan":
-                        # mask = batch["trigger_mask"][i]
+                    # If file provided get the mask from it.
+                    if self.input_trigger_files:# and self.apply_trigger=="tdscan":
                         packed = batch["trigger_mask"][i]   # 1D array uint8 length packed_len
                         bits = self._trigger_mask_bits
                         n_pixels, n_times = self._trigger_mask_shape
                         flat = np.unpackbits(packed, bitorder="big")[:bits]   # vector 0/1
                         mask = flat.reshape((n_pixels, n_times))
-                        mask = mask.astype(bool)
+                        mask = mask.astype(int)
                     else:
                         mask = apply_low_trigger(
                             waveform, 
@@ -2228,6 +2277,7 @@ class DLRawTriggerReader(DLWaveformReader):
                             tdscan_settings=self.tdscan_settings,
                         )
                     bin_pixels = np.repeat(mask, 7, axis=0)  # shape: (n_pixels, time)
+                    # Get the final type of output.
                     if self.subtract_mean:
                         waveform = waveform - self.subtract_mean
                     if self.trigger_output == 'mask':
@@ -2246,9 +2296,9 @@ class DLRawTriggerReader(DLWaveformReader):
                     waveform = self.image_mappers[camera_type].map_image(waveform).astype(np.int64) 
                 # If 'HexagonalPatchMapper' and one of the patches option, crop and reorder the image.
                 elif (self.image_mappers[self.cam_name].cam_neighbor_array is not None 
-                    and self.output_settings in ["all_patches", "balanced_patches", "double_patches"]
+                    and self.output_settings in ["all_patches", "balanced_patches", "double_patches", "max_patches"]
                 ):
-                    waveform = self.image_mappers[self.cam_name].get_reordered_patch(waveform, ptch_idx)
+                    waveform = self.image_mappers[self.cam_name].get_reordered_patch(waveform, ptch_idx, self.output_size)
                 
                 # Option to add a dummy channel to perform 3D convolutions
                 if self.add_dummy_channel:
