@@ -2021,7 +2021,7 @@ class DLRawTriggerReader(DLWaveformReader):
                 f"Patches options are only valid for the Adv SiPM camera, currently using '{self.cam_name}'."
             )
 
-    def _waveform_mode(self, true_image, true_shower):
+    def _waveform_mode(self, true_image):
         # Retrieves the complete waveform, adds the number of pe and the class depending on pe.
         pe = np.int64(true_image.sum())
         lbl = np.int64(pe > self.cpe_threshold)
@@ -2179,8 +2179,8 @@ class DLRawTriggerReader(DLWaveformReader):
                 n_patches = patches.shape[0]                
 
         records = []
-        for row_idx, (file_idx, table_idx, tel_id, true_shower) in enumerate(batch.iterrows(
-            "file_index", "table_index", "tel_id", "true_shower_primary_id")
+        for row_idx, (file_idx, table_idx, tel_id) in enumerate(batch.iterrows(
+            "file_index", "table_index", "tel_id")
         ):
             filename = list(self.files)[file_idx]
             tel_table = f"tel_{tel_id:03d}"
@@ -2190,7 +2190,7 @@ class DLRawTriggerReader(DLWaveformReader):
 
             # Call functions depending on the output settings.
             if self.output_settings == 'waveform':
-                out = self._waveform_mode(true_img, true_shower)
+                out = self._waveform_mode(true_img)
             else:
                 out = getattr(self, f"_{self.output_settings}_mode")(true_img, sparse, n_patches)
 
