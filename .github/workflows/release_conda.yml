@@ -38,14 +38,12 @@ jobs:
         conda env create -f environment.yml
         conda activate dl1-data-handler
 
+    - name: Create conda environment
+      run: |
+        conda env create -f environment.yml
+    
     - name: Build conda package
       run: |
-        conda install conda-build anaconda-client -y
-        conda-build .
-
-    - name: Upload package to Anaconda
-      env:
-        ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
-      run: |
+        conda install -n dl1-data-handler conda-build anaconda-client -y
         PACKAGE_FILE=$(conda build . --output)
         anaconda upload "$PACKAGE_FILE" --user ctlearn-project --label main --force
