@@ -7,7 +7,7 @@ package:
 
 source:
   git_url: https://github.com/cta-observatory/dl1-data-handler.git
-  git_tag: v{{ version }}
+  git_tag: {{ version }}
 
 build:
   noarch: python
