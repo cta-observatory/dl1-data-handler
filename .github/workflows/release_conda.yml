@@ -23,7 +23,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # necesario para git describe
+          fetch-depth: 0  # necesario para git describe y tags
 
       - name: Set up Miniconda
         uses: conda-incubator/setup-miniconda@v3
@@ -48,14 +48,14 @@ jobs:
 
       - name: Build conda package
         run: |
-          echo "Building package with version $VERSION_NUMBER"
-          PACKAGE_FILE=$(conda build . --output)
-          echo "Package built: $PACKAGE_FILE"
+          PACKAGE_FILE=$(conda build .github/conda --output)
+          echo "Package will be built at: $PACKAGE_FILE"
+          conda build .github/conda  # ejecuta la build real
 
       - name: Upload package to Anaconda.org
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
         run: |
-          PACKAGE_FILE=$( conda build .github/conda --output)
-          # Usamos conda run para asegurar que el comando anaconda esté disponible
-          conda run -n base anaconda upload "$PACKAGE_FILE" --user ctlearn-project --label main --force
+          PACKAGE_FILE=$(conda build .github/conda --output)
+          echo "Uploading package: $PACKAGE_FILE"
+          anaconda upload "$PACKAGE_FILE" --user ctlearn-project --label main --force
