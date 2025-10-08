@@ -32,14 +32,17 @@ jobs:
           auto-update-conda: true
 
       - name: Create conda environment
-        run: conda env create -f environment.yml
+        run: |
+          CONDA_NO_PLUGINS=true conda env create -f environment.yml
 
-      - name: Install conda-build and anaconda-client in base
-        run: conda install -c conda-forge conda-build anaconda-client -y
+      - name: Install conda-build and anaconda-client
+        run: |
+          CONDA_NO_PLUGINS=true conda install -c conda-forge conda-build anaconda-client -y
 
       - name: Determine version from Git tag
         id: git_version
-        run: echo "GIT_DESCRIBE_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
+        run: |
+          echo "GIT_DESCRIBE_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
 
       - name: Set dynamic version in meta.yaml
         run: |
@@ -48,14 +51,14 @@ jobs:
 
       - name: Build conda package
         run: |
-          PACKAGE_FILE=$(conda build .github/conda --output)
+          PACKAGE_FILE=$(CONDA_NO_PLUGINS=true conda build .github/conda --output)
           echo "Package will be built at: $PACKAGE_FILE"
-          conda build .github/conda  # ejecuta la build real
+          CONDA_NO_PLUGINS=true conda build .github/conda
 
       - name: Upload package to Anaconda.org
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
         run: |
-          PACKAGE_FILE=$(conda build .github/conda --output)
+          PACKAGE_FILE=$(CONDA_NO_PLUGINS=true conda build .github/conda --output)
           echo "Uploading package: $PACKAGE_FILE"
-          anaconda upload "$PACKAGE_FILE" --user ctlearn-project --label main --force
+          CONDA_NO_PLUGINS=true anaconda upload "$PACKAGE_FILE" --user ctlearn-project --label main --force
