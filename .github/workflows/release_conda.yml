@@ -24,10 +24,28 @@ jobs:
       actions: write
       checks: read
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      
-      - name: Publish to Conda
-        uses: fcakyon/conda-publish-action@v1.3
-        with:
-          subdir: '.github/conda'
-          anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
+    - name: Set up Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        miniconda-version: latest
+        auto-update-conda: true
+
+    - name: Create conda environment
+      run: |
+        conda env create -f environment.yml
+        conda activate dl1-data-handler
+
+    - name: Build conda package
+      run: |
+        conda install conda-build anaconda-client -y
+        conda-build .
+
+    - name: Upload package to Anaconda
+      env:
+        ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+      run: |
+        PACKAGE_FILE=$(conda build . --output)
+        anaconda upload "$PACKAGE_FILE" --user ctlearn-project --label main --force
