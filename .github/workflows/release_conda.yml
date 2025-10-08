@@ -23,7 +23,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # necesario para que git describe detecte todos los tags
+          fetch-depth: 0  # necesario para git describe
 
       - name: Set up Miniconda
         uses: conda-incubator/setup-miniconda@v3
@@ -43,9 +43,7 @@ jobs:
 
       - name: Set dynamic version in meta.yaml
         run: |
-          # Elimina la 'v' inicial si quieres solo números
-          VERSION_NUMBER="${GIT_DESCRIBE_TAG#v}"
-          # Reemplaza la línea de version en meta.yaml
+          VERSION_NUMBER="${GIT_DESCRIBE_TAG#v}"  # elimina la 'v' inicial
           sed -i "s|^{% set version.*%}|{% set version = \"$VERSION_NUMBER\" %}|" .github/conda/meta.yaml
 
       - name: Build conda package
