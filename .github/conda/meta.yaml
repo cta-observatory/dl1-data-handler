@@ -22,7 +22,6 @@ requirements:
     - setuptools_scm >=6.2
   run:
     - python >=3.10
-    - ctapipe >=0.23,<0.26
     - astropy
     - numpy
     - pandas
@@ -31,6 +30,9 @@ requirements:
     - traitlets
     - pydot
     - setuptools
+    - pip:
+        - "ctapipe>=0.23,<0.26"
+
 
 test:
   imports:
