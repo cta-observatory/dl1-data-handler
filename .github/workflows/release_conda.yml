@@ -30,14 +30,15 @@ jobs:
         with:
           miniconda-version: latest
           auto-update-conda: true
+          use-mamba: false   # usa solver clásico
 
       - name: Create conda environment
         run: |
-          CONDA_NO_PLUGINS=true conda env create -f environment.yml
+          CONDA_NO_PLUGINS=true conda env create -f environment.yml --solver classic
 
       - name: Install conda-build and anaconda-client
         run: |
-          CONDA_NO_PLUGINS=true conda install -c conda-forge conda-build anaconda-client -y
+          CONDA_NO_PLUGINS=true conda install -c conda-forge conda-build anaconda-client -y --solver classic
 
       - name: Determine version from Git tag
         id: git_version
