@@ -37,8 +37,13 @@ jobs:
       - name: Install conda-build and anaconda-client in base
         run: conda install -c conda-forge conda-build anaconda-client -y
 
+      - name: Determine version from Git tag
+        id: git_version
+        run: echo "GIT_DESCRIBE_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
+
       - name: Build conda package
         run: |
+          echo "Using version $GIT_DESCRIBE_TAG"
           PACKAGE_FILE=$(conda build . --output)
           echo "Package built: $PACKAGE_FILE"
         shell: bash
