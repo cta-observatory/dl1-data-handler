@@ -23,7 +23,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Trae todo el historial y tags
+          fetch-depth: 0  # necesario para que git describe detecte todos los tags
 
       - name: Set up Miniconda
         uses: conda-incubator/setup-miniconda@v3
@@ -41,12 +41,18 @@ jobs:
         id: git_version
         run: echo "GIT_DESCRIBE_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
 
+      - name: Set dynamic version in meta.yaml
+        run: |
+          # Elimina la 'v' inicial si quieres solo números
+          VERSION_NUMBER="${GIT_DESCRIBE_TAG#v}"
+          # Reemplaza la línea de version en meta.yaml
+          sed -i "s|^{% set version.*%}|{% set version = \"$VERSION_NUMBER\" %}|" .github/conda/meta.yaml
+
       - name: Build conda package
         run: |
-          echo "Using version $GIT_DESCRIBE_TAG"
+          echo "Building package with version $VERSION_NUMBER"
           PACKAGE_FILE=$(conda build . --output)
           echo "Package built: $PACKAGE_FILE"
-        shell: bash
 
       - name: Upload package to Anaconda.org
         env:
@@ -54,4 +60,3 @@ jobs:
         run: |
           PACKAGE_FILE=$(conda build . --output)
           anaconda upload "$PACKAGE_FILE" --user ctlearn-project --label main --force
-        shell: bash
