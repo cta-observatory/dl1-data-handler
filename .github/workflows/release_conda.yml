@@ -6,39 +6,45 @@ on:
       - conda_cd
   release:
     types: [published]
-
   workflow_dispatch:
 
 jobs:
   condapublish:
-      strategy:
-        matrix:
-          os: [ubuntu-22.04]
-          pyv: ["3.10"]
-        max-parallel: 5
-      runs-on: ${{ matrix.os }}
-      permissions:
-        id-token: write
-        contents: write
-        deployments: write
-        statuses: write
-        actions: write
-        checks: read
-      steps:
-      - uses: actions/checkout@v4
+    strategy:
+      matrix:
+        os: [ubuntu-22.04]
+        pyv: ["3.10"]
+      max-parallel: 5
+    runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+      contents: write
+      deployments: write
+      statuses: write
+      actions: write
+      checks: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           
-      - name: Set up Python ${{ matrix.pyv }}
+      - name: Setup Miniconda and mamba
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: ${{ matrix.pyv }}
+          auto-update-conda: true
+          activate-environment: base
+          use-mamba: true
+
+      - name: Install build tools
         run: |
-          conda install -y python=${{ matrix.pyv }}
-          
-      - name: Add conda to system path
-        run: |
-          # $CONDA is an environment variable pointing to the root of the miniconda directory
-          echo $CONDA/bin >> $GITHUB_PATH
-          
-      - name: publish-to-conda
+          mamba install -y -c conda-forge anaconda-client conda-build conda-verify
+
+      - name: Add conda to system PATH
+        run: echo $CONDA/bin >> $GITHUB_PATH
+
+      - name: Publish to Conda
         uses: fcakyon/conda-publish-action@v1.3
         with:
           subdir: '.github/conda'
