@@ -24,26 +24,8 @@ jobs:
       actions: write
       checks: read
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          
-      - name: Setup Miniconda and mamba
-        uses: conda-incubator/setup-miniconda@v3
-        with:
-          python-version: ${{ matrix.pyv }}
-          auto-update-conda: true
-          activate-environment: base
-          use-mamba: true
 
-      - name: Install build tools
-        run: |
-          mamba install -y -c conda-forge anaconda-client conda-build conda-verify
-
-      - name: Add conda to system PATH
-        run: echo $CONDA/bin >> $GITHUB_PATH
-
+      
       - name: Publish to Conda
         uses: fcakyon/conda-publish-action@v1.3
         with:
