@@ -1505,8 +1505,6 @@ def get_unmapped_waveform(
             sequence_position = waveform.shape[1] // 2 - 1
         elif settings["seq_position"] == "maximum":
             sequence_position = np.argmax(np.sum(waveform, axis=0))
-            # max_index_flat = np.argmax(waveform)
-            # pixel_index, sequence_position = np.unravel_index(max_index_flat, waveform.shape)
         # Calculate start and stop positions
         start = int(1 + sequence_position - settings["seq_length"] / 2)
         stop =  int(1 + sequence_position + settings["seq_length"] / 2)
@@ -1808,7 +1806,7 @@ def apply_low_trigger(x, mapper, trigger_type, l1_settings, tdscan_settings):
     bin_flowers : np.ndarray
         The trigger mask from the selected trigger algorithm, with shape (num_flowers, time).
     """
-    n_pixels, time = x.shape
+    time = x.shape[1]
     # Assign the l1 neighbor list, summing on flowers or superflowers for each flower.
     # For the superflowers, the outter flowers may not have 6 flower neighbors so need to mask.
     if l1_settings["eps"] == "flower":
@@ -1846,8 +1844,8 @@ def apply_low_trigger(x, mapper, trigger_type, l1_settings, tdscan_settings):
 
             # Get total values in the window for each time frame using broadcasting
             total = cumsum_l1[neighbors][:, end] - cumsum_l1[neighbors][:, start]  # shape: (num_neighbors, time)
-            total_sum = np.sum(total, axis=0)  # sum across neighbors
-            tdscan_flowers[i] = (total_sum >= tdscan_settings["min_pts"]).astype(np.float32)
+            # sum across neighbors and threshold.
+            tdscan_flowers[i] = (np.sum(total, axis=0) >= tdscan_settings["min_pts"]).astype(np.float32)
         bin_flowers = tdscan_flowers # shape: (n_flowers, time)
 
     return bin_flowers
@@ -2026,26 +2024,23 @@ class DLRawTriggerReader(DLWaveformReader):
     def _waveform_mode(self, true_image, true_shower):
         # Retrieves the complete waveform, adds the number of pe and the class depending on pe.
         pe = np.int64(true_image.sum())
-        if self.input_url_background:
-            lbl = np.int64(1 - true_shower)
-        else:
-            lbl = np.int64(pe > self.cpe_threshold)
-        return dict(
-            patch_idx=[0],
-            cherenkov=[pe],
-            classes=[lbl]
-        )
+        lbl = np.int64(pe > self.cpe_threshold)
+        return {
+            "patch_idx": [0],
+            "cherenkov": [pe],
+            "classes": [lbl],
+        }
 
     def _all_patches_mode(self, true_image, sparse, n_patches):
         # Retrieves all patches per event, adds the number of pe and the class depending on pe.
         sums = sparse @ true_image
         labels = (sums > self.cpe_threshold).astype(np.int64)
         idxs = np.arange(n_patches, dtype=np.int64)
-        return dict(
-            patch_idx=idxs,
-            cherenkov=sums.astype(np.int64),
-            classes=labels
-        )
+        return {
+            "patch_idx": idxs,
+            "cherenkov": sums.astype(np.int64),
+            "classes": labels,
+        }
 
     def _balanced_patches_mode(self, true_image, sparse, n_patches):
         # Retrieves the maximum equal number of NSB and cosmic patches per event.
@@ -2063,13 +2058,13 @@ class DLRawTriggerReader(DLWaveformReader):
         else:
             idxs = np.array([np.random.randint(0, n_patches)], np.int64)
             classes = np.array([int(sums[idxs[0]] > self.cpe_threshold)], np.int64)
-        return dict(
-            patch_idx=idxs,
-            cherenkov=sums[idxs].astype(np.int64),
-            classes=classes
-        )
+        return {
+            "patch_idx": np.array(idxs, np.int64),
+            "cherenkov": sums[idxs].astype(np.int64),
+            "classes": np.array(labels, np.int64),
+        }
 
-    def _max_patches_mode(self, true_image, sparse, n_patches):
+    def _max_patches_mode(self, true_image, sparse, *args):
         # Retrieves all the nsb patches and all the patches with pe above a threshold.
         # Adds the number of pe and the class depending on pe.
         sums = sparse @ true_image
@@ -2089,33 +2084,30 @@ class DLRawTriggerReader(DLWaveformReader):
         if len(idxs) == 0:
             idxs.append(bright)
             labels.append(1)
-        return dict(
-            patch_idx=np.array(idxs, np.int64),
-            cherenkov=sums[idxs].astype(np.int64),
-            classes=np.array(labels, np.int64)
-        )
+        return {
+            "patch_idx": np.array(idxs, np.int64),
+            "cherenkov": sums[idxs].astype(np.int64),
+            "classes": np.array(labels, np.int64),
+        }
 
-    def _double_patches_mode(self, true_image, sparse, n_patches):
+    def _double_patches_mode(self, true_image, sparse, *args):
         # Retrieves the brightest patch and a random nsb patch per event.
         sums = sparse @ true_image
         # find brightest patch and one random NSB or fallback
         bright = np.argmax(sums)
         idxs, labels = [], []
-        T = False
         if sums[bright] > self.cpe_threshold:
             idxs.append(bright); labels.append(1)
-            T = True
         nsb = np.where(sums == 0)[0]
         if nsb.size:
             idxs.append(np.random.choice(nsb)); labels.append(0)
-            T = True
-        if T is not True:
+        if not idxs:
             idxs.append(bright); labels.append(1)
-        return dict(
-            patch_idx=np.array(idxs, np.int64),
-            cherenkov=sums[idxs].astype(np.int64),
-            classes=np.array(labels, np.int64)
-        )
+        return {
+            "patch_idx": np.array(idxs, np.int64),
+            "cherenkov": sums[idxs].astype(np.int64),
+            "classes": np.array(labels, np.int64),
+        }
 
     def _add_tdscan_table(self, batch):
         # Add to the example identifiers the precomputed trigger information.
@@ -2175,31 +2167,32 @@ class DLRawTriggerReader(DLWaveformReader):
             The input batch with the appended patch index, class and true Cherenkov p.e.
         """
         mapper = self.image_mappers[self.cam_name]
-        sparse = None
-        n_patches = 0
+        sparse, n_patches = None, 0
         # Load the patches/sector info.
         if mapper.cam_neighbor_array is not None:
-            if self.output_size == "patch":
-                sparse = csr_matrix(mapper.trigger_patches)
-                n_patches = mapper.trigger_patches.shape[0]
-            elif self.output_size == "sector":
-                sparse = csr_matrix(mapper.sectors_bool)
-                n_patches = mapper.sectors_bool.shape[0]
+            patches = {
+                "patch": mapper.trigger_patches,
+                "sector": mapper.sectors_bool
+            }.get(self.output_size)
+            if patches is not None:
+                sparse = csr_matrix(patches)
+                n_patches = patches.shape[0]                
+
         records = []
-        for row_idx, (file_idx, table_idx, tel_type_id, tel_id, true_shower) in enumerate(batch.iterrows(
-            "file_index", "table_index", "tel_type_id", "tel_id", "true_shower_primary_id")
+        for row_idx, (file_idx, table_idx, tel_id, true_shower) in enumerate(batch.iterrows(
+            "file_index", "table_index", "tel_id", "true_shower_primary_id")
         ):
             filename = list(self.files)[file_idx]
             tel_table = f"tel_{tel_id:03d}"
             with lock:
                 sim_child = self.files[filename].root.simulation.event.telescope.images._f_get_child(tel_table)
                 true_img = get_true_image(sim_child[table_idx])
+
             # Call functions depending on the output settings.
-            mode = self.output_settings
-            if mode == 'waveform':
+            if self.output_settings == 'waveform':
                 out = self._waveform_mode(true_img, true_shower)
             else:
-                out = getattr(self, f"_{mode}_mode")(true_img, sparse, n_patches)
+                out = getattr(self, f"_{self.output_settings}_mode")(true_img, sparse, n_patches)
 
             for p, pe, cl in zip(out['patch_idx'], out['cherenkov'], out['classes']):
                 records.append((row_idx, p, pe, cl))
@@ -2261,13 +2254,10 @@ class DLRawTriggerReader(DLWaveformReader):
                 # If requested apply trigger option for the complete waveform always (not patches), also valid for image mapping methods.
                 if self.apply_trigger:
                     # If file provided get the mask from it.
-                    if self.input_trigger_files:# and self.apply_trigger=="tdscan":
+                    if self.input_trigger_files and "trigger_mask" in batch.colnames:
                         packed = batch["trigger_mask"][i]   # 1D array uint8 length packed_len
-                        bits = self._trigger_mask_bits
-                        n_pixels, n_times = self._trigger_mask_shape
-                        flat = np.unpackbits(packed, bitorder="big")[:bits]   # vector 0/1
-                        mask = flat.reshape((n_pixels, n_times))
-                        mask = mask.astype(int)
+                        flat = np.unpackbits(packed, bitorder="big")[:self._trigger_mask_bits]   # vector 0/1
+                        mask = flat.reshape(self._trigger_mask_shape).astype(int)
                     else:
                         mask = apply_low_trigger(
                             waveform, 
@@ -2279,15 +2269,15 @@ class DLRawTriggerReader(DLWaveformReader):
                     bin_pixels = np.repeat(mask, 7, axis=0)  # shape: (n_pixels, time)
                     # Get the final type of output.
                     if self.subtract_mean:
-                        waveform = waveform - self.subtract_mean
+                        waveform -= self.subtract_mean
                     if self.trigger_output == 'mask':
-                        waveform = waveform * bin_pixels # shape: (n_pixels, time)
+                        waveform *= bin_pixels # shape: (n_pixels, time)
                     elif self.trigger_output == 'binary':
                         waveform = bin_pixels
                     elif self.trigger_output == 'stack':
                         waveform = np.stack([waveform, bin_pixels], axis=-1) # shape: (n_pixels, time, 2)
                 elif self.subtract_mean:
-                    waveform = waveform - self.subtract_mean
+                    waveform -= self.subtract_mean
                 # Apply the 'ImageMapper' whenever the index matrix is not None or 'HexagonalPatchMapper' not called (only for the 'waveform' option).
                 # Otherwise, return the unmapped waveform if 'waveform' in ouput options.
                 if (self.image_mappers[self.cam_name].cam_neighbor_array is None 

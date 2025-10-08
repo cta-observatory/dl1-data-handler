@@ -733,7 +733,7 @@ class HexagonalPatchMapper(ImageMapper):
         # Retrieve the patch needed remapped to a standarized patch order.
         if out_size == "patch":
             mapper = self.index_map
-        elif out_size == "sector":
+        else: #sector
             mapper = self.sector_mappings
         mapper = mapper[patch_index]
         unmapped_waveform=raw_vector[mapper]
