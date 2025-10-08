@@ -2054,10 +2054,10 @@ class DLRawTriggerReader(DLWaveformReader):
                 np.random.choice(shwr, cnt, False),
                 np.random.choice(nsb, cnt, False)
             ])
-            classes = np.array([int(sums[i] > self.cpe_threshold) for i in idxs], np.int64)
+            labels = np.array([int(sums[i] > self.cpe_threshold) for i in idxs], np.int64)
         else:
             idxs = np.array([np.random.randint(0, n_patches)], np.int64)
-            classes = np.array([int(sums[idxs[0]] > self.cpe_threshold)], np.int64)
+            labels = np.array([int(sums[idxs[0]] > self.cpe_threshold)], np.int64)
         return {
             "patch_idx": np.array(idxs, np.int64),
             "cherenkov": sums[idxs].astype(np.int64),
