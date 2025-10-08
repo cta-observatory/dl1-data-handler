@@ -34,7 +34,14 @@ jobs:
 
       - name: Create conda environment
         run: |
-          CONDA_NO_PLUGINS=true conda env create -f environment.yml --solver classic
+          conda config --add channels conda-forge
+          conda config --add channels defaults
+          conda config --set channel_priority strict
+          conda config --set always_yes true
+          conda config --set report_errors false
+          conda install -n base conda-libmamba-solver -c conda-forge
+          CONDA_NO_PLUGINS=true conda env create -f environment.yml --solver libmamba
+        
 
       - name: Install conda-build and anaconda-client
         run: |
