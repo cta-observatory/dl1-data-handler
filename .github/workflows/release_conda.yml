@@ -28,6 +28,9 @@ jobs:
           miniconda-version: latest
           auto-update-conda: true
 
+      - name: Install conda-build
+        run: conda install -c conda-forge conda-build anaconda-client -y
+
       - name: Create conda environment
         run: conda env create -f environment.yml
 
