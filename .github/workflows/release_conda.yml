@@ -24,26 +24,22 @@ jobs:
       actions: write
       checks: read
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Set up Miniconda
-      uses: conda-incubator/setup-miniconda@v3
-      with:
-        miniconda-version: latest
-        auto-update-conda: true
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniconda-version: latest
+          auto-update-conda: true
 
-    - name: Create conda environment
-      run: |
-        conda env create -f environment.yml
-        conda activate dl1-data-handler
+      - name: Create conda environment
+        run: conda env create -f environment.yml
 
-    - name: Create conda environment
-      run: |
-        conda env create -f environment.yml
-    
-    - name: Build conda package
-      run: |
-        conda install -n dl1-data-handler conda-build anaconda-client -y
-        PACKAGE_FILE=$(conda build . --output)
-        anaconda upload "$PACKAGE_FILE" --user ctlearn-project --label main --force
+      - name: Build conda package
+        run: |
+          conda install -n dl1-data-handler conda-build anaconda-client -y
+          PACKAGE_FILE=$(conda build . --output)
+          anaconda upload "$PACKAGE_FILE" --user ctlearn-project --label main --force
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
