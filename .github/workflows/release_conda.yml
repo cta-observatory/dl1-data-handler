@@ -7,18 +7,8 @@ on:
     types: [published]
   workflow_dispatch:
 
-name: Build and Upload Conda Package
-
-on:
-  push:
-    branches: [conda_cd]
-  release:
-    types: [published]
-  workflow_dispatch:
-
 jobs:
   publish:
-    # Se ejecuta en el último Ubuntu disponible
     runs-on: ubuntu-22.04
 
     steps:
