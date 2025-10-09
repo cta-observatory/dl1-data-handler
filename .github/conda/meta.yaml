@@ -1,5 +1,5 @@
 {% set name = "dl1_data_handler" %}
-{% set version = os.environ.get('GIT_DESCRIBE_TAG', '0.0.0') %}
+{% set version = os.environ.get('PACKAGE_VERSION', '0.0.0') %}
 
 package:
   name: {{ name }}
