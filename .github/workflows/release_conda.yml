@@ -7,18 +7,42 @@ on:
     types: [published]
   workflow_dispatch:
 
+name: Build and Upload Conda Package
+
+on:
+  push:
+    branches: [conda_cd]
+  release:
+    types: [published]
+  workflow_dispatch:
+
 jobs:
-  condapublish:
+  publish:
+    # Se ejecuta en el último Ubuntu disponible
     runs-on: ubuntu-22.04
-    permissions:
-      id-token: write
-      contents: write
-      deployments: write
-      statuses: write
-      actions: write
-      checks: read
-  
-  build:
-    uses: openalea/action-build-publish-anaconda/.github/workflows/openalea_ci.yml@main
-    secrets:
-      anaconda_token: ${{ secrets.ANACONDA_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Conda/Miniconda
+        # Inicializa el entorno Conda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          # Versión de Python a usar para el build
+          python-version: 3.10
+          # Opcional: Instalar mamba para acelerar la resolución de dependencias
+          mamba-version: "*"
+          # Esto configura las variables de entorno necesarias
+          activate-environment: build-env 
+          
+      - name: Build and upload Conda package to Anaconda.org
+        uses: cct-group/build-and-upload-conda-packages@v1
+        with:
+          channel: 'ctlearn-project' 
+          anaconda-token: ${{ secrets.ANACONDA_TOKEN }}
+          
+          platforms: 'linux-64' 
+          
+          # Usar mamba para el proceso de build
+          mambabuild: true
