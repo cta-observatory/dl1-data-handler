@@ -6,17 +6,13 @@ package:
   version: {{ version }}
 
 source:
-  # ------------------------------------------------------------------
-  # ¡CORRECCIÓN CRUCIAL! Usar el código ya clonado por GitHub Actions.
-  # Esto elimina el error 'git checkout'
-  # ------------------------------------------------------------------
+
   path: ../../ 
 
 build:
   noarch: python
   number: 0
   script: "{{ PYTHON }} -m pip install . --no-deps -vv"
-
 
 requirements:
   host:
