@@ -21,8 +21,7 @@ jobs:
         uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: '3.10' 
-          channels: conda-forge,defaults 
-          auto-install-conda: true
+          channels: conda-forge 
           auto-update-conda: true
           mamba-version: "*"
           activate-environment: false 
