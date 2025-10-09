@@ -17,18 +17,8 @@ jobs:
       statuses: write
       actions: write
       checks: read
-
-    env:
-      CONDA_PKGS_DIRS: ~/conda_pkgs_dir
-
-    steps:
-      # 1️⃣ Checkout repo
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-    build:
-      uses: openalea/action-build-publish-anaconda/.github/conda/meta.yaml
-      secrets:
-        anaconda_token: ${{ secrets.ANACONDA_TOKEN }}
+  
+  build:
+    uses: openalea/action-build-publish-anaconda/.github/conda/meta.yaml
+    secrets:
+      anaconda_token: ${{ secrets.ANACONDA_TOKEN }}
