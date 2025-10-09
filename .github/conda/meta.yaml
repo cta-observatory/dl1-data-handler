@@ -1,18 +1,22 @@
 {% set name = "dl1_data_handler" %}
-{% set version = os.environ.get('PACKAGE_VERSION', '0.0.0') %}
+{% set version = os.environ.get('PACKAGE_VERSION', '0.0.0+dev') %}
 
 package:
   name: {{ name }}
   version: {{ version }}
 
 source:
-  git_url: https://github.com/cta-observatory/dl1-data-handler.git
-  git_tag: {{ version }}
+  # ------------------------------------------------------------------
+  # ¡CORRECCIÓN CRUCIAL! Usar el código ya clonado por GitHub Actions.
+  # Esto elimina el error 'git checkout'
+  # ------------------------------------------------------------------
+  path: ../../ 
 
 build:
   noarch: python
   number: 0
   script: "{{ PYTHON }} -m pip install . --no-deps -vv"
+
 
 requirements:
   host:
