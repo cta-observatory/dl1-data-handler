@@ -16,7 +16,6 @@ jobs:
         uses: actions/checkout@v4
       
       # 1. Configurar Miniconda y Mamba
-      # Esta acción hace que los comandos 'conda' y 'mamba' estén disponibles.
       - name: Setup Miniconda and Conda Tools
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -25,40 +24,40 @@ jobs:
           auto-install-conda: true
           auto-update-conda: true
           mamba-version: "*"
-          # Esto es crucial: desactiva la activación automática pero no rompe el entorno
           activate-environment: false 
           
       # 2. INSTALACIÓN DE HERRAMIENTAS DE DESPLIEGUE
-      # Instala anaconda-client y conda-build en el entorno base
       - name: Install anaconda-client and conda-build
         shell: bash
         run: |
           mamba install anaconda-client conda-build -y
           
-      # 3. Configurar Autenticación para Anaconda.org (¡CORRECCIÓN AQUÍ!)
-      # Usamos 'conda run' para asegurarnos de que el comando 'anaconda' se ejecute 
-      # dentro del entorno donde fue instalado (el entorno base).
+      # 3. Configurar Autenticación para Anaconda.org
       - name: Configure Anaconda Token
         shell: bash
         run: |
           conda run anaconda config --set upload_token ${{ secrets.ANACONDA_TOKEN }}
           
-      # 4. Construir y Subir el Paquete (¡CORRECCIÓN AQUÍ!)
-      - name: Conda Build and Upload Package
+      # 4. CONSTRUIR EL PAQUETE (Depuración añadida)
+      - name: Conda Build Package (Debugging)
         shell: bash
         run: |
-          # 1. Ruta al recetario
+          CONDA_RECIPE_DIR=".github/conda"
+          echo "Starting conda build for recipe in: $CONDA_RECIPE_DIR"
+          
+          # Ejecutamos conda build con --debug para ver la causa del error.
+          # Esto debería aparecer en los logs de GitHub Actions.
+          conda run conda build $CONDA_RECIPE_DIR --debug 
+          
+      # 5. SUBIR EL PAQUETE (Solo si el paso 4 es exitoso)
+      - name: Upload Package to Anaconda.org
+        shell: bash
+        run: |
           CONDA_RECIPE_DIR=".github/conda"
           
-          # 2. --- FASE DE CONSTRUCCIÓN ---
-          # Usamos 'conda run' para garantizar que el comando 'conda build' funcione
-          conda run conda build $CONDA_RECIPE_DIR
-          
-          # 3. --- FASE DE SUBIDA ---
-          # Obtenemos la ruta del paquete construido
-          # Nota: Aquí usamos 'conda run' otra vez por seguridad
+          # Obtenemos la ruta del paquete (asumiendo que el build fue exitoso)
           PACKAGE_PATH=$(conda run conda build $CONDA_RECIPE_DIR --output)
           
-          # 4. Subimos el archivo con 'conda run anaconda upload'
           echo "Uploading $PACKAGE_PATH to ctlearn-project channel..."
+          # Subimos el archivo con 'conda run anaconda upload'
           conda run anaconda upload "$PACKAGE_PATH" --force --user 'ctlearn-project'
