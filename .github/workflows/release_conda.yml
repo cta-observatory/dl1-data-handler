@@ -3,8 +3,6 @@ name: Release Conda
 on:
   release:
     types: [published]
-  push:
-    branches: [conda_cd]
   workflow_dispatch:
 
 jobs:
