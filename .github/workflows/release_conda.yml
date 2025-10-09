@@ -1,10 +1,12 @@
 name: Release Conda
 
 on:
-  push:
-    branches: [conda_cd]
+  # Solo se ejecuta en 'release' para asegurar que siempre haya una etiqueta válida
   release:
     types: [published]
+  # Mantengo estos activadores, pero la versión será '0.0.0-dev' o 'latest'
+  push:
+    branches: [conda_cd]
   workflow_dispatch:
 
 jobs:
@@ -38,26 +40,27 @@ jobs:
         run: |
           conda run anaconda config --set upload_token ${{ secrets.ANACONDA_TOKEN }}
           
-      # 4. CONSTRUIR EL PAQUETE (Depuración añadida)
-      - name: Conda Build Package (Debugging)
+      # 4. Construir y Subir el Paquete (Dinámicamente)
+      - name: Conda Build and Upload Package
         shell: bash
         run: |
           CONDA_RECIPE_DIR=".github/conda"
-          echo "Starting conda build for recipe in: $CONDA_RECIPE_DIR"
+          ANACONDA_CHANNEL="ctlearn-project"
+
+
+          VERSION="${{ github.event.release.tag_name }}"
+
           
-          # Ejecutamos conda build con --debug para ver la causa del error.
-          # Esto debería aparecer en los logs de GitHub Actions.
-          conda run conda build $CONDA_RECIPE_DIR --debug 
+          echo "Building package version: $VERSION"
           
-      # 5. SUBIR EL PAQUETE (Solo si el paso 4 es exitoso)
-      - name: Upload Package to Anaconda.org
-        shell: bash
-        run: |
-          CONDA_RECIPE_DIR=".github/conda"
+          # --- FASE DE CONSTRUCCIÓN ---
+          # 1. Pasamos la versión como variable de entorno PACKAGE_VERSION
+          conda run PACKAGE_VERSION=$VERSION conda build $CONDA_RECIPE_DIR 
           
-          # Obtenemos la ruta del paquete (asumiendo que el build fue exitoso)
-          PACKAGE_PATH=$(conda run conda build $CONDA_RECIPE_DIR --output)
+          # 2. --- FASE DE SUBIDA ---
+          # Obtenemos la ruta del paquete construido
+          PACKAGE_PATH=$(conda run PACKAGE_VERSION=$VERSION conda build $CONDA_RECIPE_DIR --output)
           
-          echo "Uploading $PACKAGE_PATH to ctlearn-project channel..."
-          # Subimos el archivo con 'conda run anaconda upload'
-          conda run anaconda upload "$PACKAGE_PATH" --force --user 'ctlearn-project'
+          # 3. Subimos el archivo
+          echo "Uploading $PACKAGE_PATH to $ANACONDA_CHANNEL channel..."
+          conda run anaconda upload "$PACKAGE_PATH" --force --user $ANACONDA_CHANNEL
