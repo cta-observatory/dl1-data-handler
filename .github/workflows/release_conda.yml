@@ -55,9 +55,16 @@ jobs:
         run: |
           mamba install -y -c conda-forge conda-build anaconda-client
 
+      # Detectar ruta base de conda (segura en cualquier runner)
+      - name: Detect Conda base path
+        id: conda_path
+        run: |
+          echo "CONDA_BASE=$(conda info --base)" >> $GITHUB_ENV
+          echo "Conda base is: $(conda info --base)"
+
       - name: Verify conda-build installation
         run: |
-          source ~/miniforge3/etc/profile.d/conda.sh
+          source $CONDA_BASE/etc/profile.d/conda.sh
           conda activate base
           which conda
           conda --version
@@ -76,7 +83,7 @@ jobs:
 
       - name: Build conda package
         run: |
-          source ~/miniforge3/etc/profile.d/conda.sh
+          source $CONDA_BASE/etc/profile.d/conda.sh
           conda activate base
           echo "Conda build version: $(conda build --version)"
           PACKAGE_FILE=$(conda build .github/conda --output)
@@ -87,7 +94,7 @@ jobs:
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
         run: |
-          source ~/miniforge3/etc/profile.d/conda.sh
+          source $CONDA_BASE/etc/profile.d/conda.sh
           conda activate base
           PACKAGE_FILE=$(conda build .github/conda --output)
           echo "Uploading package: $PACKAGE_FILE"
