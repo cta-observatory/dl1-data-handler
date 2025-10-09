@@ -1,10 +1,9 @@
 name: Release Conda
 
 on:
-  # Solo se ejecuta en 'release' para asegurar que siempre haya una etiqueta válida
+  # Se ejecuta tanto en release como en push
   release:
     types: [published]
-  # Mantengo estos activadores, pero la versión será '0.0.0-dev' o 'latest'
   push:
     branches: [conda_cd]
   workflow_dispatch:
@@ -14,9 +13,12 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository and fetch tags
         uses: actions/checkout@v4
-      
+        with:
+          # CLAVE: Descarga el historial completo y las etiquetas para 'git describe'
+          fetch-depth: 0 
+          
       # 1. Configurar Miniconda y Mamba
       - name: Setup Miniconda and Conda Tools
         uses: conda-incubator/setup-miniconda@v3
@@ -40,25 +42,47 @@ jobs:
         run: |
           conda run anaconda config --set upload_token ${{ secrets.ANACONDA_TOKEN }}
           
-      # 4. Construir y Subir el Paquete (Dinámicamente)
+      # 4. Construir y Subir el Paquete (Usando la Última Etiqueta de Git)
       - name: Conda Build and Upload Package
         shell: bash
         run: |
           CONDA_RECIPE_DIR=".github/conda"
           ANACONDA_CHANNEL="ctlearn-project"
-          FULL_TAG="${{ github.event.release.tag_name }}"
+          TEST_FLAG="--no-test" # Asumimos que quieres saltarte el test siempre
+
+          # ------------------------------------------------------------------
+          # CLAVE: Lógica robusta para obtener la última etiqueta
+          # ------------------------------------------------------------------
+          # Intentar obtener la última etiqueta de Git y eliminar el prefijo 'v'
+          # '|| echo "0.0.0+dev"' proporciona un valor de respaldo si no hay etiquetas.
+          FULL_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0+dev")
+          
+          # Eliminar el prefijo 'v' o 'V'
           VERSION="${FULL_TAG#v}"
-          VERSION="${VERSION#V}" 
+          VERSION="${VERSION#V}"
+          
+          # Si estamos en un release, nos aseguramos de que el TEST_FLAG no se use 
+          # si el meta.yaml no requiere ser saltado.
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+              TEST_FLAG=""
+          fi
+
           echo "Building package version: $VERSION"
           
-          # --- FASE DE CONSTRUCCIÓN ---
-          # 1. Pasamos la versión como variable de entorno PACKAGE_VERSION
-          conda run PACKAGE_VERSION=$VERSION conda build $CONDA_RECIPE_DIR  --no-test
+          # Exportamos la variable para que sea leída por meta.yaml
+          export PACKAGE_VERSION=$VERSION
+          
+          # 1. --- FASE DE CONSTRUCCIÓN ---
+          conda run conda build $CONDA_RECIPE_DIR $TEST_FLAG
           
           # 2. --- FASE DE SUBIDA ---
-          # Obtenemos la ruta del paquete construido
-          PACKAGE_PATH=$(conda run PACKAGE_VERSION=$VERSION conda build $CONDA_RECIPE_DIR --output --no-test)
+          # Obtenemos la ruta (Necesitamos 'export' y 'conda run' de nuevo)
+          PACKAGE_PATH=$(conda run conda build $CONDA_RECIPE_DIR --output)
           
-          # 3. Subimos el archivo
-          echo "Uploading $PACKAGE_PATH to $ANACONDA_CHANNEL channel..."
-          conda run anaconda upload "$PACKAGE_PATH" --force --user $ANACONDA_CHANNEL
+          # 3. Subimos el archivo (Solo si no es una versión de desarrollo)
+          if [[ "$VERSION" != "0.0.0+dev" ]]; then
+              echo "Uploading $PACKAGE_PATH to $ANACONDA_CHANNEL channel..."
+              conda run anaconda upload "$PACKAGE_PATH" --force --user $ANACONDA_CHANNEL
+          else
+              echo "Skipping upload: Version is $VERSION (development)."
+          fi
