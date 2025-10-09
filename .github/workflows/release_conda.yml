@@ -23,7 +23,7 @@ jobs:
       - name: Setup Miniconda and Conda Tools
         uses: conda-incubator/setup-miniconda@v3
         with:
-          python-version: 3.10
+          python-version: "3.10"
           channels: conda-forge,defaults 
           # Instalar conda-build y anaconda-client en el entorno base
           auto-install-conda: true
