@@ -2,8 +2,7 @@ name: Release Conda
 
 on:
   push:
-    branches:
-      - conda_cd
+    branches: [conda_cd]
   release:
     types: [published]
   workflow_dispatch:
@@ -23,48 +22,65 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # necesario para git describe y tags
+          fetch-depth: 0
 
-      - name: Set up Miniconda
+      # ⚡ Instalar Miniforge (mamba integrado y más rápido)
+      - name: Set up Miniforge
         uses: conda-incubator/setup-miniconda@v3
         with:
-          miniconda-version: latest
-          auto-update-conda: true
-          use-mamba: false
+          miniforge-version: latest
+          use-mamba: true
+          auto-activate-base: true
+          activate-environment: ""
+          auto-update-conda: false
 
-      - name: Create conda environment (conda packages only)
+      # ⚡ Cache del entorno con hash de environment.yml
+      - name: Cache conda packages
+        uses: actions/cache@v4
+        with:
+          path: ~/conda_pkgs_dir
+          key: conda-pkgs-${{ runner.os }}-${{ hashFiles('environment.yml') }}
+
+      # ⚡ Crear entorno con Mamba (mucho más rápido)
+      - name: Create conda environment
         run: |
-          CONDA_NO_PLUGINS=true conda config --set channel_priority flexible
-          CONDA_NO_PLUGINS=true conda env create -f environment.yml --solver classic --quiet
+          mamba env create -f environment.yml --quiet
+        env:
+          CONDA_PKGS_DIRS: ~/conda_pkgs_dir
 
+      # Instalar pip deps si las tienes fuera del YAML
       - name: Install pip dependencies
         run: |
-          CONDA_NO_PLUGINS=true conda run -n dl1dh pip install pydot --upgrade --quiet
+          mamba run -n dl1dh pip install -U pydot --quiet
 
+      # ⚡ Instalar herramientas de build (usa mamba)
       - name: Install conda-build and anaconda-client
         run: |
-          CONDA_NO_PLUGINS=true conda install -c conda-forge conda-build anaconda-client -y --solver classic
+          mamba install -y -c conda-forge conda-build anaconda-client
 
+      # Obtener versión de tag
       - name: Determine version from Git tag
         id: git_version
         run: |
           echo "GIT_DESCRIBE_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
 
+      # Sustituir versión en meta.yaml
       - name: Set dynamic version in meta.yaml
         run: |
           VERSION_NUMBER="${GIT_DESCRIBE_TAG#v}"
           sed -i "s|^{% set version.*%}|{% set version = \"$VERSION_NUMBER\" %}|" .github/conda/meta.yaml
 
+      # ⚡ Build rápido con mamba-build (si disponible)
       - name: Build conda package
         run: |
-          PACKAGE_FILE=$(CONDA_NO_PLUGINS=true conda build .github/conda --output)
-          echo "Package will be built at: $PACKAGE_FILE"
-          CONDA_NO_PLUGINS=true conda build .github/conda --quiet
+          PACKAGE_FILE=$(conda build .github/conda --output)
+          echo "Building: $PACKAGE_FILE"
+          conda build .github/conda --quiet
 
       - name: Upload package to Anaconda.org
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
         run: |
-          PACKAGE_FILE=$(CONDA_NO_PLUGINS=true conda build .github/conda --output)
-          echo "Uploading package: $PACKAGE_FILE"
-          CONDA_NO_PLUGINS=true anaconda upload "$PACKAGE_FILE" --user ctlearn-project --label main --force
+          PACKAGE_FILE=$(conda build .github/conda --output)
+          echo "Uploading $PACKAGE_FILE"
+          anaconda upload "$PACKAGE_FILE" --user ctlearn-project --label main --force
