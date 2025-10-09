@@ -38,7 +38,6 @@ jobs:
         run: |
           CONDA_RECIPE_DIR=".github/conda"
           ANACONDA_CHANNEL="ctlearn-project"
-          TEST_FLAG=""
 
           FULL_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0+dev")
           VERSION="${FULL_TAG#v}"
@@ -47,7 +46,7 @@ jobs:
           echo "Building package version: $VERSION"
           export PACKAGE_VERSION=$VERSION
           
-          conda run conda build $CONDA_RECIPE_DIR $TEST_FLAG
+          conda run conda build $CONDA_RECIPE_DIR
           
           PACKAGE_PATH=$(conda run conda build $CONDA_RECIPE_DIR --output)
           
