@@ -81,7 +81,7 @@ jobs:
                 "$PACKAGE_PATH" \
                 --force \
                 --user $ANACONDA_CHANNEL \
-                --token $ANACONDA_UPLOAD_TOKEN 
+                -t $ANACONDA_UPLOAD_TOKEN 
           else
               echo "Skipping upload: Version is $VERSION (development)."
           fi
