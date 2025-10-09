@@ -1,7 +1,6 @@
 name: Release Conda
 
 on:
-  # Se ejecuta tanto en release como en push
   release:
     types: [published]
   push:
@@ -16,7 +15,7 @@ jobs:
       - name: Checkout repository and fetch tags
         uses: actions/checkout@v4
         with:
-          # CLAVE: Descarga el historial completo y las etiquetas para 'git describe'
+          # CLAVE: Descarga el historial completo y las etiquetas
           fetch-depth: 0 
           
       # 1. Configurar Miniconda y Mamba
@@ -39,21 +38,21 @@ jobs:
       # 3. Configurar Autenticación para Anaconda.org
       - name: Configure Anaconda Token
         shell: bash
+        # Usamos el secreto para establecer la configuración global del cliente de Anaconda
         run: |
           conda run anaconda config --set upload_token ${{ secrets.ANACONDA_TOKEN }}
           
-      # 4. Construir y Subir el Paquete (Token Directo)
+      # 4. Construir y Subir el Paquete (Subida Limpia)
       - name: Conda Build and Upload Package
         shell: bash
-        # Definimos el token aquí para poder usarlo en el script
-        env:
-          ANACONDA_UPLOAD_TOKEN: ${{ secrets.ANACONDA_TOKEN }} 
+        # Quitamos la variable 'env: ANACONDA_UPLOAD_TOKEN' de este paso
         run: |
           CONDA_RECIPE_DIR=".github/conda"
           ANACONDA_CHANNEL="ctlearn-project"
           TEST_FLAG="--no-test" # Asumimos que quieres saltarte el test siempre
 
           # 1. Lógica robusta para obtener la última etiqueta
+          # Fallback: git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0+dev"
           FULL_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0+dev")
           VERSION="${FULL_TAG#v}"
           VERSION="${VERSION#V}"
@@ -63,7 +62,7 @@ jobs:
           fi
 
           echo "Building package version: $VERSION"
-          export PACKAGE_VERSION=$VERSION
+          export PACKAGE_VERSION=$VERSION # Pasa la versión al meta.yaml
           
           # 2. --- FASE DE CONSTRUCCIÓN ---
           conda run conda build $CONDA_RECIPE_DIR $TEST_FLAG
@@ -76,12 +75,12 @@ jobs:
           if [[ "$VERSION" != "0.0.0+dev" ]]; then
               echo "Uploading $PACKAGE_PATH to $ANACONDA_CHANNEL channel..."
               
-              # CLAVE: Forzar el token usando --token $ANACONDA_UPLOAD_TOKEN
+              # CLAVE: ¡Subida sin flags de token! 
+              # El cliente de Anaconda usará la configuración del Paso 3.
               conda run anaconda upload \
                 "$PACKAGE_PATH" \
                 --force \
-                --user $ANACONDA_CHANNEL \
-                -t $ANACONDA_UPLOAD_TOKEN 
+                --user $ANACONDA_CHANNEL 
           else
               echo "Skipping upload: Version is $VERSION (development)."
           fi
