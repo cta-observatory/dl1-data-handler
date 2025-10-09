@@ -12,7 +12,6 @@ on:
 
 jobs:
   publish:
-    # Usamos un runner estable de Ubuntu
     runs-on: ubuntu-22.04
 
     steps:
@@ -23,18 +22,14 @@ jobs:
       - name: Setup Miniconda and Conda Tools
         uses: conda-incubator/setup-miniconda@v3
         with:
-          # Usamos comillas para asegurar la interpretación correcta de la versión
           python-version: '3.10' 
-          # Agregamos conda-forge para encontrar 'mamba' y otras dependencias
           channels: conda-forge,defaults 
           auto-install-conda: true
           auto-update-conda: true
           mamba-version: "*"
-          # Asegura que no se active un entorno temporal con un nombre incorrecto
           activate-environment: false 
           
       # 2. INSTALACIÓN DE HERRAMIENTAS DE DESPLIEGUE
-      # Instala anaconda-client y conda-build, esenciales para los pasos siguientes
       - name: Install anaconda-client and conda-build
         shell: bash
         run: |
@@ -44,23 +39,24 @@ jobs:
       - name: Configure Anaconda Token
         shell: bash
         run: |
-          # Registra el token de tu secreto de GitHub para las subidas
           anaconda config --set upload_token ${{ secrets.ANACONDA_TOKEN }}
           
       # 4. Construir y Subir el Paquete
       - name: Conda Build and Upload Package
         shell: bash
         run: |
+          # 1. CORRECCIÓN CLAVE: Usar la ruta correcta del recetario
+          CONDA_RECIPE_DIR=".github/conda"
+          
           # --- FASE DE CONSTRUCCIÓN ---
-          # Construye el paquete conda. AJUSTA LA RUTA 'recipe' si es necesario.
-          conda build recipe 
+          # Construye el paquete conda usando la ruta específica
+          conda build $CONDA_RECIPE_DIR
           
           # --- FASE DE SUBIDA ---
-          # 1. Obtiene la ruta exacta del paquete .tar.bz2 construido
-          # Nota: Se ejecuta conda build recipe --output otra vez, pero solo para obtener la ruta
-          PACKAGE_PATH=$(conda build recipe --output)
+          # 2. Obtiene la ruta exacta del paquete .tar.bz2 construido
+          # Nota: Se ejecuta conda build --output solo para obtener la ruta
+          PACKAGE_PATH=$(conda build $CONDA_RECIPE_DIR --output)
           
-          # 2. Sube el archivo al canal de anaconda.org
-          # Reemplaza 'ctlearn-project' si tu canal final es otro
+          # 3. Sube el archivo al canal de anaconda.org
           echo "Uploading $PACKAGE_PATH to ctlearn-project channel..."
           anaconda upload "$PACKAGE_PATH" --force --user 'ctlearn-project'
