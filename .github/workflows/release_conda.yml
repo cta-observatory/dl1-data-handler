@@ -27,8 +27,10 @@ jobs:
           activate-environment: build-env 
           
       - name: Build and upload Conda package to Anaconda.org
-        uses: cct-group/build-and-upload-conda-packages@v1
+        uses: conda-incubator/action-tools@v1
         with:
+          # Esto le dice a la acción que corra el workflow de construir y subir
+          workflow: build-and-upload
           channel: 'ctlearn-project' 
           anaconda-token: ${{ secrets.ANACONDA_TOKEN }}
           
