@@ -55,11 +55,11 @@ jobs:
           
           # --- FASE DE CONSTRUCCIÓN ---
           # 1. Pasamos la versión como variable de entorno PACKAGE_VERSION
-          conda run PACKAGE_VERSION=$VERSION conda build $CONDA_RECIPE_DIR  --skip-test
+          conda run PACKAGE_VERSION=$VERSION conda build $CONDA_RECIPE_DIR  --no-test
           
           # 2. --- FASE DE SUBIDA ---
           # Obtenemos la ruta del paquete construido
-          PACKAGE_PATH=$(conda run PACKAGE_VERSION=$VERSION conda build $CONDA_RECIPE_DIR --output --skip-test)
+          PACKAGE_PATH=$(conda run PACKAGE_VERSION=$VERSION conda build $CONDA_RECIPE_DIR --output --no-test)
           
           # 3. Subimos el archivo
           echo "Uploading $PACKAGE_PATH to $ANACONDA_CHANNEL channel..."
