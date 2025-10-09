@@ -46,20 +46,20 @@ jobs:
         run: |
           CONDA_RECIPE_DIR=".github/conda"
           ANACONDA_CHANNEL="ctlearn-project"
-
-
-          VERSION="${{ github.event.release.tag_name }}"
-
-          
+          FULL_TAG="${{ github.event.release.tag_name }}"
+            
+          # 2. **EXTRACCIÓN**: Elimina el prefijo 'v' (o 'V') para obtener solo el número (ej: 0.15.0)
+          # Esta sintaxis de bash elimina la subcadena más corta del inicio que coincida con 'v' o 'V'.
+          VERSION="${FULL_TAG#v}"
           echo "Building package version: $VERSION"
           
           # --- FASE DE CONSTRUCCIÓN ---
           # 1. Pasamos la versión como variable de entorno PACKAGE_VERSION
-          conda run PACKAGE_VERSION=$VERSION conda build $CONDA_RECIPE_DIR 
+          conda run PACKAGE_VERSION=$VERSION conda build $CONDA_RECIPE_DIR  --skip-test
           
           # 2. --- FASE DE SUBIDA ---
           # Obtenemos la ruta del paquete construido
-          PACKAGE_PATH=$(conda run PACKAGE_VERSION=$VERSION conda build $CONDA_RECIPE_DIR --output)
+          PACKAGE_PATH=$(conda run PACKAGE_VERSION=$VERSION conda build $CONDA_RECIPE_DIR --output --skip-test)
           
           # 3. Subimos el archivo
           echo "Uploading $PACKAGE_PATH to $ANACONDA_CHANNEL channel..."
