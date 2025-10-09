@@ -42,47 +42,46 @@ jobs:
         run: |
           conda run anaconda config --set upload_token ${{ secrets.ANACONDA_TOKEN }}
           
-      # 4. Construir y Subir el Paquete (Usando la Última Etiqueta de Git)
+      # 4. Construir y Subir el Paquete (Token Directo)
       - name: Conda Build and Upload Package
         shell: bash
+        # Definimos el token aquí para poder usarlo en el script
+        env:
+          ANACONDA_UPLOAD_TOKEN: ${{ secrets.ANACONDA_TOKEN }} 
         run: |
           CONDA_RECIPE_DIR=".github/conda"
           ANACONDA_CHANNEL="ctlearn-project"
           TEST_FLAG="--no-test" # Asumimos que quieres saltarte el test siempre
 
-          # ------------------------------------------------------------------
-          # CLAVE: Lógica robusta para obtener la última etiqueta
-          # ------------------------------------------------------------------
-          # Intentar obtener la última etiqueta de Git y eliminar el prefijo 'v'
-          # '|| echo "0.0.0+dev"' proporciona un valor de respaldo si no hay etiquetas.
+          # 1. Lógica robusta para obtener la última etiqueta
           FULL_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0+dev")
-          
-          # Eliminar el prefijo 'v' o 'V'
           VERSION="${FULL_TAG#v}"
           VERSION="${VERSION#V}"
           
-          # Si estamos en un release, nos aseguramos de que el TEST_FLAG no se use 
-          # si el meta.yaml no requiere ser saltado.
           if [[ "${{ github.event_name }}" == "release" ]]; then
               TEST_FLAG=""
           fi
 
           echo "Building package version: $VERSION"
-          
-          # Exportamos la variable para que sea leída por meta.yaml
           export PACKAGE_VERSION=$VERSION
           
-          # 1. --- FASE DE CONSTRUCCIÓN ---
+          # 2. --- FASE DE CONSTRUCCIÓN ---
           conda run conda build $CONDA_RECIPE_DIR $TEST_FLAG
           
-          # 2. --- FASE DE SUBIDA ---
-          # Obtenemos la ruta (Necesitamos 'export' y 'conda run' de nuevo)
+          # 3. --- FASE DE SUBIDA ---
+          # Obtenemos la ruta del paquete (usando --output)
           PACKAGE_PATH=$(conda run conda build $CONDA_RECIPE_DIR --output)
           
-          # 3. Subimos el archivo (Solo si no es una versión de desarrollo)
+          # 4. Subimos el archivo
           if [[ "$VERSION" != "0.0.0+dev" ]]; then
               echo "Uploading $PACKAGE_PATH to $ANACONDA_CHANNEL channel..."
-              conda run anaconda upload "$PACKAGE_PATH" --force --user $ANACONDA_CHANNEL
+              
+              # CLAVE: Forzar el token usando --token $ANACONDA_UPLOAD_TOKEN
+              conda run anaconda upload \
+                "$PACKAGE_PATH" \
+                --force \
+                --user $ANACONDA_CHANNEL \
+                --token $ANACONDA_UPLOAD_TOKEN 
           else
               echo "Skipping upload: Version is $VERSION (development)."
           fi
