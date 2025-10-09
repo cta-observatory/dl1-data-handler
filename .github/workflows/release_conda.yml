@@ -1,15 +1,4 @@
-name: Release Conda
-
-# Activa el workflow bajo las condiciones que especificaste:
-on:
-  # 1. Cuando se hace push a la rama 'conda_cd'
-  push:
-    branches: [conda_cd]
-  # 2. Cuando se publica un nuevo release (etiqueta)
-  release:
-    types: [published]
-  # 3. Permite la ejecución manual desde la UI de GitHub Actions
-  workflow_dispatch:
+# ... (código anterior)
 
 jobs:
   publish:
@@ -23,37 +12,32 @@ jobs:
       - name: Setup Miniconda and Conda Tools
         uses: conda-incubator/setup-miniconda@v3
         with:
-          python-version: "3.10"
+          # Usaste comillas, así que las mantendremos si funcionaron:
+          python-version: '3.10' 
           channels: conda-forge,defaults 
-          # Instalar conda-build y anaconda-client en el entorno base
           auto-install-conda: true
           auto-update-conda: true
           mamba-version: "*"
-          # Desactivamos la creación automática de entorno para trabajar en el base
-          activate-environment: false 
+          # Asegúrate de que esta línea esté eliminada si seguiste mi consejo anterior
+          # activate-environment: false 
           
-      # 2. Configurar Autenticación para Anaconda.org
-      # NOTA: conda-client se instaló en el paso anterior
+      # 2. INSTALACIÓN DE ANACONDA-CLIENT (¡NUEVO PASO!)
+      - name: Install anaconda-client and conda-build
+        shell: bash
+        # Usamos 'mamba' ya que es más rápido y ya está instalado
+        run: |
+          mamba install anaconda-client conda-build -y
+          
+      # 3. Configurar Autenticación para Anaconda.org (Aquí es donde falló antes)
       - name: Configure Anaconda Token
         shell: bash
         run: |
-          # Esto guarda el token para usarlo automáticamente con 'anaconda upload'
+          # Ahora 'anaconda' estará disponible
           anaconda config --set upload_token ${{ secrets.ANACONDA_TOKEN }}
           
-      # 3. Construir y Subir el Paquete
+      # 4. Construir y Subir el Paquete
       - name: Conda Build and Upload Package
         shell: bash
         run: |
-          # --- FASE DE CONSTRUCCIÓN ---
-          # La construcción se hará para 'linux-64'
-          # AJUSTA LA RUTA 'recipe' si tu meta.yaml está en otro lugar
-          conda build recipe 
-          
-          # --- FASE DE SUBIDA ---
-          # Obtiene la ruta del paquete construido (generalmente en anaconda/conda-bld/linux-64/...)
-          # Esto asegura que subimos la versión correcta.
           PACKAGE_PATH=$(conda build recipe --output)
-          
-          # Sube el archivo .tar.bz2 al canal de anaconda.org
-          # Usamos el canal que especificaste: 'ctlearn-project'
           anaconda upload "$PACKAGE_PATH" --force --user 'ctlearn-project'
