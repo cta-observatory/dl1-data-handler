@@ -56,10 +56,6 @@ jobs:
           FULL_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0+dev")
           VERSION="${FULL_TAG#v}"
           VERSION="${VERSION#V}"
-          
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-              TEST_FLAG=""
-          fi
 
           echo "Building package version: $VERSION"
           export PACKAGE_VERSION=$VERSION # Pasa la versión al meta.yaml
