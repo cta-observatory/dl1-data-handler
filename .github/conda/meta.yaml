@@ -1,0 +1,54 @@
+{% set name = "dl1_data_handler" %}
+{% set version = os.environ.get('PACKAGE_VERSION', '0.0.0+dev') %}
+
+package:
+  name: {{ name }}
+  version: {{ version }}
+
+source:
+
+  path: ../../ 
+
+build:
+  noarch: python
+  number: 0
+  script: "{{ PYTHON }} -m pip install . --no-deps -vv"
+
+requirements:
+  host:
+    - python >=3.10
+    - pip
+    - setuptools >=65
+    - setuptools_scm >=6.2
+  run:
+    - python >=3.10
+    - astropy
+    - numpy
+    - pandas
+    - pyyaml
+    - scipy
+    - traitlets
+    - pydot
+    - setuptools
+    - ctapipe>=0.23,<0.26
+
+
+test:
+  imports:
+    - dl1_data_handler
+
+about:
+  home: https://github.com/cta-observatory/dl1-data-handler
+  license: BSD-3-Clause
+  summary: "Utilities for reading and processing CTA R1/DL0/DL1 data in a standardized format."
+  description: |
+    A package of utilities for reading and applying image processing to Cherenkov Telescope Array (CTA)
+    R1/DL0/DL1 data in a standardized format. Created primarily for testing machine learning image
+    analysis techniques on IACT data.
+  dev_url: https://github.com/cta-observatory/dl1-data-handler
+
+extra:
+  recipe-maintainers:
+    - Daniel Nieto
+    - Tjark Miener
+    - Alexander Cervino

@@ -31,26 +31,26 @@ Previously named image-extractor (v0.1.0 - v0.6.0). Currently under development,
 Installation
 ------------
 
-The following installation method (for Linux) is recommended:
-
-Installing as a conda package
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-To install dl1-data-handler as a conda package, first install Anaconda by following the instructions here: https://www.anaconda.com/distribution/.
-
-The following command will set up a conda virtual environment, add the
-necessary package channels, and install dl1-data-handler specified version and its dependencies:
+The lastest version fo this package can be installed as a conda or pip package:
 
 .. code-block:: bash
 
-   DL1DH_VER=0.14.5
-   wget https://raw.githubusercontent.com/cta-observatory/dl1-data-handler/v$DL1DH_VER/environment.yml
-   conda env create -n [ENVIRONMENT_NAME] -f environment.yml
-   conda activate [ENVIRONMENT_NAME]
-   conda install -c ctlearn-project dl1_data_handler=$DL1DH_VER
+   conda install ctlearn-project::dl1_data_handler
+
+or
+
+.. code-block:: bash
+
+   pip install dl1-data-handler
+
+Installing as a conda package
 
 This should automatically install all dependencies (NOTE: this may take some time, as by default MKL is included as a dependency of NumPy and it is very large).
 
+Developers
+------------
+
+We welcome contributions to this package! If you're interested in contributing, please make sure to follow the `ctapipe developer guidelines <https://ctapipe.readthedocs.io/en/latest/developer-guide/getting-started.html>`_.
 
 Links
 -----
