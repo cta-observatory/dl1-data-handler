@@ -50,7 +50,8 @@ This should automatically install all dependencies (NOTE: this may take some tim
 Developers
 ------------
 
-We welcome contributions to this package! If you're interested in contributing, please make sure to follow the 'ctapipe developer guidelines <https://ctapipe.readthedocs.io/en/latest/developer-guide/getting-started.html>_'.
+We welcome contributions to this package! If you're interested in contributing, please make sure to follow the `ctapipe developer guidelines <https://ctapipe.readthedocs.io/en/latest/developer-guide/getting-started.html>`_.
+
 Links
 -----
 
