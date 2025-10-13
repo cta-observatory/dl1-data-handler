@@ -7,6 +7,7 @@ from dl1_data_handler.image_mapper import (
     BilinearMapper,
     BicubicMapper,
     NearestNeighborMapper,
+    RebinMapper,
     AxialMapper,
     OversamplingMapper,
     ShiftingMapper,
@@ -31,7 +32,7 @@ class TestInterpolationImageShape:
 
     @pytest.mark.parametrize(
         "mapper_class",
-        [BilinearMapper, BicubicMapper, NearestNeighborMapper],
+        [BilinearMapper, BicubicMapper, NearestNeighborMapper, RebinMapper],
     )
     def test_interpolation_image_shape_kwarg(self, lstcam_geometry, mapper_class):
         """Test that interpolation_image_shape can be set via kwarg.
@@ -40,14 +41,19 @@ class TestInterpolationImageShape:
         interpolation_image_shape directly to mapper constructors
         was silently ignored.
         
-        Note: RebinMapper is excluded due to excessive memory requirements
-        when testing with custom interpolation sizes.
+        Note: RebinMapper uses a small size (10) and increased max_memory_gb
+        to avoid excessive memory requirements during testing.
         """
         # Request a custom interpolation grid size
-        custom_size = 55
-        mapper = mapper_class(
-            geometry=lstcam_geometry, interpolation_image_shape=custom_size
-        )
+        # Use smaller size for RebinMapper due to memory requirements
+        custom_size = 10 if mapper_class == RebinMapper else 55
+        
+        # RebinMapper needs max_memory_gb set higher to allow the allocation
+        kwargs = {"interpolation_image_shape": custom_size}
+        if mapper_class == RebinMapper:
+            kwargs["max_memory_gb"] = 100
+        
+        mapper = mapper_class(geometry=lstcam_geometry, **kwargs)
 
         # Verify the trait is set correctly
         assert (
@@ -67,20 +73,25 @@ class TestInterpolationImageShape:
 
     @pytest.mark.parametrize(
         "mapper_class",
-        [BilinearMapper, BicubicMapper, NearestNeighborMapper],
+        [BilinearMapper, BicubicMapper, NearestNeighborMapper, RebinMapper],
     )
     def test_interpolation_image_shape_output(
         self, lstcam_geometry, sample_image, mapper_class
     ):
         """Test that the output image has the correct shape when interpolation_image_shape is set.
         
-        Note: RebinMapper is excluded due to excessive memory requirements
-        when testing with custom interpolation sizes.
+        Note: RebinMapper uses a small size (10) and increased max_memory_gb
+        to avoid excessive memory requirements during testing.
         """
-        custom_size = 138
-        mapper = mapper_class(
-            geometry=lstcam_geometry, interpolation_image_shape=custom_size
-        )
+        # Use smaller size for RebinMapper due to memory requirements
+        custom_size = 10 if mapper_class == RebinMapper else 138
+        
+        # RebinMapper needs max_memory_gb set higher to allow the allocation
+        kwargs = {"interpolation_image_shape": custom_size}
+        if mapper_class == RebinMapper:
+            kwargs["max_memory_gb"] = 100
+        
+        mapper = mapper_class(geometry=lstcam_geometry, **kwargs)
 
         # Map the image
         mapped_image = mapper.map_image(sample_image)
@@ -98,7 +109,8 @@ class TestInterpolationImageShape:
     def test_default_image_shape(self, lstcam_geometry, mapper_class):
         """Test that mappers use default image_shape when interpolation_image_shape is not set.
         
-        Note: RebinMapper is excluded due to excessive memory requirements.
+        Note: RebinMapper is excluded from this test because its default size (110)
+        exceeds the default memory limit (10 GB), requiring ~67 GB.
         """
         mapper = mapper_class(geometry=lstcam_geometry)
 
@@ -129,7 +141,9 @@ class TestMapperBasicFunctionality:
     def test_hexagonal_mapper_instantiation(self, lstcam_geometry, mapper_class):
         """Test that hexagonal mappers can be instantiated.
         
-        Note: RebinMapper is excluded due to excessive memory requirements.
+        Note: RebinMapper is excluded from this test because its default size (110)
+        exceeds the default memory limit (10 GB). See test_rebinmapper_small_size_works
+        for RebinMapper instantiation test with appropriate parameters.
         """
         mapper = mapper_class(geometry=lstcam_geometry)
         assert mapper is not None
@@ -168,7 +182,9 @@ class TestMapperBasicFunctionality:
     def test_mapper_output_shape(self, lstcam_geometry, sample_image, mapper_class):
         """Test that mappers produce correctly shaped output.
         
-        Note: RebinMapper is excluded due to excessive memory requirements.
+        Note: RebinMapper is excluded from this test because its default size (110)
+        exceeds the default memory limit (10 GB). See test_rebinmapper_small_size_works
+        for RebinMapper output shape test with appropriate parameters.
         """
         mapper = mapper_class(geometry=lstcam_geometry)
         mapped_image = mapper.map_image(sample_image)
@@ -192,7 +208,9 @@ class TestMapperBasicFunctionality:
     def test_mapper_multichannel(self, lstcam_geometry, mapper_class):
         """Test that mappers work with multi-channel input.
         
-        Note: RebinMapper is excluded due to excessive memory requirements.
+        Note: RebinMapper is excluded from this test because its default size (110)
+        exceeds the default memory limit (10 GB). See test_rebinmapper_small_size_works
+        for RebinMapper multichannel test with appropriate parameters.
         """
         # Create a 2-channel image
         multichannel_image = np.random.rand(lstcam_geometry.n_pixels, 2).astype(
@@ -206,33 +224,26 @@ class TestMapperBasicFunctionality:
 
 
 class TestRebinMapperMemoryValidation:
-    """Test RebinMapper memory validation."""
+    """Test RebinMapper memory validation and functionality."""
 
     def test_rebinmapper_default_size_exceeds_limit(self, lstcam_geometry):
-        """Test that RebinMapper default size also exceeds memory limit.
+        """Test that RebinMapper default size exceeds the default memory limit.
         
         RebinMapper's default behavior requires ~67 GB for LSTCam, which exceeds
-        the 10 GB safety limit. This is expected and demonstrates why RebinMapper
-        is excluded from general tests.
+        the 10 GB default safety limit. This is expected behavior.
         """
-        from dl1_data_handler.image_mapper import RebinMapper
-        
-        # Default size (110) should also raise ValueError due to memory requirements
+        # Default size (110) should raise ValueError due to memory requirements
         with pytest.raises(ValueError, match="would require approximately.*GB of memory"):
             RebinMapper(geometry=lstcam_geometry)
 
     def test_rebinmapper_large_size_raises_error(self, lstcam_geometry):
         """Test that RebinMapper raises ValueError for large interpolation_image_shape."""
-        from dl1_data_handler.image_mapper import RebinMapper
-        
         # Large size should raise ValueError with even more memory requirements
         with pytest.raises(ValueError, match="would require approximately.*GB of memory"):
             RebinMapper(geometry=lstcam_geometry, interpolation_image_shape=200)
 
     def test_rebinmapper_error_message_helpful(self, lstcam_geometry):
         """Test that RebinMapper error message suggests alternatives."""
-        from dl1_data_handler.image_mapper import RebinMapper
-        
         try:
             RebinMapper(geometry=lstcam_geometry, interpolation_image_shape=200)
             pytest.fail("Should have raised ValueError")
@@ -243,6 +254,56 @@ class TestRebinMapperMemoryValidation:
             assert "memory-efficient" in error_msg
             assert "interpolation_image_shape" in error_msg or "image_shape" in error_msg
             assert "GB of memory" in error_msg
+
+    def test_rebinmapper_disable_memory_check(self, lstcam_geometry):
+        """Test that RebinMapper memory check can be disabled with max_memory_gb=None."""
+        # Small size that would normally pass, but we're testing the None behavior
+        # Note: We still use a small size to avoid actually allocating huge memory
+        mapper = RebinMapper(
+            geometry=lstcam_geometry,
+            interpolation_image_shape=10,
+            max_memory_gb=None
+        )
+        assert mapper is not None
+        assert mapper.mapping_table is not None
+
+    def test_rebinmapper_custom_memory_limit(self, lstcam_geometry):
+        """Test that RebinMapper respects custom max_memory_gb values."""
+        # Size that requires ~0.13 GB should pass with 1 GB limit
+        mapper = RebinMapper(
+            geometry=lstcam_geometry,
+            interpolation_image_shape=10,
+            max_memory_gb=1
+        )
+        assert mapper is not None
+        
+        # Size that requires ~0.13 GB should fail with 0.01 GB limit
+        with pytest.raises(ValueError, match="would require approximately.*GB of memory"):
+            RebinMapper(
+                geometry=lstcam_geometry,
+                interpolation_image_shape=10,
+                max_memory_gb=0.01
+            )
+
+    def test_rebinmapper_small_size_works(self, lstcam_geometry, sample_image):
+        """Test that RebinMapper works with small interpolation_image_shape and increased limit."""
+        # Small size with increased memory limit should work
+        mapper = RebinMapper(
+            geometry=lstcam_geometry,
+            interpolation_image_shape=10,
+            max_memory_gb=100
+        )
+        assert mapper is not None
+        assert mapper.mapping_table is not None
+        
+        # Test that it can actually map an image
+        mapped_image = mapper.map_image(sample_image)
+        
+        # Output should be square image with 1 channel
+        assert len(mapped_image.shape) == 3
+        assert mapped_image.shape[0] == mapped_image.shape[1]
+        assert mapped_image.shape[2] == 1
+        assert mapped_image.shape[0] == 10
 
 
 class TestAxialMapperSpecific:
