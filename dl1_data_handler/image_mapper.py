@@ -9,7 +9,7 @@ from collections import Counter, namedtuple
 
 from ctapipe.instrument.camera import PixelShape
 from ctapipe.core import Component
-from ctapipe.core.traits import Bool, Int
+from ctapipe.core.traits import Bool, Int, Float
 
 __all__ = [
     "ImageMapper",
@@ -1182,7 +1182,7 @@ class RebinMapper(ImageMapper):
         ),
     ).tag(config=True)
 
-    max_memory_gb = Int(
+    max_memory_gb = Float(
         default_value=10,
         allow_none=True,
         help=(
