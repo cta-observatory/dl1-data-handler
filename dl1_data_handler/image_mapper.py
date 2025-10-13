@@ -84,12 +84,22 @@ class ImageMapper(Component):
         parent : ctapipe.core.Component or ctapipe.core.Tool
             Parent of this component in the configuration hierarchy,
             this is mutually exclusive with passing ``config``
+        **kwargs
+            Additional keyword arguments for traitlets. Non-traitlet kwargs
+            (like 'subarray') are filtered out for compatibility.
         """
+
+        # Filter out non-traitlet kwargs before passing to Component
+        # This allows compatibility with ctapipe's reader which may pass extra kwargs
+        component_kwargs = {
+            key: value for key, value in kwargs.items()
+            if self.class_own_traits().get(key) is not None
+        }
 
         super().__init__(
             config=config,
             parent=parent,
-            **kwargs,
+            **component_kwargs,
         )
 
         # Camera types
@@ -1172,6 +1182,16 @@ class RebinMapper(ImageMapper):
         ),
     ).tag(config=True)
 
+    max_memory_gb = Int(
+        default_value=10,
+        allow_none=True,
+        help=(
+            "Maximum memory in GB that RebinMapper is allowed to allocate. "
+            "Set to None to disable memory checks. Default is 10 GB. "
+            "Note: RebinMapper uses approximately (image_shape * 10)^2 * image_shape^2 * 4 bytes."
+        ),
+    ).tag(config=True)
+
     def __init__(
         self,
         geometry,
@@ -1211,6 +1231,26 @@ class RebinMapper(ImageMapper):
             self.image_shape = self.interpolation_image_shape
         self.internal_shape = self.image_shape + self.internal_pad * 2
         self.rebinning_mult_factor = 10
+        
+        # Validate memory requirements before proceeding (if max_memory_gb is set)
+        if self.max_memory_gb is not None:
+            # RebinMapper uses a fine grid (internal_shape * rebinning_mult_factor)^2
+            # and creates a mapping matrix of shape (fine_grid_size, internal_shape, internal_shape)
+            fine_grid_size = (self.internal_shape * self.rebinning_mult_factor) ** 2
+            estimated_memory_gb = (
+                fine_grid_size * self.internal_shape * self.internal_shape * 4
+            ) / (1024**3)  # 4 bytes per float32
+            
+            if estimated_memory_gb > self.max_memory_gb:
+                raise ValueError(
+                    f"RebinMapper with image_shape={self.image_shape} would require "
+                    f"approximately {estimated_memory_gb:.1f} GB of memory, which exceeds "
+                    f"the limit of {self.max_memory_gb:.1f} GB. "
+                    f"To allow this allocation, set max_memory_gb to a higher value or None. "
+                    f"Alternatively, consider using a smaller interpolation_image_shape (recommended < 60) "
+                    f"or use BilinearMapper or BicubicMapper instead, which are more memory-efficient."
+                )
+        
         # Creating the hexagonal and the output grid for the conversion methods.
         input_grid, output_grid = super()._get_grids_for_interpolation()
         # Calculate the mapping table

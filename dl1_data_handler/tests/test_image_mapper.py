@@ -205,6 +205,46 @@ class TestMapperBasicFunctionality:
         assert mapped_image.shape[2] == 2
 
 
+class TestRebinMapperMemoryValidation:
+    """Test RebinMapper memory validation."""
+
+    def test_rebinmapper_default_size_exceeds_limit(self, lstcam_geometry):
+        """Test that RebinMapper default size also exceeds memory limit.
+        
+        RebinMapper's default behavior requires ~67 GB for LSTCam, which exceeds
+        the 10 GB safety limit. This is expected and demonstrates why RebinMapper
+        is excluded from general tests.
+        """
+        from dl1_data_handler.image_mapper import RebinMapper
+        
+        # Default size (110) should also raise ValueError due to memory requirements
+        with pytest.raises(ValueError, match="would require approximately.*GB of memory"):
+            RebinMapper(geometry=lstcam_geometry)
+
+    def test_rebinmapper_large_size_raises_error(self, lstcam_geometry):
+        """Test that RebinMapper raises ValueError for large interpolation_image_shape."""
+        from dl1_data_handler.image_mapper import RebinMapper
+        
+        # Large size should raise ValueError with even more memory requirements
+        with pytest.raises(ValueError, match="would require approximately.*GB of memory"):
+            RebinMapper(geometry=lstcam_geometry, interpolation_image_shape=200)
+
+    def test_rebinmapper_error_message_helpful(self, lstcam_geometry):
+        """Test that RebinMapper error message suggests alternatives."""
+        from dl1_data_handler.image_mapper import RebinMapper
+        
+        try:
+            RebinMapper(geometry=lstcam_geometry, interpolation_image_shape=200)
+            pytest.fail("Should have raised ValueError")
+        except ValueError as e:
+            error_msg = str(e)
+            # Check that error message contains helpful information
+            assert "BilinearMapper" in error_msg or "BicubicMapper" in error_msg
+            assert "memory-efficient" in error_msg
+            assert "interpolation_image_shape" in error_msg or "image_shape" in error_msg
+            assert "GB of memory" in error_msg
+
+
 class TestAxialMapperSpecific:
     """Test AxialMapper specific functionality."""
 
