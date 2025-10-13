@@ -8,7 +8,7 @@ from scipy.sparse import csr_matrix
 from collections import Counter, namedtuple
 
 from ctapipe.instrument.camera import PixelShape
-from ctapipe.core import TelescopeComponent
+from ctapipe.core import Component
 from ctapipe.core.traits import Bool, Int
 
 __all__ = [
@@ -23,7 +23,7 @@ __all__ = [
     "SquareMapper",
 ]
 
-class ImageMapper(TelescopeComponent):
+class ImageMapper(Component):
     """
     Base component for mapping raw 1D vectors into 2D mapped images.
 
@@ -85,6 +85,12 @@ class ImageMapper(TelescopeComponent):
             Parent of this component in the configuration hierarchy,
             this is mutually exclusive with passing ``config``
         """
+
+        super().__init__(
+            config=config,
+            parent=parent,
+            **kwargs,
+        )
 
         # Camera types
         self.geometry = geometry
