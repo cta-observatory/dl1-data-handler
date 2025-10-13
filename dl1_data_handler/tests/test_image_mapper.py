@@ -42,7 +42,7 @@ class TestInterpolationImageShape:
         was silently ignored.
         """
         # Request a custom interpolation grid size
-        custom_size = 138
+        custom_size = 55
         mapper = mapper_class(
             geometry=lstcam_geometry, interpolation_image_shape=custom_size
         )
