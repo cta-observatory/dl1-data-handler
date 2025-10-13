@@ -124,11 +124,24 @@ class TestMapperBasicFunctionality:
         assert mapper is not None
         assert mapper.mapping_table is not None
 
-    def test_square_mapper_requires_square_pixels(self, lstcam_geometry):
-        """Test that SquareMapper raises error for non-square pixel cameras."""
-        # LSTCam has hexagonal pixels, should raise ValueError
-        with pytest.raises(ValueError, match="only available for square pixel cameras"):
-            SquareMapper(geometry=lstcam_geometry)
+    def test_square_mapper_instantiation(self):
+        """Test that SquareMapper can be instantiated with square pixel camera."""
+        # SCTCam has square pixels
+        square_geometry = CameraGeometry.from_name("SCTCam")
+        mapper = SquareMapper(geometry=square_geometry)
+        assert mapper is not None
+        assert mapper.mapping_table is not None
+        
+        # Test output shape
+        sample_square_image = np.random.rand(square_geometry.n_pixels, 1).astype(np.float32)
+        mapped_image = mapper.map_image(sample_square_image)
+        
+        # Output should be square image with 1 channel
+        assert len(mapped_image.shape) == 3
+        assert mapped_image.shape[0] == mapped_image.shape[1]
+        assert mapped_image.shape[2] == 1
+        assert mapped_image.shape[0] == mapper.image_shape
+
 
     @pytest.mark.parametrize(
         "mapper_class",
