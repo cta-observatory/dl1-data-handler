@@ -3,6 +3,8 @@ name: Release CD
 on:
   release:
     types: [published]
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   pypi-publish:
@@ -46,4 +48,5 @@ jobs:
         python -m build
 
     - name: Publish package distributions to PyPI
+      if: github.event_name == 'release'
       uses: pypa/gh-action-pypi-publish@release/v1
