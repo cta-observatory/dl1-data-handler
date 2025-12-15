@@ -17,7 +17,7 @@ jobs:
         os: [ubuntu-22.04]
         python-version: ['3.11', '3.12', '3.13', '3.14']
         ctapipe-version: ['latest', 'nightly']
-      max-parallel: 6
+      max-parallel: 8
     runs-on: ${{ matrix.os }}
     # Allow failures for nightly ctapipe or 3.14 builds
     continue-on-error: ${{ matrix.ctapipe-version == 'nightly' || matrix.python-version == '3.14' }}
@@ -49,7 +49,6 @@ jobs:
           sudo apt-get install -y git
           pip install --upgrade pip
           pip install pylint pylint-exit anybadge
-          echo -n ${{ secrets.RDAMS_TOKEN }} > rdams_token.txt
           if [ "${{ matrix.ctapipe-version }}" = "nightly" ]; then
             pip install git+https://github.com/cta-observatory/ctapipe.git
           else
