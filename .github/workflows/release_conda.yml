@@ -4,17 +4,21 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
 
 jobs:
-  publish:
+  conda-publish:
+    name: Build and maybe publish Conda package
     runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout repository and fetch tags
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 
-          
+          fetch-depth: 0
+
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -23,19 +27,13 @@ jobs:
           auto-update-conda: true
           activate-environment: false
 
-      - name: Create Conda environment with ctapipe
+      - name: Create Conda environment with all dependencies
         shell: bash
         run: |
-          conda create -y -n dl1dh -c conda-forge python=3.12 ctapipe
-          conda activate dl1dh
+          conda create -y -n dl1dh -c conda-forge python=3.12 ctapipe conda-build anaconda-client
           python --version
-          
-      - name: Install conda-build and anaconda-client
-        shell: bash
-        run: |
-          conda install -y conda-build anaconda-client
 
-      - name: Conda Build and Upload Package
+      - name: Conda Build (and maybe Upload)
         shell: bash
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
@@ -43,25 +41,25 @@ jobs:
           CONDA_RECIPE_DIR=".github/conda"
           ANACONDA_CHANNEL="ctlearn-project"
 
+          # Get latest tag or default to dev
           FULL_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0+dev")
           VERSION="${FULL_TAG#v}"
           VERSION="${VERSION#V}"
 
           echo "Building package version: $VERSION"
           export PACKAGE_VERSION=$VERSION
-          
+
           # Build the package
-          conda run -n dl1dh conda build $CONDA_RECIPE_DIR
-          
-          # Get the package path
-          PACKAGE_PATH=$(conda run -n dl1dh conda build $CONDA_RECIPE_DIR --output)
-          
-          if [[ "$VERSION" != "0.0.0+dev" ]]; then
+          PACKAGE_PATH=$(conda run -n dl1dh conda build "$CONDA_RECIPE_DIR" --output)
+          conda run -n dl1dh conda build "$CONDA_RECIPE_DIR"
+
+          # Upload only if this is a release
+          if [[ "${{ github.event_name }}" == "release" ]]; then
               echo "Uploading $PACKAGE_PATH to $ANACONDA_CHANNEL channel..."
               conda run -n dl1dh anaconda upload \
                 "$PACKAGE_PATH" \
                 --force \
-                --user $ANACONDA_CHANNEL
+                --user "$ANACONDA_CHANNEL"
           else
-              echo "Skipping upload: Version is $VERSION (development)."
+              echo "Skipping upload (event: ${{ github.event_name }})"
           fi
