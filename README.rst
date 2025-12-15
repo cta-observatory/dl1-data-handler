@@ -31,11 +31,18 @@ Previously named image-extractor (v0.1.0 - v0.6.0). Currently under development,
 Installation
 ------------
 
+First, create and activate a fresh conda environment:
+
+.. code-block:: bash
+
+   mamba create -n dl1dh -c conda-forge python==3.12 ctapipe
+   mamba activate dl1dh
+
 The lastest version fo this package can be installed as a conda or pip package:
 
 .. code-block:: bash
 
-   conda install ctlearn-project::dl1_data_handler
+   mamba install ctlearn-project::dl1_data_handler
 
 or
 
