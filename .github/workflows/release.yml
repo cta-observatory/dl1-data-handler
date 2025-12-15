@@ -29,16 +29,17 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Miniconda
+    - name: Set up Miniconda and install dependencies
       uses: conda-incubator/setup-miniconda@v3
       with:
         auto-update-conda: true
         python-version: ${{ matrix.pyv }}
         activate-environment: dl1dh
+        channels: conda-forge
+        packages: ctapipe
 
-    - name: Create conda environment with ctapipe
+    - name: Upgrade pip and build tools
       run: |
-        conda install -y -c conda-forge python==${{ matrix.pyv }} ctapipe
         pip install --upgrade pip build
 
     - name: Build package
