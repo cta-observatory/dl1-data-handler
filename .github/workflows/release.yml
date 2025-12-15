@@ -38,9 +38,7 @@ jobs:
 
     - name: Create conda environment with ctapipe
       run: |
-        conda create -y -n dl1dh -c conda-forge python==${{ matrix.pyv }} ctapipe
-        conda activate dl1dh
-        python --version
+        conda install -y -c conda-forge python==${{ matrix.pyv }} ctapipe
         pip install --upgrade pip build
 
     - name: Build package
