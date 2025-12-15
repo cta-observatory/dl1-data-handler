@@ -15,9 +15,9 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-22.04]
-        python-version: ['3.11', '3.12', '3.13', '3.14']
+        python-version: ['3.12', '3.13', '3.14']
         ctapipe-version: ['latest', 'nightly']
-      max-parallel: 8
+      max-parallel: 6
     runs-on: ${{ matrix.os }}
     # Allow failures for nightly ctapipe or 3.14 builds
     continue-on-error: ${{ matrix.ctapipe-version == 'nightly' || matrix.python-version == '3.14' }}
