@@ -1,4 +1,4 @@
-name: Release Conda
+name: Release Conda CD
 
 on:
   release:
@@ -10,7 +10,7 @@ on:
 
 jobs:
   conda-publish:
-    name: Build and maybe publish Conda package
+    name: Publish release to Conda
     runs-on: ubuntu-22.04
 
     steps:

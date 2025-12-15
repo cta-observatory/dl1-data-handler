@@ -1,4 +1,4 @@
-name: Release CD
+name: Release PyPI CD
 
 on:
   release:
