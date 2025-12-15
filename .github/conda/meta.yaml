@@ -16,12 +16,12 @@ build:
 
 requirements:
   host:
-    - python >=3.10
+    - python >=3.12
     - pip
     - setuptools >=65
     - setuptools_scm >=6.2
   run:
-    - python >=3.10
+    - python >=3.12
     - astropy
     - numpy
     - pandas
@@ -30,7 +30,8 @@ requirements:
     - traitlets
     - pydot
     - setuptools
-    - ctapipe>=0.23,<0.26
+    - ctapipe>=0.28
+    - eventio
 
 
 test:

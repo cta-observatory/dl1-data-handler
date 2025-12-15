@@ -15,24 +15,30 @@ jobs:
         with:
           fetch-depth: 0 
           
-      - name: Setup Miniconda and Conda Tools
+      - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
-          python-version: '3.10' 
-          channels: conda-forge 
+          python-version: '3.12'
+          channels: conda-forge
           auto-update-conda: true
-          mamba-version: "*"
-          activate-environment: false 
-          
-      - name: Install anaconda-client and conda-build
+          activate-environment: false
+
+      - name: Create Conda environment with ctapipe
         shell: bash
         run: |
-          mamba install anaconda-client conda-build -y
-                    
+          conda create -y -n dl1dh -c conda-forge python=3.12 ctapipe
+          conda activate dl1dh
+          python --version
+          
+      - name: Install conda-build and anaconda-client
+        shell: bash
+        run: |
+          conda install -y conda-build anaconda-client
+
       - name: Conda Build and Upload Package
         shell: bash
         env:
-          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }} 
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
         run: |
           CONDA_RECIPE_DIR=".github/conda"
           ANACONDA_CHANNEL="ctlearn-project"
@@ -44,16 +50,18 @@ jobs:
           echo "Building package version: $VERSION"
           export PACKAGE_VERSION=$VERSION
           
-          conda run conda build $CONDA_RECIPE_DIR
+          # Build the package
+          conda run -n dl1dh conda build $CONDA_RECIPE_DIR
           
-          PACKAGE_PATH=$(conda run conda build $CONDA_RECIPE_DIR --output)
+          # Get the package path
+          PACKAGE_PATH=$(conda run -n dl1dh conda build $CONDA_RECIPE_DIR --output)
           
           if [[ "$VERSION" != "0.0.0+dev" ]]; then
               echo "Uploading $PACKAGE_PATH to $ANACONDA_CHANNEL channel..."
-              conda run anaconda upload \
+              conda run -n dl1dh anaconda upload \
                 "$PACKAGE_PATH" \
                 --force \
-                --user $ANACONDA_CHANNEL 
+                --user $ANACONDA_CHANNEL
           else
               echo "Skipping upload: Version is $VERSION (development)."
           fi

@@ -20,28 +20,30 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-22.04]
-        pyv: ['3.10']
+        pyv: ['3.12']
       max-parallel: 5
     runs-on: ${{ matrix.os }}
+
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.pyv }}
+
+    - name: Set up Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        auto-update-conda: true
+        python-version: ${{ matrix.pyv }}
+        activate-environment: dl1dh
+
+    - name: Create conda environment with ctapipe
       run: |
-        conda install -y python=${{ matrix.pyv }}
-        
-    - name: Add conda to system path
-      run: |
-        #$CONDA is an environment variable pointing to the root of the miniconda directory
-        echo $CONDA/bin >> $GITHUB_PATH 
-        
-    - name: Install dependencies
-      run: |
-        conda env update --file environment.yml --name base 
-        
+        conda create -y -n dl1dh -c conda-forge python==${{ matrix.pyv }} ctapipe
+        conda activate dl1dh
+        python --version
+        pip install --upgrade pip build
+
     - name: Build package
       run: |
-        python --version
-        pip install -U build
         python -m build
+
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
