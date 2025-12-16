@@ -668,7 +668,7 @@ class DLDataReader(Component):
             self.n_signal_events = np.count_nonzero(
                 self.example_identifiers[class_column] == 1
             )
-            if self.input_url_background:
+            if self.input_url_background or (isinstance(self, DLTriggerReader) and not self.one_class):
                 self.n_bkg_events = np.count_nonzero(
                     self.example_identifiers[class_column] == 0
                 )
@@ -2206,10 +2206,11 @@ class DLTriggerReader(DLWaveformReader):
         # Packing info
         with tables.open_file(self.input_trigger_files[0], 'r') as h5file:
             node = h5file.get_node('/table')
-            self._trigger_mask_shape = tuple(node._v_attrs.trigger_mask_shape)
-            self._trigger_mask_bits = int(node._v_attrs.trigger_mask_bits)
-            self._trigger_mask_packed_len = int(node._v_attrs.trigger_mask_packed_len)
-            self._trigger_mask_bitorder = str(node._v_attrs.trigger_mask_bitorder)
+            if hasattr(node._v_attrs, 'trigger_mask_shape'):
+                self._trigger_mask_shape = tuple(node._v_attrs.trigger_mask_shape)
+                self._trigger_mask_bits = int(node._v_attrs.trigger_mask_bits)
+                self._trigger_mask_packed_len = int(node._v_attrs.trigger_mask_packed_len)
+                self._trigger_mask_bitorder = str(node._v_attrs.trigger_mask_bitorder)
 
         for file_idx, trigger_file in enumerate(self.input_trigger_files):
             tdscan_table = read_table(trigger_file, "/table")
