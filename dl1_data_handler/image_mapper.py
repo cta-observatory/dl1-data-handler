@@ -28,7 +28,7 @@ __all__ = [
     "HexagonalPatchMapper",
 ]
 
-class ImageMapper(Component):
+class ImageMapper(TelescopeComponent):
     """
     Base component for mapping raw 1D vectors into 2D mapped images.
 
@@ -91,9 +91,6 @@ class ImageMapper(Component):
         parent : ctapipe.core.Component or ctapipe.core.Tool
             Parent of this component in the configuration hierarchy,
             this is mutually exclusive with passing ``config``
-        **kwargs
-            Additional keyword arguments for traitlets. Non-traitlet kwargs
-            (like 'subarray') are filtered out for compatibility.
         """
 
         # Filter out non-traitlet kwargs before passing to Component
@@ -113,6 +110,8 @@ class ImageMapper(Component):
         self.camera_type = self.geometry.name
         self.n_pixels = self.geometry.n_pixels
         # Rotate the pixel positions by the pixel to align
+        if self.camera_type == "AdvCamSiPM":
+            self.geometry.pix_rotation = 8.213 * u.deg
         self.geometry.rotate(self.geometry.pix_rotation)
 
         self.pix_x = np.around(
@@ -1309,16 +1308,6 @@ class RebinMapper(ImageMapper):
         help=(
             "Integer to overwrite the default shape of the resulting mapped image."
             "Only available for interpolation and rebinning methods."
-        ),
-    ).tag(config=True)
-
-    max_memory_gb = Float(
-        default_value=10,
-        allow_none=True,
-        help=(
-            "Maximum memory in GB that RebinMapper is allowed to allocate. "
-            "Set to None to disable memory checks. Default is 10 GB. "
-            "Note: RebinMapper uses approximately (image_shape * 10)^2 * image_shape^2 * 4 bytes."
         ),
     ).tag(config=True)
 

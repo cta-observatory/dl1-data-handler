@@ -315,11 +315,7 @@ class DLDataReader(Component):
                 self.process_type = ProcessType(self.ctao_metadata["CTA PROCESS TYPE"])
                 self.data_format_version = self.ctao_metadata["CTA PRODUCT DATA MODEL VERSION"]
             else:
-<<<<<<< HEAD
                 raise IOError("Unsupported or missing reference metadata.")
-=======
-                raise IOError("Unsupported or missing reference metadata")
->>>>>>> 3f60226 (raise IOError for unsupported or missing ref metadata not an OSError)
         # Check for the minimum ctapipe data format version (v6.0.0) for MC sims
         if (
             self.process_type == ProcessType.Simulation
