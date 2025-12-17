@@ -163,6 +163,15 @@ class DLDataReader(Component):
         help="Skip files that are not compatible to the reference instead of raising an error",
     ).tag(config=True)
 
+    enforce_subarray_equality = Bool(
+        default_value=True,
+        help=(
+            "Enforce strict equality of subarray descriptions between files, "
+            "raising an error if they do not match exactly. If False, a looser check "
+            "primarily on telescope IDs is performed to ensure compatibility."
+        ),
+    ).tag(config=True)
+
     allowed_tel_types = List(
         default_value=None,
         allow_none=True,
@@ -353,17 +362,21 @@ class DLDataReader(Component):
             if selected_tel_ids is not None:
                 subarray = subarray.select_subarray(self.tel_ids)
 
-            # Check if it matches the reference
-            if not subarray.__eq__(self.subarray):
+            # Check if the subarray matches the reference
+            subarrays_match = (
+                subarray.__eq__(self.subarray)
+                if self.enforce_subarray_equality
+                else SubarrayDescription.check_matching_subarrays([self.subarray, subarray])
+            )
+            if not subarrays_match:
+                message = (
+                    f"Subarray description of file '{filename}' does not match the reference subarray description."
+                )
                 if self.skip_incompatible_files:
-                    self.log.warning(
-                        f"Skipping '{filename}'. Subarray description does not match the reference subarray description."
-                    )
+                    self.log.warning(f"Skipping '{filename}'. {message}")
                     del self.files[filename]
                 else:
-                    raise ValueError(
-                        f"Subarray description of file '{filename}' does not match the reference subarray description."
-                    )
+                    raise ValueError(message)
 
         # Set the telescope type and camera name as class attributes for mono mode for convenience
         # FIXME Make image mapper not a dict because we only need one since we do not select multiple telescope types for image/wvf reading
