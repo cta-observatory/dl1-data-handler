@@ -166,9 +166,10 @@ class DLDataReader(Component):
     enforce_subarray_equality = Bool(
         default_value=True,
         help=(
-            "Enforce strict equality of subarray descriptions between files, "
-            "raising an error if they do not match exactly. If False, a looser check "
-            "primarily on telescope IDs is performed to ensure compatibility."
+            "Enforce strict equality of subarray descriptions between files. "
+            "If False, a looser check primarily on telescope IDs is performed "
+            "to ensure compatibility. Error will be raised if selected check failed "
+            "and skip_incompatible_files is False."
         ),
     ).tag(config=True)
 
