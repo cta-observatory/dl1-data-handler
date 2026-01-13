@@ -112,8 +112,6 @@ class ImageMapper(Component):
         self.camera_type = self.geometry.name
         self.n_pixels = self.geometry.n_pixels
         # Rotate the pixel positions by the pixel to align
-        if self.camera_type == "AdvCamSiPM":
-            self.geometry.pix_rotation = 8.213 * u.deg
         self.geometry.rotate(self.geometry.pix_rotation)
 
         self.pix_x = np.around(
