@@ -790,6 +790,7 @@ class DLDataReader(Component):
         self.unique_example_identifiers = unique(
             self.example_identifiers, keys=["obs_id", "event_id"]
         )
+        self.unique_example_identifiers.remove_columns(["table_index", "tel_type_id", "tel_id", "hillas_intensity"])
         # Construct simulation information for all files
         if self.process_type == ProcessType.Simulation:
             self.simulation_info = vstack(simulation_info)
