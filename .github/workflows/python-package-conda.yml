@@ -9,9 +9,14 @@ on:
       - "**"
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * *"  # Daily at 02:00 UTC
 
 jobs:
   build:
+    if: >
+      github.event_name != 'schedule' ||
+      (matrix.ctapipe-version == 'nightly' && matrix.python-version == '3.12')
     strategy:
       matrix:
         os: [ubuntu-22.04]
