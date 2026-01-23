@@ -6,6 +6,9 @@ import numpy as np
 from scipy import spatial
 from scipy.sparse import csr_matrix
 from collections import Counter, namedtuple
+import tables
+from importlib.resources import files
+import astropy.units as u
 
 from ctapipe.instrument.camera import PixelShape
 from ctapipe.core import Component
@@ -21,6 +24,7 @@ __all__ = [
     "RebinMapper",
     "ShiftingMapper",
     "SquareMapper",
+    "HexagonalPatchMapper",
 ]
 
 class ImageMapper(Component):
@@ -55,6 +59,8 @@ class ImageMapper(Component):
     rebinning_mult_factor : int
         Multiplication factor used for rebinning.
     index_matrix : numpy.ndarray or None
+        Matrix used for indexing, initialized to None.
+    cam_neighbor_array : numpy.ndarray or None
         Matrix used for indexing, initialized to None.
 
     Methods
@@ -101,12 +107,13 @@ class ImageMapper(Component):
             parent=parent,
             **component_kwargs,
         )
-
         # Camera types
         self.geometry = geometry
         self.camera_type = self.geometry.name
         self.n_pixels = self.geometry.n_pixels
         # Rotate the pixel positions by the pixel to align
+        if self.camera_type == "AdvCamSiPM":
+            self.geometry.pix_rotation = 8.213 * u.deg
         self.geometry.rotate(self.geometry.pix_rotation)
 
         self.pix_x = np.around(
@@ -122,7 +129,7 @@ class ImageMapper(Component):
         # Additional smooth the ticks for 'DigiCam', 'RealLSTCam' and 'CHEC' cameras
         if self.camera_type in ["DigiCam", "RealLSTCam"]:
             self.pix_y, self.y_ticks = self._smooth_ticks(self.pix_y, self.y_ticks)
-        if self.camera_type == "CHEC":
+        if self.camera_type in ["CHEC",  "AdvCamSiPM"]:
             self.pix_x, self.x_ticks = self._smooth_ticks(self.pix_x, self.x_ticks)
             self.pix_y, self.y_ticks = self._smooth_ticks(self.pix_y, self.y_ticks)
 
@@ -140,6 +147,7 @@ class ImageMapper(Component):
 
         # Set the indexed matrix to None
         self.index_matrix = None
+        self.cam_neighbor_array = None
 
     def map_image(self, raw_vector: np.array) -> np.array:
         """
@@ -374,7 +382,7 @@ class ImageMapper(Component):
             )
         # Adjust for odd tick_diff
         # TODO: Check why MAGICCam, VERITAS, and UNKNOWN-7987PX (AdvCam) do not need this adjustment
-        if tick_diff % 2 != 0 and self.camera_type not in ["MAGICCam", "VERITAS", "UNKNOWN-7987PX"]:
+        if tick_diff % 2 != 0 and self.camera_type not in ["MAGICCam", "VERITAS", "AdvCamSiPM"]:
             grid_second.insert(
                 0,
                 np.around(
@@ -662,6 +670,90 @@ class AxialMapper(ImageMapper):
         output_grid = np.column_stack([x_grid.ravel(), y_grid.ravel()])
 
         return input_grid, output_grid
+
+
+class HexagonalPatchMapper(ImageMapper):
+    """
+    HexagonalPatchMapper retrieves the necessary information to perform indexed 
+    convolutions, also allows croping the images following the "sipm_patches.h5"
+    patches geometry and reorders the pixels.
+
+    This class extends the functionality of ImageMapper by implementing
+    methods to look up at the configuration file and perform the image cropping.
+    It is particularly useful for applications where we are working with waveforms
+    with high time dimension.
+    """
+
+    def __init__(
+        self,
+        geometry,
+        config=None,
+        parent=None,
+        **kwargs,
+    ):
+        super().__init__(
+            geometry=geometry,
+            config=config,
+            parent=parent,
+            **kwargs,
+        )
+
+        if geometry.pix_type != PixelShape.HEXAGON:
+            raise ValueError(
+                f"HexagonalPatchMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
+             )
+
+        if geometry.name == "AdvCamSiPM":
+            path = files("dl1_data_handler.ressources").joinpath("triggergeometry_AdvCam_v1.h5")
+            with tables.open_file(path, mode="r") as f:
+                self.trigger_patches = f.root.patches.masks[:]
+                self.index_map = f.root.mappings.index_map[:]
+                self.neighbor_array = f.root.neighbors.patch0_neighbors[:]
+                self.cam_neighbor_array = f.root.neighbors.camera_neighbors[:]
+                self.fl_neighbor_array_tdscan = f.root.neighbors.flower_neighbors_tdscan[:]
+                self.fl_neighbor_array_l1 = f.root.neighbors.flower_neighbors_l1[:]
+                self.feb_indices = f.root.modules.indices[:]
+                self.feb_neighbors = f.root.neighbors.feb_neighbors[:]
+                self.supfl_neighbor_array_l1 = f.root.neighbors.superflower_neighbors_l1[:]
+                self.sectors_bool = f.root.sectors.mask[:]
+                self.sectors_indices = f.root.sectors.sectors_indices[:]
+                self.sect0_neighbors = f.root.sectors.sect0_neighbors[:]
+                self.sector_mappings = f.root.sectors.mapping[:]
+                # Remove -1 padding from each row
+                self.neighbor_tdscan_eps1_list = [row[row != -1].tolist() for row in self.fl_neighbor_array_tdscan]
+                self.fl_neighbor_l1_list = [row[row != -1].tolist() for row in self.fl_neighbor_array_l1]
+                self.supfl_neighbor_l1_list = [row[row != -1].tolist() for row in self.supfl_neighbor_array_l1]
+
+
+            self.num_patches = len(self.trigger_patches)
+            self.patch_size = self.neighbor_array.shape[0]
+            self.sector_size = self.sect0_neighbors.shape[0]
+
+            self.supfl_neighbor_l1_mask = self.supfl_neighbor_array_l1 >= 0
+        # Retrieve the camera neighbor array to perform convolutions with cameras different from AdvCamSiPM.
+        else:
+            self.log.debug(f"Computing neighbor array for {geometry.name} ...")
+            neighbor_matrix = geometry.neighbor_matrix
+            num_pixels = neighbor_matrix.shape[0]
+            neighbor_lists = []
+            for i in range(num_pixels):
+                # Find indices where the row is True
+                neighbors = np.where(neighbor_matrix[i])[0]
+                neighbor_lists.append([i] + neighbors.tolist())    
+
+            self.cam_neighbor_array = np.full((num_pixels, 7), -1, dtype=int)
+            for i, neighbors in enumerate(neighbor_lists):
+                self.cam_neighbor_array[i, :len(neighbors)] = neighbors
+
+    def get_reordered_patch(self, raw_vector, patch_index, out_size):
+        # Retrieve the patch needed remapped to a standarized patch order.
+        if out_size == "patch":
+            mapper = self.index_map
+        else: #sector
+            mapper = self.sector_mappings
+        mapper = mapper[patch_index]
+        unmapped_waveform=raw_vector[mapper]
+        return unmapped_waveform
 
 
 class ShiftingMapper(ImageMapper):
@@ -1231,7 +1323,7 @@ class RebinMapper(ImageMapper):
             self.image_shape = self.interpolation_image_shape
         self.internal_shape = self.image_shape + self.internal_pad * 2
         self.rebinning_mult_factor = 10
-        
+
         # Validate memory requirements before proceeding (if max_memory_gb is set)
         if self.max_memory_gb is not None:
             # RebinMapper uses a fine grid (internal_shape * rebinning_mult_factor)^2
@@ -1240,7 +1332,7 @@ class RebinMapper(ImageMapper):
             estimated_memory_gb = (
                 fine_grid_size * self.internal_shape * self.internal_shape * 4
             ) / (1024**3)  # 4 bytes per float32
-            
+
             if estimated_memory_gb > self.max_memory_gb:
                 raise ValueError(
                     f"RebinMapper with image_shape={self.image_shape} would require "
@@ -1250,7 +1342,7 @@ class RebinMapper(ImageMapper):
                     f"Alternatively, consider using a smaller interpolation_image_shape (recommended < 60) "
                     f"or use BilinearMapper or BicubicMapper instead, which are more memory-efficient."
                 )
-        
+
         # Creating the hexagonal and the output grid for the conversion methods.
         input_grid, output_grid = super()._get_grids_for_interpolation()
         # Calculate the mapping table
