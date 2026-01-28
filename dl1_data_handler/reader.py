@@ -1214,7 +1214,8 @@ def get_unmapped_image(dl1_event, channels, transforms) -> np.ndarray:
     channels : list of str
         A list of channels to be processed, such as ``image`` and ``peak_time``
         with optional ``cleaned_``-prefix for for the cleaned versions of the channels
-        and ``relative_``-prefix for the relative peak arrival times.
+        and ``relative_``-prefix for the relative peak arrival times. The ``log``-prefix
+        can be used to apply a logarithmic transformation to the image data.
     transforms : dict
         A dictionary containing scaling and offset values for image and peak time
         transformations.
@@ -1254,9 +1255,6 @@ def get_unmapped_image(dl1_event, channels, transforms) -> np.ndarray:
                 )
             else:
                 image[:, i] = dl1_event["peak_time"]
-        # Apply the cleaning mask to the image if specified
-        if "cleaned" in channel:
-            image[:, i] *= mask
         # Apply the transform to recover orginal floating point values if the file were compressed
         if "image" in channel:
             if transforms["image_scale"] > 0.0:
@@ -1268,6 +1266,14 @@ def get_unmapped_image(dl1_event, channels, transforms) -> np.ndarray:
                 image[:, i] /= transforms["peak_time_scale"]
             if transforms["peak_time_offset"] > 0:
                 image[:, i] -= transforms["peak_time_offset"]
+        # Apply the cleaning mask to the image if specified
+        if "cleaned" in channel:
+            image[:, i] *= mask
+        # Apply the logarithmic transformation to the image if specified
+        if "log_cleaned_image" == channel:
+            # Only apply log to values that survive the mask (non-zero)
+            valid = image[:, i] > 0
+            image[valid, i] = np.log10(image[valid, i])
     return image
 
 
@@ -1295,6 +1301,7 @@ class DLImageReader(DLDataReader):
             [
                 "image",
                 "cleaned_image",
+                "log_cleaned_image",
                 "peak_time",
                 "relative_peak_time",
                 "cleaned_peak_time",
@@ -1307,6 +1314,7 @@ class DLImageReader(DLDataReader):
             "Set the input channels to be loaded from the DL1 event data. "
             "image: integrated charges, "
             "cleaned_image: integrated charges cleaned with the DL1 cleaning mask, "
+            "log_cleaned_image: logarithm of the integrated charges cleaned with the DL1 cleaning mask, "
             "peak_time: extracted peak arrival times, "
             "relative_peak_time: extracted relative peak arrival times, "
             "cleaned_peak_time: extracted peak arrival times cleaned with the DL1 cleaning mask,"
