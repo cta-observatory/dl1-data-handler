@@ -27,7 +27,7 @@ classifiers = [
 
 requires-python = ">=3.12"
 dependencies = [
-    "ctapipe>=0.28",
+    "ctapipe>=0.25",
     "astropy",
     "eventio",
     "numpy",

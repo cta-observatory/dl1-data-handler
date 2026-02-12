@@ -30,7 +30,7 @@ requirements:
     - traitlets
     - pydot
     - setuptools
-    - ctapipe>=0.28
+    - ctapipe>=0.25
     - eventio
 
 

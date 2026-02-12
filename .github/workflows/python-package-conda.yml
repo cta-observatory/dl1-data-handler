@@ -18,7 +18,7 @@ jobs:
       matrix:
         os: [ubuntu-22.04]
         python-version: ['3.12', '3.13', '3.14']
-        ctapipe-version: ['latest', 'nightly']
+        ctapipe-version: ['0.25.0', 'latest', 'nightly']
       max-parallel: 6
     runs-on: ${{ matrix.os }}
     # Allow failures for nightly ctapipe or 3.14 builds
@@ -54,8 +54,10 @@ jobs:
           pip install eventio
           if [ "${{ matrix.ctapipe-version }}" = "nightly" ]; then
             pip install git+https://github.com/cta-observatory/ctapipe.git
-          else
+          elif [ "${{ matrix.ctapipe-version }}" = "latest" ]; then
             pip install ctapipe
+          else
+            pip install ctapipe==${{ matrix.ctapipe-version }}
           fi
           pip install pytest flake8
 
