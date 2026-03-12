@@ -664,7 +664,7 @@ class DLDataReader(Component):
                     # Look for real triggers for gammas, 20 ns around the center of the simulation window.
                     # For the NSB we just need the first trigger to be in the second retrieved sample.
                     combined_mask = (
-                        (cpe >= self.cpe_threshold) & np.any(trigger_array[:, center-10:center+11], axis=1) | 
+                        (cpe >= self.cpe_threshold) & np.any(trigger_array[:, center-5:center+6], axis=1) | 
                         (cpe == 0) & np.any(trigger_array[:, :length], axis=1)                        
                     )
                     self.example_identifiers = self.example_identifiers[combined_mask]
@@ -2058,6 +2058,12 @@ class DLTriggerReader(DLWaveformReader):
             "``threshold``: Threshold in ADC counts above which flowers are going to be considered as triggered. ")
     ).tag(config=True)
 
+    flatten_flower_feb_quantised = Bool(
+        default_value = False,
+        allow_none = False,
+        help=("Boolean variable to filter the table with events with positive triggers")
+    ).tag(config=True) 
+
     tdscan_settings = Dict(
         default_value ={"eps_xy":1, "eps_t":1, "min_pts":6},
         allow_none = True,
@@ -2109,7 +2115,7 @@ class DLTriggerReader(DLWaveformReader):
 
         elif self.output_settings == "waveform" and self.output_size == "camera":
             # Different shapes in case HexagonalPatchMapper or other square pixel mapper is selected.
-            if self.image_mapper_type != "HexagonalPatchMapper":
+            if self.image_mappers[self.cam_name].cam_neighbor_array is None:
                 self.input_shape = (
                     self.image_mappers[self.cam_name].image_shape,
                     self.image_mappers[self.cam_name].image_shape,
@@ -2120,7 +2126,10 @@ class DLTriggerReader(DLWaveformReader):
                 self.input_shape = (self.image_mappers[self.cam_name].n_pixels, final_time)
                 self.neighbor_array = self.image_mappers[self.cam_name].cam_neighbor_array
             elif self.trigger_output in ["flower_feb_quantised"]:
-                self.input_shape = (163, final_time, 2)
+                if self.flatten_flower_feb_quantised:
+                    self.input_shape = (163, final_time*2)
+                else:
+                    self.input_shape = (163, final_time, 2)
                 self.neighbor_array = self.image_mappers[self.cam_name].feb_neighbors
             elif self.trigger_output in ["feb_quantised"]: 
                 self.input_shape = (163, final_time)
@@ -2150,7 +2159,7 @@ class DLTriggerReader(DLWaveformReader):
            raise ValueError(
                 f"Output size {self.output_size} not compatible with trigger output {self.trigger_output}."
             )
-        if self.image_mapper_type != "HexagonalPatchMapper" and self.trigger_output in ["feb_quantised", "flower_feb_quantised"]:
+        if self.image_mappers[self.cam_name].cam_neighbor_array is None and self.input_shape[0] != self.image_mappers[self.cam_name].geometry.n_pixels:
            raise ValueError(
                 f"Only HexagonalPatchMapper method compatible with trigger output {self.trigger_output}, currently using {self.image_mapper_type}."
             )
@@ -2310,7 +2319,7 @@ class DLTriggerReader(DLWaveformReader):
                 records.append((row_idx, p, pe, cl))
 
         row_idxs, patch_idxs, ch_pe, patch_cls = zip(*records)
-        self.one_class = np.all(patch_cls == 0) or np.all(patch_cls == 1)
+        self.one_class = np.all(np.asarray(patch_cls) == 0) or np.all(np.asarray(patch_cls) == 1)
         if self.output_settings == "balanced_patches":
             row_idxs, patch_idxs, ch_pe, patch_cls = self._balanced_patches(
                 row_idxs, patch_idxs, ch_pe, patch_cls
@@ -2348,7 +2357,7 @@ class DLTriggerReader(DLWaveformReader):
         n_samples = waveforms.shape[1]
         center = n_samples // 2
         if true_show:
-            search_start, search_end = center-10, center+11
+            search_start, search_end = center-5, center+6
         else:
             search_start, search_end = 0, n_samples - self.trigger_length + 1
         # Find the first triggered sample
@@ -2435,13 +2444,15 @@ class DLTriggerReader(DLWaveformReader):
                             waveform = quantised_per_feb(flower_sums, self.l1_settings, self.quantisation_step) # shape: (n_febs, time)
                         elif self.l1_settings["eps"] in ['flower', 'superflower'] and self.trigger_output == "flower_feb_quantised":
                             waveform = quantised_per_flower(flower_sums, mask, self.l1_settings, self.quantisation_step) # shape: (n_febs, time, 2)
+                            if self.flatten_flower_feb_quantised:
+                                waveform = waveform.reshape((163, -1))  # shape: (n_febs, time*2)
                     # Masked, binary or stacked output                    
                     if self.trigger_output == 'mask':
                         if self.subtract_baseline:
                             waveform -= self.subtract_baseline                            
                         waveform *= np.array(bin_pixels, dtype=np.int64) # shape: (n_pixels, time)
                     elif self.trigger_output == 'binary':
-                        if self.image_mapper_type != "HexagonalPatchMapper" or self.output_size != "camera":
+                        if self.image_mappers[self.cam_name].cam_neighbor_array is None or self.output_size != "camera":
                             waveform = bin_pixels # shape: (n_pixels, time)
                         else:
                             waveform = np.array(mask) # shape: (n_trigger_regions, time)
