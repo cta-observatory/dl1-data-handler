@@ -12,7 +12,7 @@ import astropy.units as u
 
 from ctapipe.instrument.camera import PixelShape
 from ctapipe.core import Component
-from ctapipe.core.traits import Bool, Int, Float
+from ctapipe.core.traits import Bool, Int, Float, CaselessStrEnum
 
 __all__ = [
     "ImageMapper",
@@ -682,6 +682,15 @@ class HexagonalPatchMapper(ImageMapper):
     with high time dimension.
     """
 
+    patches_sector_version = CaselessStrEnum(
+        ["v1"],
+        default_value = "v1",
+        help=(
+            "Set the version of patches and sectors partitions, only available for the Advanced SiPM camera (AdvCam)."
+            "``v1``: 343 pixels non-overlapping trigger patches, and 2989 overlapping trigger sectors, for prod2 AdvCamSiPM."
+        ),
+    ).tag(config=True) 
+
     def __init__(
         self,
         geometry,
@@ -702,7 +711,7 @@ class HexagonalPatchMapper(ImageMapper):
              )
 
         if geometry.name == "AdvCamSiPM":
-            path = files("dl1_data_handler.ressources").joinpath("triggergeometry_AdvCam_v1.h5")
+            path = files("dl1_data_handler.ressources").joinpath(f"triggergeometry_AdvCam_{self.patches_sector_version}.h5")
             with tables.open_file(path, mode="r") as f:
                 self.trigger_patches = f.root.patches.masks[:]
                 self.index_map = f.root.mappings.index_map[:]
