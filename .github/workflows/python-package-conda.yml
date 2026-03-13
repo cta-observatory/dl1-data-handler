@@ -22,7 +22,7 @@ jobs:
       max-parallel: 6
     runs-on: ${{ matrix.os }}
     # Allow failures for nightly ctapipe or 3.14 builds
-    continue-on-error: ${{ matrix.ctapipe-version == 'nightly' || matrix.python-version == '3.14' }}
+    continue-on-error: ${{ matrix.ctapipe-version == 'nightly'}}
     steps:
       - uses: actions/checkout@v4
 
