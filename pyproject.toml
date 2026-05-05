@@ -35,6 +35,7 @@ dependencies = [
     "pip",
     "pyyaml",
     "scipy",
+    "tables ~=3.11",
     "traitlets",
     "pydot",
     "setuptools",
