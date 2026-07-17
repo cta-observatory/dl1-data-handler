@@ -222,6 +222,76 @@ class TestMapperBasicFunctionality:
         # Output should preserve the number of channels
         assert mapped_image.shape[2] == 2
 
+class TestMapperBatchFunctionality:
+    """Test batched image mapping functionality."""
+
+    @pytest.mark.parametrize(
+        "mapper_class",
+        [
+            BilinearMapper,
+            BicubicMapper,
+            NearestNeighborMapper,
+            AxialMapper,
+            OversamplingMapper,
+            ShiftingMapper,
+        ],
+    )
+    def test_mapper_batch_images(self, lstcam_geometry, mapper_class):
+        """Test that mappers support mapping multiple images at once.
+
+        The batch interface should produce the same result as mapping each
+        image individually, while returning an additional batch dimension.
+
+        Note: RebinMapper is excluded because its default configuration requires
+        special memory handling.
+        """
+        n_images = 10
+        n_channels = 2
+
+        mapper = mapper_class(geometry=lstcam_geometry)
+
+        # Create batch of images
+        batch_images = np.random.rand(
+            n_images,
+            lstcam_geometry.n_pixels,
+            n_channels,
+        ).astype(np.float32)
+
+        # Map batch
+        mapped_batch = mapper.map_image(batch_images)
+
+        # Check batch output shape
+        expected_shape = (
+            n_images,
+            mapper.image_shape,
+            mapper.image_shape,
+            n_channels,
+        )
+
+        assert (
+            mapped_batch.shape == expected_shape
+        ), (
+            f"{mapper_class.__name__}: batch output shape incorrect. "
+            f"Expected {expected_shape}, got {mapped_batch.shape}"
+        )
+
+        # Compare with individual mapping
+        mapped_individual = np.stack(
+            [
+                mapper.map_image(batch_images[i])
+                for i in range(n_images)
+            ],
+            axis=0,
+        )
+
+        np.testing.assert_allclose(
+            mapped_batch,
+            mapped_individual,
+            rtol=1e-6,
+            atol=1e-6,
+            err_msg=f"{mapper_class.__name__}: batch mapping differs from individual mapping",
+        )
+
 
 class TestRebinMapperMemoryValidation:
     """Test RebinMapper memory validation and functionality."""
