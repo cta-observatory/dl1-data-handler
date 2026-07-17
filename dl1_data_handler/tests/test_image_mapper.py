@@ -245,17 +245,22 @@ class TestMapperBatchFunctionality:
         Note: RebinMapper is excluded because its default configuration requires
         special memory handling.
         """
+        rng = np.random.default_rng(42)
+
         n_images = 10
         n_channels = 2
 
         mapper = mapper_class(geometry=lstcam_geometry)
 
         # Create batch of images
-        batch_images = np.random.rand(
-            n_images,
-            lstcam_geometry.n_pixels,
-            n_channels,
-        ).astype(np.float32)
+        batch_images = rng.random(
+            (
+                n_images,
+                lstcam_geometry.n_pixels,
+                n_channels,
+            ),
+            dtype=np.float32,
+        )
 
         # Map batch
         mapped_batch = mapper.map_image(batch_images)
