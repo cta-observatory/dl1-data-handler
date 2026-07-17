@@ -141,31 +141,59 @@ class ImageMapper(Component):
         # Set the indexed matrix to None
         self.index_matrix = None
 
-    def map_image(self, raw_vector: np.array) -> np.array:
+    def map_image(self, raw_vectors: np.ndarray) -> np.ndarray:
         """
-        Map the raw pixel data to a 2D image.
+        Map raw pixel vectors to 2D image representations.
+
+        This method supports both a single image and a batch of images. The input
+        pixel values are projected onto the image plane using the precomputed
+        mapping table. The operation is vectorized over images and channels and
+        uses sparse matrix multiplication for efficient processing.
 
         Parameters
         ----------
-        raw_vector : numpy.ndarray
-            A numpy array of values for each pixel, in order of pixel index.
+        raw_vectors : numpy.ndarray
+            Input pixel values.
+
+            For a single image:
+                Shape ``(n_pixels, n_channels)``
+
+            For a batch of images:
+                Shape ``(n_images, n_pixels, n_channels)``
+
+            Each pixel value should be ordered according to the camera pixel
+            indexing scheme used to generate the mapping table.
 
         Returns
         -------
         numpy.ndarray
-            A numpy array of shape [img_width, img_length, N_channels].
+            The mapped image(s).
+
+            For a single input image:
+                Shape ``(image_shape, image_shape, n_channels)``
+
+            For a batch input:
+                Shape ``(n_images, image_shape, image_shape, n_channels)``
+
+        Notes
+        -----
+        The mapping is performed by multiplying the input pixel vectors with
+        ``self.mapping_table``. For batched inputs, all images and channels are
+        combined into a single matrix multiplication to improve performance.
         """
-        # Reshape each channel and stack the result
-        images = np.concatenate(
-            [
-                (raw_vector[:, channel].T @ self.mapping_table).reshape(
-                    self.image_shape, self.image_shape, 1
-                )
-                for channel in range(raw_vector.shape[1])
-            ],
-            axis=-1,
-        )
-        return images
+        single_image = raw_vectors.ndim == 2
+        if single_image:
+            raw_vectors = raw_vectors[None, ...]
+        B, P, C = raw_vectors.shape
+        # (B*C, P)
+        x = raw_vectors.transpose(0, 2, 1).reshape(B * C, P)
+        # sparse multiplication
+        y = x @ self.mapping_table      # (B*C, H*W)
+        # (B, C, H, W)
+        y = y.reshape(B, C, self.image_shape, self.image_shape)
+        # (B, H, W, C) s
+        images = y.transpose(0, 2, 3, 1)
+        return images[0] if single_image else images
 
     def _get_virtual_pixels(self, x_ticks, y_ticks, pix_x, pix_y):
         """Get the virtual pixels outside of the camera."""
