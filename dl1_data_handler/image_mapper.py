@@ -110,21 +110,23 @@ class ImageMapper(Component):
         self.geometry.rotate(self.geometry.pix_rotation)
 
         self.pix_x = np.around(
-            self.geometry.pix_x.value, decimals=self.constants.decimal_precision
+            self.geometry.pix_x.to_value("m"), decimals=self.constants.decimal_precision
         )
         self.pix_y = np.around(
-            self.geometry.pix_y.value, decimals=self.constants.decimal_precision
+            self.geometry.pix_y.to_value("m"), decimals=self.constants.decimal_precision
         )
 
         self.x_ticks = np.unique(self.pix_x).tolist()
         self.y_ticks = np.unique(self.pix_y).tolist()
 
-        # Additional smooth the ticks for 'DigiCam', 'RealLSTCam' and 'CHEC' cameras
+        # Additional smooth the ticks for 'DigiCam', 'RealLSTCam', 'CHEC' and 'VERITAS' cameras
         if self.camera_type in ["DigiCam", "RealLSTCam"]:
             self.pix_y, self.y_ticks = self._smooth_ticks(self.pix_y, self.y_ticks)
         if self.camera_type == "CHEC":
             self.pix_x, self.x_ticks = self._smooth_ticks(self.pix_x, self.x_ticks)
             self.pix_y, self.y_ticks = self._smooth_ticks(self.pix_y, self.y_ticks)
+        if self.camera_type == "VERITAS":
+            self.pix_x, self.x_ticks = self._smooth_ticks(self.pix_x, self.x_ticks)
 
         # At the edges of the cameras some mapping methods run into issues.
         # Therefore, we are using a default padding to ensure that the camera pixels aren't affected.
