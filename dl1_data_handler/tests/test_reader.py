@@ -94,3 +94,30 @@ def test_dl1_hillas_parameter_extraction(dl1_image_reader):
     hillas_all = dl1_image_reader.get_parameters(batch)
 
     assert list(hillas_all.keys()) == dl1_image_reader.dl1b_parameter_colnames  # nosec
+
+from dl1_data_handler.reader import get_unmapped_image
+
+def test_get_unmapped_image_log():
+    """check reading log_image from unmapped image data"""
+    dl1_event = {
+        "image": np.array([10.0, 100.0, 0.0, -5.0], dtype=np.float32),
+        "image_mask": np.array([1, 1, 0, 0], dtype=np.int32),
+        "peak_time": np.array([1.0, 2.0, 0.0, 0.0], dtype=np.float32)
+    }
+    transforms = {
+        "image_scale": 1.0,
+        "image_offset": 0.0,
+        "peak_time_scale": 1.0,
+        "peak_time_offset": 0.0,
+    }
+    channels = ["image", "log_image"]
+    
+    unmapped = get_unmapped_image(dl1_event, channels, transforms)
+    
+    image = unmapped[:, 0]
+    log_image = unmapped[:, 1]
+    
+    valid = image > 0
+    np.testing.assert_allclose(log_image[valid], np.log10(image[valid]))
+    # For invalid values, the original values should remain unchanged
+    np.testing.assert_allclose(log_image[~valid], image[~valid])
