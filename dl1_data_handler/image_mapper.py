@@ -23,6 +23,7 @@ __all__ = [
     "SquareMapper",
 ]
 
+
 class ImageMapper(Component):
     """
     Base component for mapping raw 1D vectors into 2D mapped images.
@@ -65,7 +66,7 @@ class ImageMapper(Component):
 
     # Constants for the ImageMapper classes
     Constants = namedtuple("Constants", ["decimal_precision", "tick_interval_limit"])
-    constants = Constants(3, 0.002) 
+    constants = Constants(3, 0.002)
 
     def __init__(
         self,
@@ -92,7 +93,8 @@ class ImageMapper(Component):
         # Filter out non-traitlet kwargs before passing to Component
         # This allows compatibility with ctapipe's reader which may pass extra kwargs
         component_kwargs = {
-            key: value for key, value in kwargs.items()
+            key: value
+            for key, value in kwargs.items()
             if self.class_own_traits().get(key) is not None
         }
 
@@ -133,7 +135,7 @@ class ImageMapper(Component):
         # The default padding is removed after the conversion is finished.
         self.internal_pad = 0
         # Retrieve default shape of the image from the oversampling method.
-        _, output_grid = self._get_grids_for_oversampling()    
+        _, output_grid = self._get_grids_for_oversampling()
         # This value can be overwritten by the subclass
         self.image_shape = int(len(output_grid) ** 0.5)
 
@@ -190,7 +192,7 @@ class ImageMapper(Component):
         # (B*C, P)
         x = raw_vectors.transpose(0, 2, 1).reshape(B * C, P)
         # sparse multiplication
-        y = x @ self.mapping_table      # (B*C, H*W)
+        y = x @ self.mapping_table  # (B*C, H*W)
         # (B, C, H, W)
         y = y.reshape(B, C, self.image_shape, self.image_shape)
         # (B, H, W, C) s
@@ -200,7 +202,7 @@ class ImageMapper(Component):
     def _get_virtual_pixels(self, x_ticks, y_ticks, pix_x, pix_y):
         """Get the virtual pixels outside of the camera."""
         gridpoints = np.array(np.meshgrid(x_ticks, y_ticks)).T.reshape(-1, 2)
-        gridpoints = [tuple(l) for l in gridpoints.tolist()]
+        gridpoints = [tuple(pt) for pt in gridpoints.tolist()]
         virtual_pixels = set(gridpoints) - set(zip(pix_x, pix_y))
         virtual_pixels = np.array(list(virtual_pixels))
         return virtual_pixels
@@ -210,10 +212,12 @@ class ImageMapper(Component):
     ):
         """Create virtual hexagonal pixels outside of the camera."""
         dist_first = np.around(
-            abs(first_ticks[0] - first_ticks[1]), decimals=self.constants.decimal_precision
+            abs(first_ticks[0] - first_ticks[1]),
+            decimals=self.constants.decimal_precision,
         )
         dist_second = np.around(
-            abs(second_ticks[0] - second_ticks[1]), decimals=self.constants.decimal_precision
+            abs(second_ticks[0] - second_ticks[1]),
+            decimals=self.constants.decimal_precision,
         )
 
         tick_diff = len(first_ticks) * 2 - len(second_ticks)
@@ -257,7 +261,8 @@ class ImageMapper(Component):
             second_ticks.insert(
                 0,
                 np.around(
-                    second_ticks[0] - dist_second, decimals=self.constants.decimal_precision
+                    second_ticks[0] - dist_second,
+                    decimals=self.constants.decimal_precision,
                 ),
             )
 
@@ -353,7 +358,6 @@ class ImageMapper(Component):
         weights = np.stack((w1, w2, w3), axis=-1)
         return weights.astype(np.float32)
 
-
     def _get_grids_for_oversampling(
         self,
     ):
@@ -404,11 +408,16 @@ class ImageMapper(Component):
             )
         # Adjust for odd tick_diff
         # TODO: Check why MAGICCam, VERITAS, and UNKNOWN-7987PX (AdvCam) do not need this adjustment
-        if tick_diff % 2 != 0 and self.camera_type not in ["MAGICCam", "VERITAS", "UNKNOWN-7987PX"]:
+        if tick_diff % 2 != 0 and self.camera_type not in [
+            "MAGICCam",
+            "VERITAS",
+            "UNKNOWN-7987PX",
+        ]:
             grid_second.insert(
                 0,
                 np.around(
-                    grid_second[0] - dist_second, decimals=self.constants.decimal_precision
+                    grid_second[0] - dist_second,
+                    decimals=self.constants.decimal_precision,
                 ),
             )
 
@@ -626,10 +635,12 @@ class AxialMapper(ImageMapper):
         )
 
         dist_first = np.around(
-            abs(first_ticks[0] - first_ticks[1]), decimals=self.constants.decimal_precision
+            abs(first_ticks[0] - first_ticks[1]),
+            decimals=self.constants.decimal_precision,
         )
         dist_second = np.around(
-            abs(second_ticks[0] - second_ticks[1]), decimals=self.constants.decimal_precision
+            abs(second_ticks[0] - second_ticks[1]),
+            decimals=self.constants.decimal_precision,
         )
 
         # manipulate y ticks with extra ticks
@@ -637,7 +648,8 @@ class AxialMapper(ImageMapper):
         for i in np.arange(num_extra_ticks):
             second_ticks.append(
                 np.around(
-                    second_ticks[-1] + dist_second, decimals=self.constants.decimal_precision
+                    second_ticks[-1] + dist_second,
+                    decimals=self.constants.decimal_precision,
                 )
             )
         first_ticks = reversed(first_ticks)
@@ -765,13 +777,15 @@ class ShiftingMapper(ImageMapper):
         for _ in np.arange(tick_diff_each_side):
             second_ticks.append(
                 np.around(
-                    second_ticks[-1] + dist_second, decimals=self.constants.decimal_precision
+                    second_ticks[-1] + dist_second,
+                    decimals=self.constants.decimal_precision,
                 )
             )
             second_ticks.insert(
                 0,
                 np.around(
-                    second_ticks[0] - dist_second, decimals=self.constants.decimal_precision
+                    second_ticks[0] - dist_second,
+                    decimals=self.constants.decimal_precision,
                 ),
             )
         # If tick_diff is odd, add one more tick to the beginning
@@ -779,7 +793,8 @@ class ShiftingMapper(ImageMapper):
             second_ticks.insert(
                 0,
                 np.around(
-                    second_ticks[0] - dist_second, decimals=self.constants.decimal_precision
+                    second_ticks[0] - dist_second,
+                    decimals=self.constants.decimal_precision,
                 ),
             )
         # Create the input and output grid
@@ -839,7 +854,6 @@ class OversamplingMapper(ImageMapper):
         self.mapping_table = super()._generate_nearestneighbor_table(
             input_grid, output_grid, pixel_weight=0.25
         )
-
 
 
 class NearestNeighborMapper(ImageMapper):
@@ -1139,16 +1153,16 @@ class BicubicMapper(ImageMapper):
         for i in range(4):
             for j in range(self.internal_shape):
                 for k in range(self.internal_shape):
-                    for l in range(weights.shape[3]):
+                    for m in range(weights.shape[3]):
                         index = (
-                            corner_indexes[i][k][j][l]
+                            corner_indexes[i][k][j][m]
                             if weights.shape[3] == 3
-                            else corner_indexes[k][j][i][l]
+                            else corner_indexes[k][j][i][m]
                         )
                         mapping_matrix[index][k][j] = (
-                            weights[i][k][j][l] / 4
+                            weights[i][k][j][m] / 4
                             if weights.shape[3] == 3
-                            else weights[k][j][i][l] / 4
+                            else weights[k][j][i][m] / 4
                         )
         return super()._get_sparse_mapping_matrix(mapping_matrix)
 
@@ -1261,7 +1275,7 @@ class RebinMapper(ImageMapper):
             self.image_shape = self.interpolation_image_shape
         self.internal_shape = self.image_shape + self.internal_pad * 2
         self.rebinning_mult_factor = 10
-        
+
         # Validate memory requirements before proceeding (if max_memory_gb is set)
         if self.max_memory_gb is not None:
             # RebinMapper uses a fine grid (internal_shape * rebinning_mult_factor)^2
@@ -1270,7 +1284,7 @@ class RebinMapper(ImageMapper):
             estimated_memory_gb = (
                 fine_grid_size * self.internal_shape * self.internal_shape * 4
             ) / (1024**3)  # 4 bytes per float32
-            
+
             if estimated_memory_gb > self.max_memory_gb:
                 raise ValueError(
                     f"RebinMapper with image_shape={self.image_shape} would require "
@@ -1280,7 +1294,7 @@ class RebinMapper(ImageMapper):
                     f"Alternatively, consider using a smaller interpolation_image_shape (recommended < 60) "
                     f"or use BilinearMapper or BicubicMapper instead, which are more memory-efficient."
                 )
-        
+
         # Creating the hexagonal and the output grid for the conversion methods.
         input_grid, output_grid = super()._get_grids_for_interpolation()
         # Calculate the mapping table

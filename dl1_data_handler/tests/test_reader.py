@@ -25,9 +25,7 @@ def test_dl1_image_reading(dl1_image_reader):
     for col in dl1_image_reader.example_ids_keep_columns:
         assert not np.isnan(mono_batch[col][0])  # nosec
     # Check that the transformation is also present and has no NaN values
-    assert mono_batch["log_true_energy"][0] == np.log10(
-        mono_batch["true_energy"][0]
-    )  # nosec
+    assert mono_batch["log_true_energy"][0] == np.log10(mono_batch["true_energy"][0])  # nosec
     assert mono_batch["impact_radius"][0] == np.sqrt(
         mono_batch["true_core_y"][0] ** 2 + mono_batch["true_core_x"][0] ** 2
     )  # nosec
@@ -75,21 +73,19 @@ def test_dl1_hillas_parameter_extraction(dl1_image_reader):
     hillas = dl1_image_reader.get_parameters(batch, hillas_names_1)
     present_count = sum(name in hillas for name in hillas_names_1)
 
-    assert present_count == len(
-        hillas_names_1
-    ), f"Missing parameters: {set(hillas_names_1) - hillas.keys()}"  # nosec
+    assert present_count == len(hillas_names_1), (
+        f"Missing parameters: {set(hillas_names_1) - hillas.keys()}"
+    )  # nosec
 
     # Test with one invalid parameter name included
     hillas_partial = dl1_image_reader.get_parameters(batch, hillas_names_2)
     present_count_partial = sum(name in hillas_partial for name in hillas_names_2)
 
-    assert present_count_partial < len(
-        hillas_names_2
-    ), "Unexpected match for invalid parameter"  # nosec
+    assert present_count_partial < len(hillas_names_2), (
+        "Unexpected match for invalid parameter"
+    )  # nosec
 
-    assert (
-        "NO_NAME" not in hillas_partial
-    ), "'NO_NAME' should not be in the result"  # nosec
+    assert "NO_NAME" not in hillas_partial, "'NO_NAME' should not be in the result"  # nosec
 
     hillas_all = dl1_image_reader.get_parameters(batch)
 
@@ -101,7 +97,7 @@ def test_get_unmapped_image_log():
     dl1_event = {
         "image": np.array([10.0, 100.0, 0.0, -5.0], dtype=np.float32),
         "image_mask": np.array([1, 1, 0, 0], dtype=np.int32),
-        "peak_time": np.array([1.0, 2.0, 0.0, 0.0], dtype=np.float32)
+        "peak_time": np.array([1.0, 2.0, 0.0, 0.0], dtype=np.float32),
     }
     transforms = {
         "image_scale": 1.0,
@@ -110,12 +106,12 @@ def test_get_unmapped_image_log():
         "peak_time_offset": 0.0,
     }
     channels = ["image", "log_image"]
-    
+
     unmapped = get_unmapped_image(dl1_event, channels, transforms)
-    
+
     image = unmapped[:, 0]
     log_image = unmapped[:, 1]
-    
+
     valid = image > 0
     np.testing.assert_allclose(log_image[valid], np.log10(image[valid]))
     # For invalid values, the original values should remain unchanged

@@ -24,7 +24,6 @@ import tables
 import threading
 
 from astropy import units as u
-from astropy.coordinates.earth import EarthLocation
 from astropy.coordinates import AltAz, SkyCoord
 from astropy.table import (
     Table,
@@ -309,7 +308,9 @@ class DLDataReader(Component):
             )
 
         # Set up the subarray
-        self.subarray = SubarrayDescription.from_hdf(self.first_file, focal_length_choice=self.focal_length_choice)
+        self.subarray = SubarrayDescription.from_hdf(
+            self.first_file, focal_length_choice=self.focal_length_choice
+        )
         selected_tel_ids = None
         if self.allowed_tels is not None:
             selected_tel_ids = np.array(list(self.allowed_tels), dtype=np.int16)
@@ -357,7 +358,9 @@ class DLDataReader(Component):
         # Check that all files have the same SubarrayDescription
         for filename in self.files:
             # Read SubarrayDescription from the new file
-            subarray = SubarrayDescription.from_hdf(filename, focal_length_choice=self.focal_length_choice)
+            subarray = SubarrayDescription.from_hdf(
+                filename, focal_length_choice=self.focal_length_choice
+            )
 
             # Filter subarray by selected telescopes
             if selected_tel_ids is not None:
@@ -367,12 +370,12 @@ class DLDataReader(Component):
             subarrays_match = (
                 subarray.__eq__(self.subarray)
                 if self.enforce_subarray_equality
-                else SubarrayDescription.check_matching_subarrays([self.subarray, subarray])
+                else SubarrayDescription.check_matching_subarrays(
+                    [self.subarray, subarray]
+                )
             )
             if not subarrays_match:
-                message = (
-                    f"Subarray description of file '{filename}' does not match the reference subarray description."
-                )
+                message = f"Subarray description of file '{filename}' does not match the reference subarray description."
                 if self.skip_incompatible_files:
                     self.log.warning(f"Skipping '{filename}'. {message}")
                     del self.files[filename]
@@ -476,7 +479,7 @@ class DLDataReader(Component):
                     "true_core_x",
                     "true_core_y",
                     "true_h_first_int",
-                    "true_x_max"
+                    "true_x_max",
                 ]
             )
         elif self.process_type == ProcessType.Observation:
@@ -546,7 +549,8 @@ class DLDataReader(Component):
                 if self.force_dl1_lookup:
                     # Read the DL1 image table
                     dl1_tel_table = read_table(
-                        f, f"/dl1/event/telescope/images/tel_{tel_id:03d}",
+                        f,
+                        f"/dl1/event/telescope/images/tel_{tel_id:03d}",
                     )
                     # Keep only the columns needed for the join
                     dl1_tel_table.keep_columns(["obs_id", "event_id", "tel_id"])
@@ -555,7 +559,9 @@ class DLDataReader(Component):
                         np.arange(len(dl1_tel_table)), name="table_index", index=0
                     )
                     # Unique the table to remove unwanted duplication
-                    dl1_tel_table = unique(dl1_tel_table, keys=["obs_id", "event_id", "tel_id"])
+                    dl1_tel_table = unique(
+                        dl1_tel_table, keys=["obs_id", "event_id", "tel_id"]
+                    )
                     # Join the DL1 image table with the DL1 parameter table
                     tel_table = join(
                         left=tel_table,
@@ -687,7 +693,8 @@ class DLDataReader(Component):
                     if self.force_dl1_lookup:
                         # Read the DL1 image table
                         dl1_tel_table = read_table(
-                            f, f"/dl1/event/telescope/images/tel_{tel_id:03d}",
+                            f,
+                            f"/dl1/event/telescope/images/tel_{tel_id:03d}",
                         )
                         # Keep only the columns needed for the join
                         dl1_tel_table.keep_columns(["obs_id", "event_id", "tel_id"])
@@ -696,7 +703,9 @@ class DLDataReader(Component):
                             np.arange(len(dl1_tel_table)), name="table_index", index=0
                         )
                         # Unique the table to remove unwanted duplication
-                        dl1_tel_table = unique(dl1_tel_table, keys=["obs_id", "event_id", "tel_id"])
+                        dl1_tel_table = unique(
+                            dl1_tel_table, keys=["obs_id", "event_id", "tel_id"]
+                        )
                         # Join the DL1 image table with the DL1 parameter table
                         tel_table = join(
                             left=tel_table,
@@ -790,7 +799,9 @@ class DLDataReader(Component):
         self.unique_example_identifiers = unique(
             self.example_identifiers, keys=["obs_id", "event_id"]
         )
-        self.unique_example_identifiers.remove_columns(["table_index", "tel_type_id", "tel_id", "hillas_intensity"])
+        self.unique_example_identifiers.remove_columns(
+            ["table_index", "tel_type_id", "tel_id", "hillas_intensity"]
+        )
         # Construct simulation information for all files
         if self.process_type == ProcessType.Simulation:
             self.simulation_info = vstack(simulation_info)
@@ -896,7 +907,7 @@ class DLDataReader(Component):
             A Table with the impact radius added as a new column.
         """
         # Calculate the impact radius
-        impact_radius = np.sqrt(table["true_core_x"]**2 + table["true_core_y"]**2)
+        impact_radius = np.sqrt(table["true_core_x"] ** 2 + table["true_core_y"] ** 2)
         # Add the impact radius to the table
         table.add_column(impact_radius, name="impact_radius")
         return table
@@ -1026,7 +1037,7 @@ class DLDataReader(Component):
         """
         if not parameter_list:
             parameter_list = self.dl1b_parameter_colnames
-            
+
         param_dict = {param: [] for param in parameter_list}
         initialized = False
         available_params = set()
@@ -1058,7 +1069,7 @@ class DLDataReader(Component):
 
         if parameter_list != list(param_dict.keys()):
             self.log.warning("The parameter list does not match with the output.")
- 
+
         return param_dict
 
     def generate_mono_batch(self, batch_indices) -> Table:
