@@ -2,7 +2,7 @@ import pytest
 from traitlets.config.loader import Config
 import numpy as np
 
-from dl1_data_handler.reader import DLImageReader, DLWaveformReader
+from dl1_data_handler.reader import DLImageReader, DLWaveformReader, get_unmapped_image
 
 
 @pytest.fixture
@@ -95,7 +95,6 @@ def test_dl1_hillas_parameter_extraction(dl1_image_reader):
 
     assert list(hillas_all.keys()) == dl1_image_reader.dl1b_parameter_colnames  # nosec
 
-from dl1_data_handler.reader import get_unmapped_image
 
 def test_get_unmapped_image_log():
     """check reading log_image from unmapped image data"""
