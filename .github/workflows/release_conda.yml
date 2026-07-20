@@ -50,7 +50,7 @@ jobs:
           export PACKAGE_VERSION=$VERSION
 
           # Build the package
-          PACKAGE_PATH=$(conda run -n dl1dh conda build "$CONDA_RECIPE_DIR" --output)
+          PACKAGE_PATH=$(conda run -n dl1dh conda-build "$CONDA_RECIPE_DIR" --output)
           conda run -n dl1dh conda build "$CONDA_RECIPE_DIR"
 
           # Upload only if this is a release
