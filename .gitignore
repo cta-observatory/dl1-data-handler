@@ -9,3 +9,4 @@ dl1_data_handler/__pycache__
 build
 dist
 *.egg-info/
+*.pyc
