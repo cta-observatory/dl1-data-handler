@@ -1270,8 +1270,8 @@ def get_unmapped_image(dl1_event, channels, transforms) -> np.ndarray:
         if "cleaned" in channel:
             image[:, i] *= mask
         # Apply the logarithmic transformation to the image if specified
-        if "log_cleaned_image" == channel:
-            # Only apply log to values that survive the mask (non-zero)
+        if "log" in channel:
+            # Only apply log to positive values
             valid = image[:, i] > 0
             image[valid, i] = np.log10(image[valid, i])
     return image
@@ -1300,6 +1300,7 @@ class DLImageReader(DLDataReader):
         trait=CaselessStrEnum(
             [
                 "image",
+                "log_image",
                 "cleaned_image",
                 "log_cleaned_image",
                 "peak_time",
@@ -1313,6 +1314,7 @@ class DLImageReader(DLDataReader):
         help=(
             "Set the input channels to be loaded from the DL1 event data. "
             "image: integrated charges, "
+            "log_image: logarithm of the integrated charges, "
             "cleaned_image: integrated charges cleaned with the DL1 cleaning mask, "
             "log_cleaned_image: logarithm of the integrated charges cleaned with the DL1 cleaning mask, "
             "peak_time: extracted peak arrival times, "
