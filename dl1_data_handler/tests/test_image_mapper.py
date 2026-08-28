@@ -6,6 +6,7 @@ from ctapipe.instrument import CameraGeometry
 from dl1_data_handler.image_mapper import (
     BilinearMapper,
     BicubicMapper,
+    HexagdlyMapper,
     NearestNeighborMapper,
     RebinMapper,
     AxialMapper,
@@ -134,6 +135,7 @@ class TestMapperBasicFunctionality:
             BicubicMapper,
             NearestNeighborMapper,
             AxialMapper,
+            HexagdlyMapper,
             OversamplingMapper,
             ShiftingMapper,
         ],
@@ -175,6 +177,7 @@ class TestMapperBasicFunctionality:
             BicubicMapper,
             NearestNeighborMapper,
             AxialMapper,
+            HexagdlyMapper,
             OversamplingMapper,
             ShiftingMapper,
         ],
@@ -201,6 +204,7 @@ class TestMapperBasicFunctionality:
             BicubicMapper,
             NearestNeighborMapper,
             AxialMapper,
+            HexagdlyMapper,
             OversamplingMapper,
             ShiftingMapper,
         ],
@@ -232,6 +236,7 @@ class TestMapperBatchFunctionality:
             BicubicMapper,
             NearestNeighborMapper,
             AxialMapper,
+            HexagdlyMapper,
             OversamplingMapper,
             ShiftingMapper,
         ],
@@ -395,3 +400,123 @@ class TestAxialMapperSpecific:
         assert mapper.index_matrix is not None
         # Index matrix should have the same shape as the output image
         assert mapper.index_matrix.shape == (mapper.image_shape, mapper.image_shape)
+
+
+class TestHexagdlyMapperSpecific:
+    """Test HexagdlyMapper specific functionality.
+
+    Unlike the interpolation-based mappers, HexagdlyMapper places each pixel
+    at an *exact* grid cell (no interpolation), verified against the
+    camera's own neighbour graph. These tests cover that verification and
+    the exact placement, on top of the generic contract tests above.
+    """
+
+    @pytest.mark.parametrize(
+        "camera_name",
+        ["LSTCam", "MAGICCam", "NectarCam", "FlashCam", "DigiCam"],
+    )
+    def test_zero_neighbor_mismatches(self, camera_name):
+        """The hex-grid addressing must exactly reproduce each camera's
+        physical neighbour graph -- zero mismatches, not an approximation.
+
+        DigiCam specifically regression-tests the chirality search in
+        _HexGridTransform: its raw pixel index order is point-inverted
+        (both axial q and r negated) relative to the other four cameras
+        here, which all happen to share one handedness. Without searching
+        over both, DigiCam mismatched on every single pixel (1296/1296).
+        """
+        geometry = CameraGeometry.from_name(camera_name)
+        mapper = HexagdlyMapper(geometry=geometry)
+        assert mapper.grid_transform.neighbor_mismatch_count == 0
+
+    def test_square_pixel_camera_rejected(self):
+        """HexagdlyMapper only supports hexagonal-pixel cameras."""
+        square_geometry = CameraGeometry.from_name("SCTCam")
+        with pytest.raises(ValueError, match="hexagonal pixel cameras"):
+            HexagdlyMapper(geometry=square_geometry)
+
+    def test_image_shape_is_square_padded(self, lstcam_geometry):
+        """DLDataReader assumes a square image_shape; the (possibly
+        non-square) hex grid must be padded to image_shape = max(H, W)."""
+        mapper = HexagdlyMapper(geometry=lstcam_geometry)
+        grid = mapper.grid_transform
+        assert mapper.image_shape == max(grid.H, grid.W)
+
+    def test_chirality_search_is_generic_not_camera_specific(self, lstcam_geometry):
+        """Regression test for the DigiCam neighbour-mismatch bug: negate the
+        x-coordinate of a camera that already works (LSTCam) to synthesize a
+        camera with the OPPOSITE pixel-index handedness, independent of any
+        specific real camera's data. If the chirality search in
+        _HexGridTransform were hardcoded to LSTCam's handedness (or worse,
+        keyed off the camera name) rather than generic, this would fail.
+        """
+        mirrored = CameraGeometry(
+            name="LSTCam_mirrored_for_test",
+            pix_id=lstcam_geometry.pix_id,
+            pix_x=-lstcam_geometry.pix_x,
+            pix_y=lstcam_geometry.pix_y,
+            pix_area=lstcam_geometry.pix_area,
+            pix_type=lstcam_geometry.pix_type,
+            pix_rotation=lstcam_geometry.pix_rotation,
+        )
+        # Mirroring must not change the neighbour topology itself -- only the
+        # handedness -- otherwise this wouldn't isolate the chirality issue.
+        assert all(
+            set(map(int, mirrored.neighbors[i])) == set(map(int, lstcam_geometry.neighbors[i]))
+            for i in range(lstcam_geometry.n_pixels)
+        )
+        mapper = HexagdlyMapper(geometry=mirrored)
+        assert mapper.grid_transform.neighbor_mismatch_count == 0
+
+    def test_exact_pixel_placement_roundtrip(self, lstcam_geometry):
+        """Every real camera pixel's value must land at exactly its
+        row_idx/col_idx grid cell, with no interpolation/blending."""
+        mapper = HexagdlyMapper(geometry=lstcam_geometry)
+        grid = mapper.grid_transform
+
+        image = np.arange(1, lstcam_geometry.n_pixels + 1, dtype=np.float32).reshape(
+            -1, 1
+        )
+        mapped = mapper.map_image(image)
+
+        for pixel_idx in range(lstcam_geometry.n_pixels):
+            row, col = int(grid.row_idx[pixel_idx]), int(grid.col_idx[pixel_idx])
+            assert mapped[row, col, 0] == pixel_idx + 1
+
+        # Every non-pixel cell is empty padding.
+        n_nonzero = np.count_nonzero(mapped[..., 0])
+        assert n_nonzero == lstcam_geometry.n_pixels
+
+    def test_origin_and_chirality_search_runs_once_not_per_image(
+        self, lstcam_geometry, monkeypatch
+    ):
+        """The grid-origin/chirality candidate search must run only once, at
+        mapper construction time -- never per map_image() call. If it ran per
+        image, mapping a large dataset would pay the search cost on every
+        single event instead of once per camera type.
+        """
+        from dl1_data_handler import image_mapper as image_mapper_module
+
+        call_count = {"n": 0}
+        original_mismatch = image_mapper_module._HexGridTransform._mismatch
+
+        def counting_mismatch(cls, geometry, row, col):
+            call_count["n"] += 1
+            return original_mismatch(geometry, row, col)
+
+        monkeypatch.setattr(
+            image_mapper_module._HexGridTransform,
+            "_mismatch",
+            classmethod(counting_mismatch),
+        )
+
+        mapper = HexagdlyMapper(geometry=lstcam_geometry)
+        n_calls_after_construction = call_count["n"]
+        assert n_calls_after_construction > 0  # the search did run at construction
+
+        rng = np.random.default_rng(0)
+        for _ in range(20):
+            image = rng.random((lstcam_geometry.n_pixels, 1)).astype(np.float32)
+            mapper.map_image(image)
+
+        assert call_count["n"] == n_calls_after_construction
