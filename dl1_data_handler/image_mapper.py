@@ -1488,14 +1488,21 @@ class _HexGridTransform:
 class HexagdlyMapper(ImageMapper):
     """Map a hexagonal camera image onto a ``keras_hexagdly``-addressed grid.
 
-    Unlike the other ``ImageMapper`` subclasses (``BilinearMapper``,
-    ``AxialMapper``, ...), which resample the hexagonal pixel grid onto an
-    axis-aligned square grid via interpolation, ``HexagdlyMapper`` places
-    each pixel value at its *exact* nearest-neighbour cell on the
+    ``HexagdlyMapper`` places each pixel value at its exact cell on the
     offset-column grid that ``keras_hexagdly.layers.Conv2d``/``MaxPool2d``
-    expect (see :class:`_HexGridTransform`). No interpolation is involved --
-    every output cell is either exactly one camera pixel's value or empty
-    padding.
+    address (see :class:`_HexGridTransform`), and verifies that every camera
+    pixel's hexagonal neighbours land where those layers expect --
+    construction fails if any neighbour relation is broken. No interpolation
+    is involved: every output cell is either exactly one camera pixel's value
+    or empty padding.
+
+    The other mappers target a plain square convolution instead, either by
+    resampling onto a square grid (``BilinearMapper``, ``BicubicMapper``,
+    ``NearestNeighborMapper``, ``RebinMapper``, ``OversamplingMapper``) or by
+    re-addressing pixels without changing their values (``AxialMapper``,
+    ``ShiftingMapper``). In those layouts a square kernel's neighbourhood
+    does not coincide with the camera's hexagonal one, which is what
+    ``keras_hexagdly``'s parity-aware sub-kernels exist to handle.
 
     The mapping is built as a one-hot ``mapping_table`` (weight 1.0 at each
     pixel's grid cell), so the inherited ``ImageMapper.map_image`` is reused
