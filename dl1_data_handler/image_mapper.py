@@ -1347,19 +1347,19 @@ class _HexGridTransform:
     row/column of every camera pixel on that grid from its ``ctapipe``
     ``CameraGeometry``.
 
-    Camera geometries are not generally axis-aligned (e.g. ``LSTCam`` is
-    rotated ~41 degrees), so neighbour pairs are not necessarily horizontal,
-    which the offset-column addressing relies on. This is handled with an
-    automatic de-rotation step (rotate the pixel coordinates so a neighbour
-    pair becomes horizontal) before the offset-column assignment. The
-    resulting mapping is verified against the camera's own neighbour graph
+    The offset-column addressing needs one family of neighbour pairs to be
+    horizontal. That alignment comes from ``ImageMapper.__init__``, which
+    rotates the geometry by its ``pix_rotation`` before
+    :class:`HexagdlyMapper` builds this transform, so ``geometry`` is
+    expected to be aligned already. The resulting mapping is verified
+    against the camera's own neighbour graph
     (:attr:`neighbor_mismatch_count`); zero mismatches means every pixel's
-    grid neighbours are exactly its physical camera neighbours.
+    grid neighbours are exactly its physical camera neighbours, so a
+    geometry whose ``pix_rotation`` doesn't match its pixel layout fails
+    loudly rather than mapping silently wrong.
 
-    Only hexagonal-pixel cameras are supported -- construction raises on a
-    square-pixel geometry (e.g. ``SCTCam``, ``CHEC``) via the "no horizontal
-    neighbour vectors" check below, since a square pixel grid has no
-    60-degree neighbour structure to fold into.
+    Only hexagonal-pixel cameras are supported; :class:`HexagdlyMapper`
+    rejects other pixel shapes before this class is used.
 
     Parameters
     ----------
@@ -1379,22 +1379,21 @@ class _HexGridTransform:
     """
 
     def __init__(self, geometry):
-        x = geometry.pix_x.value.astype(np.float64)
-        y = geometry.pix_y.value.astype(np.float64)
-        x, y = self._derotate(x, y, geometry.neighbors)
+        x = geometry.pix_x.to_value("m").astype(np.float64)
+        y = geometry.pix_y.to_value("m").astype(np.float64)
 
         vecs = self._neighbor_vectors(x, y, geometry.neighbors)
         dist = np.linalg.norm(vecs, axis=1)
         horiz = np.abs(vecs[:, 1]) < np.median(dist) * 1e-3
         if not np.any(horiz):
             raise ValueError(
-                "no horizontal neighbour vectors after de-rotation -- "
-                "_HexGridTransform only supports hexagonal-pixel cameras"
+                "no horizontal neighbour vectors -- _HexGridTransform expects a "
+                "hexagonal-pixel geometry already aligned by its pix_rotation"
             )
         if not np.any(~horiz):
             raise ValueError(
-                "no non-horizontal neighbour vectors after de-rotation -- "
-                "_HexGridTransform only supports hexagonal-pixel cameras"
+                "no non-horizontal neighbour vectors -- _HexGridTransform expects a "
+                "hexagonal-pixel geometry already aligned by its pix_rotation"
             )
         horizontal_pitch = np.median(np.abs(vecs[horiz, 0]))
         vertical_pitch = np.median(np.abs(vecs[~horiz, 1]))
@@ -1442,13 +1441,6 @@ class _HexGridTransform:
                 if i < j:
                     v.append((x[j] - x[i], y[j] - y[i]))
         return np.asarray(v)
-
-    @classmethod
-    def _derotate(cls, x, y, neighbors):
-        v = cls._neighbor_vectors(x, y, neighbors)
-        # angle that makes a neighbour pair horizontal (fold into one 60deg sector)
-        t = np.median(np.arctan2(v[:, 1], v[:, 0]) % (np.pi / 3))
-        return x * np.cos(t) + y * np.sin(t), -x * np.sin(t) + y * np.cos(t)
 
     @staticmethod
     def _offset_from_axial(q, r):
