@@ -413,7 +413,7 @@ class TestHexagdlyMapperSpecific:
 
     @pytest.mark.parametrize(
         "camera_name",
-        ["LSTCam", "MAGICCam", "NectarCam", "FlashCam", "DigiCam"],
+        ["LSTCam", "MAGICCam", "NectarCam", "FlashCam", "DigiCam", "VERITAS"],
     )
     def test_zero_neighbor_mismatches(self, camera_name):
         """The hex-grid addressing must exactly reproduce each camera's
@@ -421,9 +421,12 @@ class TestHexagdlyMapperSpecific:
 
         DigiCam specifically regression-tests the chirality search in
         _HexGridTransform: its raw pixel index order is point-inverted
-        (both axial q and r negated) relative to the other four cameras
-        here, which all happen to share one handedness. Without searching
-        over both, DigiCam mismatched on every single pixel (1296/1296).
+        (both axial q and r negated) relative to LSTCam, MAGICCam, NectarCam
+        and FlashCam, which all happen to share one handedness. Without
+        searching over both, DigiCam mismatched on every single pixel
+        (1296/1296).
+
+        VERITAS covers a geometry stored in mm rather than m.
         """
         geometry = CameraGeometry.from_name(camera_name)
         mapper = HexagdlyMapper(geometry=geometry)
@@ -443,13 +446,19 @@ class TestHexagdlyMapperSpecific:
         assert mapper.image_shape == max(grid.H, grid.W)
 
     def test_chirality_search_is_generic_not_camera_specific(self, lstcam_geometry):
-        """Regression test for the DigiCam neighbour-mismatch bug: negate the
-        x-coordinate of a camera that already works (LSTCam) to synthesize a
-        camera with the OPPOSITE pixel-index handedness, independent of any
-        specific real camera's data. If the chirality search in
-        _HexGridTransform were hardcoded to LSTCam's handedness (or worse,
-        keyed off the camera name) rather than generic, this would fail.
+        """A mirror image of a camera that already works (LSTCam) must map
+        with zero mismatches too, so the addressing can't depend on one
+        camera's handedness or be keyed off its name.
+
+        This alone doesn't force the sign flip in _HexGridTransform's
+        chirality search -- the mirrored lattice is matched by the first
+        candidate. That path is exercised by DigiCam in
+        test_zero_neighbor_mismatches, whose pixel layout needs the flipped
+        sign.
         """
+        # A mirror image is rotated the opposite way, so pix_rotation has to be
+        # mirrored along with the pixels for the geometry to stay consistent --
+        # ImageMapper aligns the lattice from pix_rotation before mapping.
         mirrored = CameraGeometry(
             name="LSTCam_mirrored_for_test",
             pix_id=lstcam_geometry.pix_id,
@@ -457,7 +466,7 @@ class TestHexagdlyMapperSpecific:
             pix_y=lstcam_geometry.pix_y,
             pix_area=lstcam_geometry.pix_area,
             pix_type=lstcam_geometry.pix_type,
-            pix_rotation=lstcam_geometry.pix_rotation,
+            pix_rotation=-lstcam_geometry.pix_rotation,
         )
         # Mirroring must not change the neighbour topology itself -- only the
         # handedness -- otherwise this wouldn't isolate the chirality issue.
