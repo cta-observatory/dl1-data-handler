@@ -13,7 +13,23 @@ on:
     - cron: "0 2 * * *"  # Daily at 02:00 UTC
 
 jobs:
+  cache-test-data:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Cache test data
+        id: cache-data
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ctapipe
+          key: ctapipe-data-${{ runner.os }}-v1
+      - name: Install ctapipe and download data
+        if: steps.cache-data.outputs.cache-hit != 'true'
+        run: |
+          pip install ctapipe
+          python -c "from ctapipe.utils import get_dataset_path; get_dataset_path('gamma_prod5.simtel.zst')"
+
   build:
+    needs: cache-test-data
     strategy:
       matrix:
         os: [ubuntu-22.04]
@@ -21,34 +37,36 @@ jobs:
         ctapipe-version: ['0.25.0', 'latest', 'nightly']
       max-parallel: 6
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -el {0}
     # Allow failures for nightly ctapipe builds
     continue-on-error: ${{ matrix.ctapipe-version == 'nightly'}}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Miniconda
-        run: |
-          wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
-          bash miniconda.sh -b -p $HOME/miniconda
-          echo "$HOME/miniconda/bin" >> $GITHUB_PATH
-          source $HOME/miniconda/etc/profile.d/conda.sh
-          conda activate base
-          conda config --add channels conda-forge
-          conda install -y mamba
+      - name: Restore test data cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ctapipe
+          key: ctapipe-data-${{ runner.os }}-v1
 
-      - name: Create environment for Python ${{ matrix.python-version }}
-        run: |
-          source $HOME/miniconda/etc/profile.d/conda.sh
-          conda activate base
-          mamba create -y -n dl1dh -c conda-forge python==${{ matrix.python-version }}
-          conda activate dl1dh
+      - name: Cache PIP
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ matrix.python-version }}-${{ matrix.ctapipe-version }}
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: "latest"
+          use-mamba: true
+          activate-environment: dl1dh
+          python-version: ${{ matrix.python-version }}
 
       - name: Pre-script setup
         run: |
-          source $HOME/miniconda/etc/profile.d/conda.sh
-          conda activate dl1dh
-          sudo apt-get update
-          sudo apt-get install -y git
           pip install --upgrade pip
           pip install pylint pylint-exit anybadge
           pip install eventio
@@ -66,19 +84,13 @@ jobs:
 
       - name: Lint with flake8
         run: |
-          source $HOME/miniconda/etc/profile.d/conda.sh
-          conda activate dl1dh
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
       - name: Install package with pip
         run: |
-          source $HOME/miniconda/etc/profile.d/conda.sh
-          conda activate dl1dh
-          pip install -e .
+          pip install -e .[tests]
 
       - name: Run pytest
         run: |
-          source $HOME/miniconda/etc/profile.d/conda.sh
-          conda activate dl1dh
           pytest

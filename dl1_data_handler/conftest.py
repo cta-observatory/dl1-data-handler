@@ -4,13 +4,17 @@ Credits to ctapipe for the original code.
 """
 
 import pytest
+from filelock import FileLock
 
 from ctapipe.core import run_tool
 from ctapipe.utils import get_dataset_path
 
 @pytest.fixture(scope="session")
-def prod5_gamma_simtel_path():
-    return get_dataset_path("gamma_prod5.simtel.zst")
+def prod5_gamma_simtel_path(tmp_path_factory):
+    basetemp = tmp_path_factory.getbasetemp().parent
+    lock_path = basetemp / "get_dataset_path.lock"
+    with FileLock(str(lock_path)):
+        return get_dataset_path("gamma_prod5.simtel.zst")
 
 @pytest.fixture(scope="session")
 def dl1_tmp_path(tmp_path_factory):
