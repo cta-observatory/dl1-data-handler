@@ -47,12 +47,17 @@ dynamic = ["version"]
 packages = ["dl1_data_handler"]
 
 [project.optional-dependencies]
+tests = [
+  "pytest",
+  "pytest-xdist",
+  "filelock",
+]
 doc = [
   "sphinx",
   "sphinx-rtd-theme",
 ]
 # self reference allows all to be defined in terms of other extras
-all = ["dl1_data_handler[doc]"]
+all = ["dl1_data_handler[doc]", "dl1_data_handler[tests]"]
 
 [project.urls]
 repository = "https://github.com/cta-observatory/dl1-data-handler"
