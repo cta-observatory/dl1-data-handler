@@ -49,6 +49,7 @@ from ctapipe.core.traits import (
     UseEnum,
     TelescopeParameter,
 )
+from traitlets import TraitError
 from ctapipe.instrument import SubarrayDescription
 from ctapipe.instrument.optics import FocalLengthKind
 from ctapipe.io import read_table
@@ -261,6 +262,9 @@ class DLDataReader(Component):
         **kwargs,
     ):
         super().__init__(config=config, parent=parent, **kwargs)
+
+        if not input_url_signal:
+            raise TraitError("The 'input_url_signal' list cannot be empty.")
 
         # Register the destructor to close all open files properly
         atexit.register(self.__destructor)
@@ -639,6 +643,8 @@ class DLDataReader(Component):
                 self.n_bkg_events = np.count_nonzero(
                     self.example_identifiers["true_shower_primary_class"] == 0
                 )
+            else:
+                self.n_bkg_events = 0
         # Add index column to the example identifiers to later retrieve batches
         # using the loc functionality
         self.example_identifiers.add_column(
@@ -801,6 +807,8 @@ class DLDataReader(Component):
                 self.n_bkg_events = np.count_nonzero(
                     self.unique_example_identifiers["true_shower_primary_class"] == 0
                 )
+            else:
+                self.n_bkg_events = 0
         # Workaround for the missing multicolumn indexing in astropy:
         # Need this PR https://github.com/astropy/astropy/pull/15826
         # waiting astropy v7.1.0
