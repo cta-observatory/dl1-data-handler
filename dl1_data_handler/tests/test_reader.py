@@ -1,5 +1,6 @@
 import pytest
 from traitlets.config.loader import Config
+from traitlets import TraitError
 import numpy as np
 
 from dl1_data_handler.reader import DLImageReader, DLWaveformReader, get_unmapped_image
@@ -120,3 +121,9 @@ def test_get_unmapped_image_log():
     np.testing.assert_allclose(log_image[valid], np.log10(image[valid]))
     # For invalid values, the original values should remain unchanged
     np.testing.assert_allclose(log_image[~valid], image[~valid])
+
+
+def test_empty_input_url_signal():
+    """Test that a TraitError is raised if input_url_signal is empty."""
+    with pytest.raises(TraitError, match="The 'input_url_signal' list cannot be empty."):
+        DLImageReader(input_url_signal=[])
