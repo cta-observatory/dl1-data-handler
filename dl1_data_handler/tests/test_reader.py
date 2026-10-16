@@ -16,7 +16,7 @@ def test_dl1_image_reading(dl1_image_reader):
     """check reading from pixel-wise image data files"""
 
     # Test basic properties
-    assert dl1_image_reader._get_n_events() == 1  # nosec
+    assert dl1_image_reader.get_n_events() == 1  # nosec
     assert dl1_image_reader.tel_type == "LST_LST_LSTCam"  # nosec
     # Test the generation of a mono batch
     mono_batch = dl1_image_reader.generate_mono_batch([0])
@@ -47,7 +47,7 @@ def test_r1_waveform_reading(r1_tmp_path, r1_gamma_file):
     )
     # Create an image reader and test basic properties
     r1_reader = DLWaveformReader(input_url_signal=[r1_gamma_file], config=config)
-    assert r1_reader._get_n_events() == 1  # nosec
+    assert r1_reader.get_n_events() == 1  # nosec
     assert r1_reader.tel_type == "LST_LST_LSTCam"  # nosec
     # Test the generation of a mono batch
     mono_batch = r1_reader.generate_mono_batch([0])
