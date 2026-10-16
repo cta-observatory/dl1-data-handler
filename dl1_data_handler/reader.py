@@ -571,12 +571,13 @@ class DLDataReader(Component):
                     tel_table.add_column(
                         np.arange(len(tel_table)), name="table_index", index=0
                     )
+                # Join the telescope table with the trigger table
+                tel_table = join(
+                    left=tel_table,
+                    right=trigger_table,
+                    keys=["obs_id", "event_id"],
+                )
                 if self.process_type == ProcessType.Simulation:
-                    tel_table = join(
-                        left=tel_table,
-                        right=trigger_table,
-                        keys=["obs_id", "event_id"],
-                    )
                     # Add the spherical offsets w.r.t. to the telescope pointing
                     tel_pointing = self.get_tel_pointing(f, tel_id)
                     tel_table = join(
