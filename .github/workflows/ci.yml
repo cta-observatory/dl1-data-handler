@@ -25,7 +25,7 @@ jobs:
       - name: Install ctapipe and download data
         if: steps.cache-data.outputs.cache-hit != 'true'
         run: |
-          pip install ctapipe
+          pip install ctapipe==0.25.0 # For writing lowest possible version of SUPPORTED_TAB_VERSIONS
           python - <<'PY'
           from pathlib import Path
 
