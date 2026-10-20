@@ -58,7 +58,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-24.04]
-        python-version: ['3.12', '3.13', '3.14']
+        python-version: ['3.12', '3.13', '3.14', '3.15']
         ctapipe-version: ['0.25.0', 'latest', 'nightly']
       max-parallel: 6
     runs-on: ${{ matrix.os }}
@@ -66,7 +66,7 @@ jobs:
       run:
         shell: bash -el {0}
     # Allow failures for nightly ctapipe builds
-    continue-on-error: ${{ matrix.ctapipe-version == 'nightly'}}
+    continue-on-error: ${{ matrix.ctapipe-version == 'nightly' || matrix.python-version == '3.15' }}
     steps:
       - uses: actions/checkout@v4
 
