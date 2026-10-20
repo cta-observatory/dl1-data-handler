@@ -1,4 +1,7 @@
 """Tests for image_mapper module."""
+import os
+from pathlib import Path
+
 import pytest
 import numpy as np
 from ctapipe.instrument import CameraGeometry
@@ -16,10 +19,28 @@ from dl1_data_handler.image_mapper import (
 )
 
 
+def load_camera_geometry(camera_name):
+    """Load a camera geometry from the ctapipe cache, downloading if needed."""
+    cache_root = Path(
+        os.environ.get("CTAPIPE_CACHE", Path.home() / ".cache" / "ctapipe")
+    )
+    geometry_path = cache_root / "camera-geometries" / f"{camera_name}.ecsv"
+    if not geometry_path.exists():
+        geometry_path.parent.mkdir(parents=True, exist_ok=True)
+        geometry = CameraGeometry.from_name(camera_name)
+        geometry.to_table().write(
+            geometry_path,
+            format="ascii.ecsv",
+            overwrite=True,
+        )
+
+    return CameraGeometry.from_table(geometry_path)
+
+
 @pytest.fixture
 def lstcam_geometry():
     """Fixture to provide LSTCam geometry."""
-    return CameraGeometry.from_name("LSTCam")
+    return load_camera_geometry("LSTCam")
 
 
 @pytest.fixture
@@ -154,7 +175,7 @@ class TestMapperBasicFunctionality:
     def test_square_mapper_instantiation(self):
         """Test that SquareMapper can be instantiated with square pixel camera."""
         # SCTCam has square pixels
-        square_geometry = CameraGeometry.from_name("SCTCam")
+        square_geometry = load_camera_geometry("SCTCam")
         mapper = SquareMapper(geometry=square_geometry)
         assert mapper is not None
         assert mapper.mapping_table is not None
@@ -428,13 +449,13 @@ class TestHexagdlyMapperSpecific:
 
         VERITAS covers a geometry stored in mm rather than m.
         """
-        geometry = CameraGeometry.from_name(camera_name)
+        geometry = load_camera_geometry(camera_name)
         mapper = HexagdlyMapper(geometry=geometry)
         assert mapper.grid_transform.neighbor_mismatch_count == 0
 
     def test_square_pixel_camera_rejected(self):
         """HexagdlyMapper only supports hexagonal-pixel cameras."""
-        square_geometry = CameraGeometry.from_name("SCTCam")
+        square_geometry = load_camera_geometry("SCTCam")
         with pytest.raises(ValueError, match="hexagonal pixel cameras"):
             HexagdlyMapper(geometry=square_geometry)
 
