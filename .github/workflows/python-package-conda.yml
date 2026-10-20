@@ -21,12 +21,37 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ctapipe
-          key: ctapipe-data-${{ runner.os }}-v1
+          key: ctapipe-data-${{ runner.os }}-v2
       - name: Install ctapipe and download data
         if: steps.cache-data.outputs.cache-hit != 'true'
         run: |
           pip install ctapipe
-          python -c "from ctapipe.utils import get_dataset_path; get_dataset_path('gamma_prod5.simtel.zst')"
+          python - <<'PY'
+          from pathlib import Path
+
+          from ctapipe.instrument import CameraGeometry
+          from ctapipe.utils import get_dataset_path
+
+          get_dataset_path("gamma_prod5.simtel.zst")
+
+          geometry_cache = Path.home() / ".cache" / "ctapipe" / "camera-geometries"
+          geometry_cache.mkdir(parents=True, exist_ok=True)
+          for camera_name in (
+              "LSTCam",
+              "MAGICCam",
+              "NectarCam",
+              "FlashCam",
+              "DigiCam",
+              "VERITAS",
+              "SCTCam",
+          ):
+              geometry = CameraGeometry.from_name(camera_name)
+              geometry.to_table().write(
+                  geometry_cache / f"{camera_name}.ecsv",
+                  format="ascii.ecsv",
+                  overwrite=True,
+              )
+          PY
 
   build:
     needs: cache-test-data
@@ -49,7 +74,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ctapipe
-          key: ctapipe-data-${{ runner.os }}-v1
+          key: ctapipe-data-${{ runner.os }}-v2
 
       - name: Cache PIP
         uses: actions/cache@v4
