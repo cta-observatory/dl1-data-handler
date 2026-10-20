@@ -47,17 +47,28 @@ dynamic = ["version"]
 packages = ["dl1_data_handler"]
 
 [project.optional-dependencies]
+all = [
+    "dl1_data_handler",
+    "matplotlib ~=3.0",
+]
+
 tests = [
+  "dl1_data_handler",
   "pytest",
   "pytest-xdist",
   "filelock",
 ]
-doc = [
+
+docs = [
+  "dl1_data_handler",
   "sphinx",
   "sphinx-rtd-theme",
 ]
-# self reference allows all to be defined in terms of other extras
-all = ["dl1_data_handler[doc]", "dl1_data_handler[tests]"]
+
+dev = [
+  "dl1_data_handler[all,docs,tests]",
+  "setuptools_scm[toml]",
+]
 
 [project.urls]
 repository = "https://github.com/cta-observatory/dl1-data-handler"
