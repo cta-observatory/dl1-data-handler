@@ -21,7 +21,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ctapipe
-          key: ctapipe-data-${{ runner.os }}-v2
+          key: ctapipe-data-${{ runner.os }}-v3
       - name: Install ctapipe and download data
         if: steps.cache-data.outputs.cache-hit != 'true'
         run: |
@@ -74,7 +74,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ctapipe
-          key: ctapipe-data-${{ runner.os }}-v2
+          key: ctapipe-data-${{ runner.os }}-v3
 
       - name: Cache PIP
         uses: actions/cache@v4
