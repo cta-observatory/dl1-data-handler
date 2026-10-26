@@ -8,6 +8,7 @@ from filelock import FileLock
 
 from ctapipe.core import run_tool
 from ctapipe.utils import get_dataset_path
+from dl1_data_handler.compat import CTAO_DATAMODEL_GE_1_4_0
 
 @pytest.fixture(scope="session")
 def prod5_gamma_simtel_path(tmp_path_factory):
@@ -41,8 +42,12 @@ def dl1_gamma_file(dl1_tmp_path, prod5_gamma_simtel_path):
         "--write-images",
         "--DataWriter.Contact.name=αℓℓ the äüöß",
     ]
+    if CTAO_DATAMODEL_GE_1_4_0:
+        from ctapipe.conftest import SOUTH_SITE_METADATA
+        argv.append(SOUTH_SITE_METADATA)
     assert run_tool(ProcessorTool(), argv=argv, cwd=dl1_tmp_path) == 0
     return output
+
 
 @pytest.fixture(scope="session")
 def r1_gamma_file(r1_tmp_path, prod5_gamma_simtel_path):
@@ -59,5 +64,8 @@ def r1_gamma_file(r1_tmp_path, prod5_gamma_simtel_path):
         f"--DataWriter.write_r1_waveforms=True",
         "--DataWriter.Contact.name=αℓℓ the äüöß",
     ]
+    if CTAO_DATAMODEL_GE_1_4_0:
+        from ctapipe.conftest import SOUTH_SITE_METADATA
+        argv.append(SOUTH_SITE_METADATA)
     assert run_tool(ProcessorTool(), argv=argv, cwd=r1_tmp_path) == 0
     return output

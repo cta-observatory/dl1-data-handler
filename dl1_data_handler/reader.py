@@ -53,6 +53,7 @@ from traitlets import TraitError
 from ctapipe.instrument import SubarrayDescription
 from ctapipe.instrument.optics import FocalLengthKind
 from ctapipe.io import read_table
+from dl1_data_handler.compat import CTAO_DATAMODEL_GE_1_4_0
 from dl1_data_handler.image_mapper import ImageMapper
 
 # Reference (dummy) time to insert in the SkyCoord object as the default time
@@ -64,6 +65,12 @@ lock = threading.Lock()
 class ProcessType(Enum):
     Observation = "Observation"
     Simulation = "Simulation"
+
+    @classmethod
+    def _missing_(cls, value):
+        if value == "ObservationSim":
+            return cls.Simulation
+        return None
 
 
 class TableQualityQuery(QualityQuery):
@@ -286,9 +293,12 @@ class DLDataReader(Component):
         self.first_file = list(self.files)[0]
         # Save the user attributes and useful information retrieved from the first file as a reference
         self._v_attrs = self.files[self.first_file].root._v_attrs
-        self.process_type = ProcessType(self._v_attrs["CTA PROCESS TYPE"])
-        self.data_format_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
-        self.instrument_id = self._v_attrs["CTA INSTRUMENT ID"]
+        if CTAO_DATAMODEL_GE_1_4_0:
+            self.process_type = ProcessType(self._v_attrs["data.type"])
+            self.data_format_version = self._v_attrs["model.version"]
+        else:
+            self.process_type = ProcessType(self._v_attrs["CTA PROCESS TYPE"])
+            self.data_format_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
 
         # Check for the minimum ctapipe data format version (v6.0.0) for MC sims
         if (

@@ -3,7 +3,17 @@ from traitlets.config.loader import Config
 from traitlets import TraitError
 import numpy as np
 
-from dl1_data_handler.reader import DLImageReader, DLWaveformReader, get_unmapped_image
+from dl1_data_handler.reader import (
+    DLImageReader,
+    DLWaveformReader,
+    ProcessType,
+    get_unmapped_image,
+)
+
+
+@pytest.mark.parametrize("value", ["Simulation", "ObservationSim"])
+def test_process_type_simulation_values(value):
+    assert ProcessType(value) is ProcessType.Simulation
 
 
 @pytest.fixture
