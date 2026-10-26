@@ -59,7 +59,11 @@ from traitlets import TraitError
 from ctapipe.instrument import SubarrayDescription
 from ctapipe.instrument.optics import FocalLengthKind
 from ctapipe.io import read_table
+<<<<<<< HEAD
 from ctapipe.io.datalevels import DataLevel
+=======
+# TODO: Bump minimum ctapipe version to v0.33.0. Clean up imports!
+>>>>>>> cd47fdf (polishing)
 from ctapipe.io.metadata import read_reference_metadata
 try:
     from ctapipe.io.metadata import read_ctao_metadata
@@ -302,8 +306,8 @@ class DLDataReader(Component):
             with lock:
                 self.files[filename] = tables.open_file(filename, mode="r")
         self.first_file = list(self.files)[0]
+        # TODO: Bump minimum ctapipe version to v0.33.0. Clean up here!
         # Load CTAO metadata from the first file as a reference
-        self.process_type = None
         if read_ctao_metadata is not None:
             self.ctao_metadata = read_ctao_metadata(self.first_file)
             self.process_type = ProcessType(self.ctao_metadata.data.type)
@@ -313,8 +317,8 @@ class DLDataReader(Component):
             if "CTA PROCESS TYPE" in self.ctao_metadata:
                 self.process_type = ProcessType(self.ctao_metadata["CTA PROCESS TYPE"])
                 self.data_format_version = self.ctao_metadata["CTA PRODUCT DATA MODEL VERSION"]
-        if self.process_type is None:
-            raise IOError("Unsupported or missing reference metadata.")
+            else:
+                raise IOError("Unsupported or missing reference metadata.")
         # Check for the minimum ctapipe data format version (v6.0.0) for MC sims
         if (
             self.process_type == ProcessType.Simulation
