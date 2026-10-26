@@ -13,7 +13,7 @@ from dl1_data_handler.reader import (
 
 @pytest.mark.parametrize("value", ["Simulation", "ObservationSim"])
 def test_process_type_simulation_values(value):
-    assert ProcessType(value) is ProcessType.Simulation
+    assert ProcessType(value) is ProcessType.Simulation  # nosec
 
 
 @pytest.fixture
