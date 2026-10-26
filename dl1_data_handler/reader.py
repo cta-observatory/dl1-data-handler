@@ -60,6 +60,11 @@ from ctapipe.instrument import SubarrayDescription
 from ctapipe.instrument.optics import FocalLengthKind
 from ctapipe.io import read_table
 from ctapipe.io.datalevels import DataLevel
+from ctapipe.io.metadata import read_reference_metadata
+try:
+    from ctapipe.io.metadata import read_ctao_metadata
+except ImportError:
+    read_ctao_metadata = None
 from dl1_data_handler.image_mapper import ImageMapper
 
 # Reference (dummy) time to insert in the SkyCoord object as the default time
@@ -299,13 +304,11 @@ class DLDataReader(Component):
         self.first_file = list(self.files)[0]
         # Load CTAO metadata from the first file as a reference
         self.process_type = None
-        try:
-            from ctapipe.io.metadata import read_ctao_metadata
+        if read_ctao_metadata is not None:
             self.ctao_metadata = read_ctao_metadata(self.first_file)
             self.process_type = ProcessType(self.ctao_metadata.data.type)
             self.data_format_version = self.ctao_metadata.model.version
-        except ImportError:
-            from ctapipe.io.metadata import read_reference_metadata
+        else:
             self.ctao_metadata = read_reference_metadata(self.first_file).to_dict()
             if "CTA PROCESS TYPE" in self.ctao_metadata:
                 self.process_type = ProcessType(self.ctao_metadata["CTA PROCESS TYPE"])
