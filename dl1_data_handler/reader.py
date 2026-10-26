@@ -289,7 +289,7 @@ class DLDataReader(Component):
                 self.files[filename] = tables.open_file(filename, mode="r")
         self.first_file = list(self.files)[0]
         # Load CTAO metadata from the first file as a reference
-        self.ctao_metadata = None
+        self.process_type = None
         try:
             from ctapipe.io.metadata import read_ctao_metadata
             self.ctao_metadata = read_ctao_metadata(self.first_file)
@@ -300,7 +300,7 @@ class DLDataReader(Component):
             if "CTA PROCESS TYPE" in self.ctao_metadata:
                 self.process_type = ProcessType(self.ctao_metadata["CTA PROCESS TYPE"])
                 self.data_format_version = self.ctao_metadata["CTA PRODUCT DATA MODEL VERSION"]
-        if self.ctao_metadata is None:
+        if self.process_type is None:
             raise IOError("Unsupported or missing reference metadata.")
         # Check for the minimum ctapipe data format version (v6.0.0) for MC sims
         if (
