@@ -24,7 +24,6 @@ import tables
 import threading
 
 from astropy import units as u
-from astropy.coordinates.earth import EarthLocation
 from astropy.coordinates import AltAz, SkyCoord
 from astropy.table import (
     Table,
@@ -53,7 +52,6 @@ from traitlets import TraitError
 from ctapipe.instrument import SubarrayDescription
 from ctapipe.instrument.optics import FocalLengthKind
 from ctapipe.io import read_table
-from dl1_data_handler.compat import CTAO_DATAMODEL_GE_1_4_0
 from dl1_data_handler.image_mapper import ImageMapper
 
 # Reference (dummy) time to insert in the SkyCoord object as the default time
