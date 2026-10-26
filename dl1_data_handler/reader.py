@@ -101,9 +101,10 @@ class DLDataReader(Component):
         A dictionary of filename:file_handle pairs for the input files.
     first_file : str
         The first file in the list of input files, which is used as reference.
-    ctao_metadata : dict-like HDF5 attributes or ctapipe.io.metadata.CTAODataModel
-        Metadata from the first input file. With ctapipe 0.33.0 or later, this is a
-        ``CTAODataModel`` instance; with older versions, it is the file's HDF5 attributes.
+    ctao_metadata : ctao_datamodel.models.dataproducts.Product or dict
+        Metadata from the first input file.
+        With ctapipe v0.33.0 or later, this is a data product instance of the ctao_datamodel package;
+        with older versions, it is a flat dict of the file's HDF5 attributes.
     process_type : enum
         The type of data processing (i.e. ``ProcessType.Observation`` or ``ProcessType.Simulation``).
     data_format_version : str
@@ -296,7 +297,8 @@ class DLDataReader(Component):
             self.process_type = ProcessType(self.ctao_metadata.data.type)
             self.data_format_version = self.ctao_metadata.model.version
         except ImportError:
-            self.ctao_metadata = self.files[self.first_file].root._v_attrs
+            from ctapipe.io.metadata import read_reference_metadata
+            self.ctao_metadata = read_reference_metadata(self.first_file).to_dict()
             if "CTA PROCESS TYPE" in self.ctao_metadata:
                 self.process_type = ProcessType(self.ctao_metadata["CTA PROCESS TYPE"])
                 self.data_format_version = self.ctao_metadata["CTA PRODUCT DATA MODEL VERSION"]
