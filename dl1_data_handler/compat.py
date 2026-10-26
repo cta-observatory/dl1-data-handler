@@ -8,3 +8,9 @@ else:
         int(v) for v in ctao_datamodel_version.split(".")[:3]
     )
     CTAO_DATAMODEL_GE_1_4_0 = CTAO_DATAMODEL_VERSION >= (1, 4, 0)
+
+SOUTH_SITE_METADATA = (
+    "--ProductMetadata.instance={'site_id': 'CTAO-South'}"
+    if CTAO_DATAMODEL_GE_1_4_0
+    else None
+)
