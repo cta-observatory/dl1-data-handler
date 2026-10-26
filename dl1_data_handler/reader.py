@@ -103,14 +103,13 @@ class DLDataReader(Component):
         A dictionary of filename:file_handle pairs for the input files.
     first_file : str
         The first file in the list of input files, which is used as reference.
-    _v_attrs : dict
-        Attributes and useful information retrieved from the first file.
+    ctao_metadata : dict-like HDF5 attributes or ctapipe.io.metadata.CTAODataModel
+        Metadata from the first input file. With ctapipe 0.33.0 or later, this is a
+        ``CTAODataModel`` instance; with older versions, it is the file's HDF5 attributes.
     process_type : enum
         The type of data processing (i.e. ``ProcessType.Observation`` or ``ProcessType.Simulation``).
     data_format_version : str
         The version of the ctapipe data format.
-    instrument_id : str
-        The ID of the instrument.
     subarray : SubarrayDescription
         The description of the subarray.
     tel_ids : list
@@ -291,15 +290,19 @@ class DLDataReader(Component):
             with lock:
                 self.files[filename] = tables.open_file(filename, mode="r")
         self.first_file = list(self.files)[0]
-        # Save the user attributes and useful information retrieved from the first file as a reference
-        self._v_attrs = self.files[self.first_file].root._v_attrs
-        if CTAO_DATAMODEL_GE_1_4_0:
-            self.process_type = ProcessType(self._v_attrs["data.type"])
-            self.data_format_version = self._v_attrs["model.version"]
-        else:
-            self.process_type = ProcessType(self._v_attrs["CTA PROCESS TYPE"])
-            self.data_format_version = self._v_attrs["CTA PRODUCT DATA MODEL VERSION"]
-
+        # Load CTAO metadata from the first file as a reference
+        try:
+            from ctapipe.io.metadata import read_ctao_metadata
+            self.ctao_metadata = read_ctao_metadata(self.first_file)
+            self.process_type = ProcessType(self.ctao_metadata.data.type)
+            self.data_format_version = self.ctao_metadata.model.version
+        except ImportError:
+            self.ctao_metadata = self.files[self.first_file].root._v_attrs
+            if "CTA PROCESS TYPE" in self.ctao_metadata:
+                self.process_type = ProcessType(self.ctao_metadata["CTA PROCESS TYPE"])
+                self.data_format_version = self.ctao_metadata["CTA PRODUCT DATA MODEL VERSION"]
+            else:
+                raise IOError("Unsupported or missing reference metadata")
         # Check for the minimum ctapipe data format version (v6.0.0) for MC sims
         if (
             self.process_type == ProcessType.Simulation
