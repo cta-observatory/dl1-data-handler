@@ -52,12 +52,7 @@ from traitlets import TraitError
 from ctapipe.instrument import SubarrayDescription
 from ctapipe.instrument.optics import FocalLengthKind
 from ctapipe.io import read_table
-# TODO: Bump minimum ctapipe version to v0.33.0. Clean up imports!
-from ctapipe.io.metadata import read_reference_metadata
-try:
-    from ctapipe.io.metadata import read_ctao_metadata
-except ImportError:
-    read_ctao_metadata = None
+from ctapipe.io.metadata import read_ctao_metadata
 from dl1_data_handler.image_mapper import ImageMapper
 
 # Reference (dummy) time to insert in the SkyCoord object as the default time
@@ -68,14 +63,7 @@ lock = threading.Lock()
 
 class ProcessType(Enum):
     Observation = "Observation"
-    Simulation = "Simulation"
-
-    @classmethod
-    def _missing_(cls, value):
-        if value == "ObservationSim":
-            return cls.Simulation
-        return None
-
+    Simulation = "ObservationSim"
 
 class TableQualityQuery(QualityQuery):
     """Quality criteria for table-wise dl1b parameters."""
@@ -295,19 +283,10 @@ class DLDataReader(Component):
             with lock:
                 self.files[filename] = tables.open_file(filename, mode="r")
         self.first_file = list(self.files)[0]
-        # TODO: Bump minimum ctapipe version to v0.33.0. Clean up here!
         # Load CTAO metadata from the first file as a reference
-        if read_ctao_metadata is not None:
-            self.ctao_metadata = read_ctao_metadata(self.first_file)
-            self.process_type = ProcessType(self.ctao_metadata.data.type)
-            self.data_format_version = self.ctao_metadata.model.version
-        else:
-            self.ctao_metadata = read_reference_metadata(self.first_file).to_dict()
-            if "CTA PROCESS TYPE" in self.ctao_metadata:
-                self.process_type = ProcessType(self.ctao_metadata["CTA PROCESS TYPE"])
-                self.data_format_version = self.ctao_metadata["CTA PRODUCT DATA MODEL VERSION"]
-            else:
-                raise IOError("Unsupported or missing reference metadata.")
+        self.ctao_metadata = read_ctao_metadata(self.first_file)
+        self.process_type = ProcessType(self.ctao_metadata.data.type)
+        self.data_format_version = self.ctao_metadata.model.version
         # Check for the minimum ctapipe data format version (v6.0.0) for MC sims
         if (
             self.process_type == ProcessType.Simulation
