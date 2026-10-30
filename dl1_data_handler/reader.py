@@ -53,7 +53,6 @@ from ctapipe.instrument import SubarrayDescription
 from ctapipe.instrument.optics import FocalLengthKind
 from ctapipe.io import read_table
 # TODO: Bump minimum ctapipe version to v0.33.0. Clean up imports!
-from ctapipe.io.metadata import read_reference_metadata
 try:
     from ctapipe.io.metadata import read_ctao_metadata
 except ImportError:
