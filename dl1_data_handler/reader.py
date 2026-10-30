@@ -118,7 +118,7 @@ class DLDataReader(Component):
     ctao_metadata : ctao_datamodel.models.dataproducts.Product or dict
         Metadata from the first input file.
         With ctapipe v0.33.0 or later, this is a data product instance of the ctao_datamodel package;
-        with older versions, it is a flat dict of the file's HDF5 attributes.
+        with older versions, it is an attribute set of the HDF5 file.
     process_type : enum
         The type of data processing (i.e. ``ProcessType.Observation`` or ``ProcessType.Simulation``).
     data_format_version : str
