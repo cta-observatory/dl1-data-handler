@@ -311,7 +311,7 @@ class DLDataReader(Component):
                     "CTA PRODUCT DATA MODEL VERSION"
                 ]
             else:
-                raise OSError("Unsupported or missing reference metadata")
+                raise IOError("Unsupported or missing reference metadata")
         # Check for the minimum ctapipe data format version (v6.0.0) for MC sims
         if (
             self.process_type == ProcessType.Simulation
