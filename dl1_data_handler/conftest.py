@@ -6,6 +6,11 @@ Credits to ctapipe for the original code.
 import pytest
 from filelock import FileLock
 
+# TODO: Bump minimum ctapipe version to v0.33.0. Clean up imports!
+try:
+    from ctapipe.conftest import SOUTH_SITE_METADATA
+except ImportError:
+    SOUTH_SITE_METADATA = None
 from ctapipe.core import run_tool
 from ctapipe.utils import get_dataset_path
 
@@ -40,8 +45,9 @@ def dl1_gamma_file(dl1_tmp_path, prod5_gamma_simtel_path):
         f"--output={output}",
         "--write-images",
         "--DataWriter.Contact.name=αℓℓ the äüöß",
-        "--ProductMetadata.instance={'site_id': 'CTAO-South'}",
     ]
+    if SOUTH_SITE_METADATA is not None:
+        argv.append(SOUTH_SITE_METADATA)
     assert run_tool(ProcessorTool(), argv=argv, cwd=dl1_tmp_path) == 0
     return output
 
@@ -60,7 +66,8 @@ def r1_gamma_file(r1_tmp_path, prod5_gamma_simtel_path):
         f"--output={output}",
         f"--DataWriter.write_r1_waveforms=True",
         "--DataWriter.Contact.name=αℓℓ the äüöß",
-        "--ProductMetadata.instance={'site_id': 'CTAO-South'}",
     ]
+    if SOUTH_SITE_METADATA is not None:
+        argv.append(SOUTH_SITE_METADATA)
     assert run_tool(ProcessorTool(), argv=argv, cwd=r1_tmp_path) == 0
     return output
