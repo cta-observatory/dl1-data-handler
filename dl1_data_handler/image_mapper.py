@@ -28,7 +28,7 @@ __all__ = [
     "HexagonalPatchMapper",
 ]
 
-class ImageMapper(TelescopeComponent):
+class ImageMapper(Component):
     """
     Base component for mapping raw 1D vectors into 2D mapped images.
 
@@ -1308,6 +1308,16 @@ class RebinMapper(ImageMapper):
         help=(
             "Integer to overwrite the default shape of the resulting mapped image."
             "Only available for interpolation and rebinning methods."
+        ),
+    ).tag(config=True)
+
+    max_memory_gb = Float(
+        default_value=10,
+        allow_none=True,
+        help=(
+            "Maximum memory in GB that RebinMapper is allowed to allocate. "
+            "Set to None to disable memory checks. Default is 10 GB. "
+            "Note: RebinMapper uses approximately (image_shape * 10)^2 * image_shape^2 * 4 bytes."
         ),
     ).tag(config=True)
 
