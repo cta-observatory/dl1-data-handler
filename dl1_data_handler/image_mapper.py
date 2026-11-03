@@ -741,7 +741,7 @@ class HexagonalPatchMapper(ImageMapper):
              )
 
         if geometry.name == "AdvCamSiPM":
-            path = files("dl1_data_handler.ressources").joinpath(f"triggergeometry_AdvCam_{self.patches_sector_version}.h5")
+            path = files("dl1_data_handler.resources").joinpath(f"triggergeometry_AdvCam_{self.patches_sector_version}.h5")
             with tables.open_file(path, mode="r") as f:
                 self.trigger_patches = f.root.patches.masks[:]
                 self.index_map = f.root.mappings.index_map[:]
