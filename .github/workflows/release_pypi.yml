@@ -1,0 +1,75 @@
+name: Release PyPI CD
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build"
+        required: true
+        type: string
+      upload:
+        description: "Upload package to PyPI"
+        required: true
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+        - '.github/workflows/**'
+
+jobs:
+  pypi-publish:
+    name: Publish release to PyPI
+    runs-on: ubuntu-22.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/dl1-data-handler/
+    permissions:
+      id-token: write
+      contents: write
+      deployments: write
+      statuses: write
+      actions: write
+      checks: read
+
+    steps:
+      - name: Checkout repository and fetch tags
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.event.release.tag_name || github.ref }}
+          fetch-depth: 0
+
+      - name: Set up Miniconda and install dependencies
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: '3.12'
+          activate-environment: dl1dh
+          channels: conda-forge
+          packages: ctapipe
+
+      - name: Upgrade pip and build tools
+        shell: bash -el {0}
+        run: |
+          pip install --upgrade pip build
+
+      - name: Build package
+        shell: bash -el {0}
+        run: |
+          python -m build
+
+      # Save distributions BEFORE attempting the upload.
+      - name: Archive PyPI distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-packages-${{ inputs.tag || github.event.release.tag_name || github.sha }}
+          path: dist/*
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Publish package distributions to PyPI
+        if: |
+          github.event_name == 'release' ||
+          (github.event_name == 'workflow_dispatch' && inputs.upload)
+        uses: pypa/gh-action-pypi-publish@release/v1
