@@ -59,8 +59,8 @@ jobs:
       matrix:
         os: [ubuntu-24.04]
         python-version: ['3.12', '3.13', '3.14', '3.15']
-        ctapipe-version: ['0.25.0', 'latest', 'nightly']
-      max-parallel: 6
+        ctapipe-version: ['latest', 'nightly']
+      max-parallel: 8
     runs-on: ${{ matrix.os }}
     defaults:
       run:
