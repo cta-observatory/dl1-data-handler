@@ -697,7 +697,7 @@ class DLDataReader(Component):
         simulation_info, example_identifiers = [], []
         for file_idx, (filename, f) in enumerate(self.files.items()):
             # Read the trigger table.
-            trigger_table = read_table(f, "/dl1/event/subarray/trigger")
+            trigger_table = read_table(f, self.subarray_trigger_table_path)
             if self.process_type == ProcessType.Simulation:
                 # Read simulation information for each observation
                 simulation_info_table = read_table(f, "/configuration/simulation/run")
