@@ -52,13 +52,11 @@ from traitlets import TraitError
 from ctapipe.instrument import SubarrayDescription
 from ctapipe.instrument.optics import FocalLengthKind
 from ctapipe.io import read_table
-from ctapipe.io.hdf5dataformat import DL1_SUBARRAY_TRIGGER_TABLE, DL1_TEL_TRIGGER_TABLE
 # TODO: Bump minimum ctapipe version to v0.33.0. Clean up imports!
 try:
     from ctapipe.io.metadata import read_ctao_metadata
-    from ctapipe.io.hdf5dataformat import DL0_SUBARRAY_TRIGGER_TABLE, DL0_TEL_TRIGGER_TABLE
 except ImportError:
-    read_ctao_metadata, DL0_SUBARRAY_TRIGGER_TABLE, DL0_TEL_TRIGGER_TABLE = None, None, None
+    read_ctao_metadata = None
 
 from dl1_data_handler.image_mapper import ImageMapper
 
@@ -337,11 +335,11 @@ class DLDataReader(Component):
                 f"When processing real observational data, please provide a single file (currently: '{len(self.files)}')."
             )
         # Set the paths for the telescope and subarray trigger tables based on the data format version
-        self.tel_trigger_table_path = DL1_TEL_TRIGGER_TABLE
-        self.subarray_trigger_table_path = DL1_SUBARRAY_TRIGGER_TABLE
-        if int(self.data_format_version.split(".")[0].replace("v", "")) >= 8 and DL0_TEL_TRIGGER_TABLE is not None:
-            self.tel_trigger_table_path = DL0_TEL_TRIGGER_TABLE
-            self.subarray_trigger_table_path = DL0_SUBARRAY_TRIGGER_TABLE
+        self.tel_trigger_table_path = "dl1/event/telescope/trigger"
+        self.subarray_trigger_table_path = "dl1/event/subarray/trigger"
+        if int(self.data_format_version.split(".")[0].replace("v", "")) >= 8:
+            self.tel_trigger_table_path = "dl0/event/telescope/trigger"
+            self.subarray_trigger_table_path = "dl0/event/subarray/trigger"
 
         # Set up the subarray
         self.subarray = SubarrayDescription.from_hdf(self.first_file, focal_length_choice=self.focal_length_choice)
