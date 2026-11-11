@@ -6,10 +6,13 @@ import numpy as np
 from scipy import spatial
 from scipy.sparse import csr_matrix
 from collections import Counter, namedtuple
+import tables
+from importlib.resources import files
+import astropy.units as u
 
 from ctapipe.instrument.camera import PixelShape
 from ctapipe.core import Component
-from ctapipe.core.traits import Bool, Int, Float
+from ctapipe.core.traits import Bool, Int, Float, CaselessStrEnum
 
 __all__ = [
     "ImageMapper",
@@ -22,6 +25,7 @@ __all__ = [
     "RebinMapper",
     "ShiftingMapper",
     "SquareMapper",
+    "HexagonalPatchMapper",
 ]
 
 class ImageMapper(Component):
@@ -57,6 +61,8 @@ class ImageMapper(Component):
         Multiplication factor used for rebinning.
     index_matrix : numpy.ndarray or None
         Matrix used for indexing, initialized to None.
+    cam_neighbor_array : numpy.ndarray or None
+        Matrix used for indexing, initialized to None.
 
     Methods
     -------
@@ -85,9 +91,6 @@ class ImageMapper(Component):
         parent : ctapipe.core.Component or ctapipe.core.Tool
             Parent of this component in the configuration hierarchy,
             this is mutually exclusive with passing ``config``
-        **kwargs
-            Additional keyword arguments for traitlets. Non-traitlet kwargs
-            (like 'subarray') are filtered out for compatibility.
         """
 
         # Filter out non-traitlet kwargs before passing to Component
@@ -102,12 +105,13 @@ class ImageMapper(Component):
             parent=parent,
             **component_kwargs,
         )
-
         # Camera types
         self.geometry = geometry
         self.camera_type = self.geometry.name
         self.n_pixels = self.geometry.n_pixels
         # Rotate the pixel positions by the pixel to align
+        if self.camera_type == "AdvCamSiPM":
+            self.geometry.pix_rotation = 8.213 * u.deg
         self.geometry.rotate(self.geometry.pix_rotation)
 
         self.pix_x = np.around(
@@ -123,7 +127,7 @@ class ImageMapper(Component):
         # Additional smooth the ticks for 'DigiCam', 'RealLSTCam', 'CHEC' and 'VERITAS' cameras
         if self.camera_type in ["DigiCam", "RealLSTCam"]:
             self.pix_y, self.y_ticks = self._smooth_ticks(self.pix_y, self.y_ticks)
-        if self.camera_type == "CHEC":
+        if self.camera_type in ["CHEC",  "AdvCamSiPM"]:
             self.pix_x, self.x_ticks = self._smooth_ticks(self.pix_x, self.x_ticks)
             self.pix_y, self.y_ticks = self._smooth_ticks(self.pix_y, self.y_ticks)
         if self.camera_type == "VERITAS":
@@ -143,6 +147,7 @@ class ImageMapper(Component):
 
         # Set the indexed matrix to None
         self.index_matrix = None
+        self.cam_neighbor_array = None
 
     def map_image(self, raw_vectors: np.ndarray) -> np.ndarray:
         """
@@ -405,7 +410,7 @@ class ImageMapper(Component):
             )
         # Adjust for odd tick_diff
         # TODO: Check why MAGICCam, VERITAS, and UNKNOWN-7987PX (AdvCam) do not need this adjustment
-        if tick_diff % 2 != 0 and self.camera_type not in ["MAGICCam", "VERITAS", "UNKNOWN-7987PX"]:
+        if tick_diff % 2 != 0 and self.camera_type not in ["MAGICCam", "VERITAS", "AdvCamSiPM"]:
             grid_second.insert(
                 0,
                 np.around(
@@ -693,6 +698,131 @@ class AxialMapper(ImageMapper):
         output_grid = np.column_stack([x_grid.ravel(), y_grid.ravel()])
 
         return input_grid, output_grid
+
+
+class HexagonalPatchMapper(ImageMapper):
+    """
+    HexagonalPatchMapper retrieves the information needed to work with unmapped
+    hexagonal cameras: the pixel neighbor array for indexed convolutions and,
+    for the Advanced SiPM camera (AdvCam), the trigger geometry (flowers, FEBs and
+    the three trigger sectors).
+
+    The trigger geometry is read from ``resources/triggergeometry_AdvCam_<version>.h5``.
+    Each sector is made of complete flowers and complete FEBs, so the flower and FEB
+    content of each sector is derived from the pixel mapping of the sector.
+    """
+
+    trigger_geometry_version = CaselessStrEnum(
+        ["v1"],
+        default_value="v1",
+        help=(
+            "Set the version of the trigger geometry file, only available for the Advanced SiPM camera (AdvCam). "
+            "``v1``: 3 overlapping trigger sectors of 2989 pixels (427 flowers, 61 FEBs) for prod2 AdvCamSiPM."
+        ),
+    ).tag(config=True)
+
+    def __init__(
+        self,
+        geometry,
+        config=None,
+        parent=None,
+        **kwargs,
+    ):
+        super().__init__(
+            geometry=geometry,
+            config=config,
+            parent=parent,
+            **kwargs,
+        )
+
+        if geometry.pix_type != PixelShape.HEXAGON:
+            raise ValueError(
+                f"HexagonalPatchMapper is only available for hexagonal pixel cameras. Pixel type of the selected camera is '{geometry.pix_type}'."
+            )
+
+        # Sector information is only available for the AdvCam
+        self.sector_mappings = None
+
+        if geometry.name == "AdvCamSiPM":
+            path = files("dl1_data_handler.resources").joinpath(
+                f"triggergeometry_AdvCam_{self.trigger_geometry_version}.h5"
+            )
+            with tables.open_file(path, mode="r") as f:
+                # Complete camera: pixels, flowers (1141) and FEBs (163)
+                self.cam_neighbor_array = f.root.neighbors.camera_neighbors[:]
+                self.fl_neighbor_array_l1 = f.root.neighbors.flower_neighbors_l1[:]
+                self.supfl_neighbor_array_l1 = f.root.neighbors.superflower_neighbors_l1[:]
+                self.fl_neighbor_array_tdscan = f.root.neighbors.flower_neighbors_tdscan[:]
+                self.feb_indices = f.root.modules.indices[:]
+                self.feb_neighbors = f.root.neighbors.feb_neighbors[:]
+                # Sectors: boolean pixel masks, pixel order of each sector and pixel neighbors
+                self.sectors_bool = f.root.sectors.mask[:]
+                self.sector_mappings = f.root.sectors.mapping[:]
+                self.sect0_neighbors = f.root.sectors.sect0_neighbors[:]
+
+            # The superflowers on the camera border have less than 7 flowers (padded with -1)
+            self.supfl_neighbor_l1_mask = self.supfl_neighbor_array_l1 >= 0
+
+            # Flower and FEB order of each sector. The sector pixel mapping keeps the
+            # pixels of each flower (7) and of each FEB (49) together, so the first pixel
+            # of each group gives the flower or FEB index.
+            n_sectors = self.sector_mappings.shape[0]
+            self.sector_flower_order = self.sector_mappings.reshape(n_sectors, -1, 7)[:, :, 0] // 7
+            self.sector_feb_order = self.sector_mappings.reshape(n_sectors, -1, 49)[:, :, 0] // 49
+
+            # Neighbor arrays in the local order of a sector (valid for the three sectors).
+            self.sect0_flower_neighbors = _get_sector_neighbors(
+                self.fl_neighbor_array_tdscan, self.sector_flower_order[0]
+            )
+            self.sect0_feb_neighbors = _get_sector_neighbors(
+                self.feb_neighbors, self.sector_feb_order[0]
+            )
+        # Retrieve the camera neighbor array to perform convolutions with cameras different from AdvCamSiPM.
+        else:
+            self.log.debug(f"Computing neighbor array for {geometry.name} ...")
+            neighbor_matrix = geometry.neighbor_matrix
+            num_pixels = neighbor_matrix.shape[0]
+            self.cam_neighbor_array = np.full((num_pixels, 7), -1, dtype=int)
+            for i in range(num_pixels):
+                neighbors = [i] + np.where(neighbor_matrix[i])[0].tolist()
+                self.cam_neighbor_array[i, : len(neighbors)] = neighbors
+
+    def get_sector(self, raw_vector, sector_index, level="pixel"):
+        """
+        Select and reorder the elements of one sector.
+
+        Parameters
+        ----------
+        raw_vector : numpy.ndarray
+            Array whose first axis is pixels (7987), flowers (1141) or FEBs (163).
+        sector_index : int
+            Index of the sector.
+        level : str
+            ``pixel``, ``flower`` or ``feb``.
+
+        Returns
+        -------
+        numpy.ndarray
+            The elements of the sector in the standard sector order.
+        """
+        order = {
+            "pixel": self.sector_mappings,
+            "flower": self.sector_flower_order,
+            "feb": self.sector_feb_order,
+        }[level][sector_index]
+        return raw_vector[order]
+
+
+def _get_sector_neighbors(global_neighbors, order):
+    """
+    Translate a camera neighbor array (global indices, -1 padded) into the local
+    indices of a sector. Neighbors outside the sector become -1 and every neighbor
+    keeps its position in the row.
+    """
+    position = np.full(global_neighbors.shape[0], -1)
+    position[order] = np.arange(len(order))
+    rows = global_neighbors[order]
+    return np.where(rows >= 0, position[np.clip(rows, 0, None)], -1)
 
 
 class ShiftingMapper(ImageMapper):
@@ -1262,7 +1392,7 @@ class RebinMapper(ImageMapper):
             self.image_shape = self.interpolation_image_shape
         self.internal_shape = self.image_shape + self.internal_pad * 2
         self.rebinning_mult_factor = 10
-        
+
         # Validate memory requirements before proceeding (if max_memory_gb is set)
         if self.max_memory_gb is not None:
             # RebinMapper uses a fine grid (internal_shape * rebinning_mult_factor)^2
@@ -1271,7 +1401,7 @@ class RebinMapper(ImageMapper):
             estimated_memory_gb = (
                 fine_grid_size * self.internal_shape * self.internal_shape * 4
             ) / (1024**3)  # 4 bytes per float32
-            
+
             if estimated_memory_gb > self.max_memory_gb:
                 raise ValueError(
                     f"RebinMapper with image_shape={self.image_shape} would require "
@@ -1281,7 +1411,7 @@ class RebinMapper(ImageMapper):
                     f"Alternatively, consider using a smaller interpolation_image_shape (recommended < 60) "
                     f"or use BilinearMapper or BicubicMapper instead, which are more memory-efficient."
                 )
-        
+
         # Creating the hexagonal and the output grid for the conversion methods.
         input_grid, output_grid = super()._get_grids_for_interpolation()
         # Calculate the mapping table
