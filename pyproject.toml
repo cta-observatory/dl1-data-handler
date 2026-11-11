@@ -45,7 +45,10 @@ dependencies = [
 dynamic = ["version"]
 
 [tool.setuptools]
-packages = ["dl1_data_handler"]
+packages = ["dl1_data_handler", "dl1_data_handler.resources"]
+
+[tool.setuptools.package-data]
+"dl1_data_handler.resources" = ["*.h5"]
 
 [project.optional-dependencies]
 all = [
