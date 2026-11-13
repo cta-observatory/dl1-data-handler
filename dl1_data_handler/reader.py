@@ -1260,14 +1260,15 @@ class DLDataReader(Component):
                 if self.files[file_name].isopen:  # Check if file is still open
                     self.files[file_name].close()
 
+    @abstractmethod
     def _process_example_identifiers(self, example_identifiers) -> Table:
         """
-        Hook for subclasses to label or select the mono example identifiers.
+        Label or select the mono example identifiers.
 
         It is called once all files are read and before the examples are sorted.
-        The default implementation returns the example identifiers unchanged.
+        Subclasses that do not need it return the example identifiers unchanged.
         """
-        return example_identifiers
+        pass
     
     @abstractmethod
     def _append_features(self, batch) -> Table:
@@ -1520,6 +1521,10 @@ class DLImageReader(DLDataReader):
                 images.append(unmapped_image)
         batch.add_column(images, name="features", index=7)
         return batch
+
+    def _process_example_identifiers(self, example_identifiers) -> Table:
+        """No additional labelling or selection of the example identifiers."""
+        return example_identifiers
 
 
 def get_unmapped_waveform(
@@ -1819,6 +1824,11 @@ class DLWaveformReader(DLDataReader):
                 waveforms.append(unmapped_waveform)
         batch.add_column(waveforms, name="features", index=7)
         return batch
+
+    def _process_example_identifiers(self, example_identifiers) -> Table:
+        """No additional labelling or selection of the example identifiers."""
+        return example_identifiers
+    
 
 def apply_digital_sum(waveform, mapper, l1_settings):
     """
@@ -2621,3 +2631,7 @@ class DLFeatureVectorReader(DLDataReader):
                 np.array(stereo_fvs), name="stereo_feature_vectors", index=7
             )
         return batch
+
+    def _process_example_identifiers(self, example_identifiers) -> Table:
+        """No additional labelling or selection of the example identifiers."""
+        return example_identifiers
