@@ -169,14 +169,14 @@ class DLDataReader(Component):
         help="Skip files that are not compatible to the reference instead of raising an error",
     ).tag(config=True)
 
-    enforce_subarray_equality = Bool(
-        default_value=True,
+    subarray_check = CaselessStrEnum(
+        values=["equality", "telescopes", "disabled"],
+        default_value="equality",
         help=(
-            "Enforce strict equality of subarray descriptions between files. "
-            "If False, only the telescope descriptions (optics and camera) of the telescopes "
-            "common to the file and the reference are compared, so positions and reference "
-            "location may differ. Error will be raised if selected check failed "
-            "and skip_incompatible_files is False."
+            "Specify the level of subarray compatibility checking between files. "
+            "'equality' enforces strict equality of subarray descriptions. "
+            "'telescopes' performs a looser check based on telescope IDs only. "
+            "'disabled' disables subarray compatibility checks entirely. "
         ),
     ).tag(config=True)
 
@@ -371,40 +371,26 @@ class DLDataReader(Component):
                 "types using the 'DLFeatureVectorReader' subclass. Beforehand, the feature vectors have to be appended "
                 "to the DL1 data files using '$ ctlearn-predict-model --dl1-features ...'."
             )
-        # Check that all files have compatible SubarrayDescriptions.
-        # Files may contain only a subset of the selected telescopes (e.g. NSB files
-        # with a single telescope). In that case only the common telescopes are compared.
-        for filename in list(self.files):
-            subarray = SubarrayDescription.from_hdf(filename, focal_length_choice=self.focal_length_choice)
-            common_tel_ids = sorted(set(subarray.tel_ids) & set(self.tel_ids))
-            if len(common_tel_ids) == 0:
-                subarrays_match = False
-                message = f"File '{filename}' does not contain any of the selected telescopes {list(self.tel_ids)}."
-            else:
-                if len(common_tel_ids) < len(self.tel_ids):
-                    self.log.warning(
-                        f"File '{filename}' only contains telescopes {common_tel_ids} "
-                        f"of the selected {list(self.tel_ids)}."
-                    )
-                # Same name for both selections: 'select_subarray' appends the selected tel_ids
-                # to the name, and the reference subarray was already selected once.
-                ref_common = self.subarray.select_subarray(common_tel_ids, name="common")
-                file_common = subarray.select_subarray(common_tel_ids, name="common")
-                if self.enforce_subarray_equality:
-                    subarrays_match = ref_common.__eq__(file_common)
-                else:
-                    # Only the telescope descriptions (optics and camera) of the common telescopes are
-                    # compared: positions and reference location may differ (e.g. NSB-only simulations).
-                    subarrays_match = all(
-                        ref_common.tel[tel_id] == file_common.tel[tel_id] for tel_id in common_tel_ids
-                    )
-                message = f"Subarray description of file '{filename}' does not match the reference subarray description."
-            if not subarrays_match:
-                if self.skip_incompatible_files:
-                    self.log.warning(f"Skipping '{filename}'. {message}")
-                    del self.files[filename]
-                else:
-                    raise ValueError(message)
+        # Check that all files have compatible SubarrayDescriptions
+        if self.subarray_check != "disabled":
+            for filename in list(self.files):
+                subarray = SubarrayDescription.from_hdf(filename, focal_length_choice=self.focal_length_choice)
+                # Filter subarray by selected telescopes
+                if selected_tel_ids is not None:
+                    subarray = subarray.select_subarray(self.tel_ids)
+                # Check if the subarray matches the reference
+                subarrays_match = (
+                    subarray.__eq__(self.subarray)
+                    if self.subarray_check == "equality"
+                    else SubarrayDescription.check_matching_subarrays([self.subarray, subarray])
+                )
+                if not subarrays_match:
+                    message = f"Subarray description of file '{filename}' does not match the reference subarray description."
+                    if self.skip_incompatible_files:
+                        self.log.warning(f"Skipping '{filename}'. {message}")
+                        del self.files[filename]
+                    else:
+                        raise ValueError(message)
 
         # Set the telescope type and camera name as class attributes for mono mode for convenience
         # FIXME Make image mapper not a dict because we only need one since we do not select multiple telescope types for image/wvf reading
