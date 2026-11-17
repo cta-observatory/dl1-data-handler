@@ -74,6 +74,9 @@ docs = [
 
 dev = [
   "dl1_data_handler[all,docs,tests]",
+  "codespell",
+  "pre-commit",
+  "ruff",
   "setuptools_scm[toml]",
 ]
 
@@ -91,3 +94,26 @@ norecursedirs = [
     "notebooks",
     "build",
 ]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+extend-select = ["I"]
+ignore = []
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint.isort]
+known-first-party = ["dl1_data_handler"]
+
+[tool.codespell]
+ignore-words = ".codespell-ignores"
+skip = "*.drawio,*.svg,*.egg-info/*"
