@@ -45,7 +45,10 @@ dependencies = [
 dynamic = ["version"]
 
 [tool.setuptools]
-packages = ["dl1_data_handler", "dl1_data_handler.resources"]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.setuptools.package-data]
 "dl1_data_handler.resources" = ["*.h5"]
@@ -78,10 +81,10 @@ dev = [
 repository = "https://github.com/cta-observatory/dl1-data-handler"
 
 [tool.setuptools_scm]
-version_file = "dl1_data_handler/_version.py"
+version_file = "src/dl1_data_handler/_version.py"
 
 [tool.pytest.ini_options]
-testpaths = ["dl1_data_handler"]
+testpaths = ["src/dl1_data_handler"]
 
 norecursedirs = [
     ".git",

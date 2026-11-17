@@ -3,9 +3,8 @@ from traitlets.config.loader import Config
 from traitlets import TraitError
 import numpy as np
 
-from dl1_data_handler.reader import (
+from dl1_data_handler.io import (
     DLImageReader,
-    DLWaveformReader,
     get_unmapped_image,
 )
 
@@ -36,27 +35,6 @@ def test_dl1_image_reading(dl1_image_reader):
     assert mono_batch["impact_radius"][0] == np.sqrt(
         mono_batch["true_core_y"][0] ** 2 + mono_batch["true_core_x"][0] ** 2
     )  # nosec
-
-
-def test_r1_waveform_reading(r1_tmp_path, r1_gamma_file):
-    """check reading from pixel-wise waveform data files"""
-    # Create a configuration suitable for the test
-    config = Config(
-        {
-            "DLWaveformReader": {
-                "allowed_tels": [4],
-                "sequence_length": 20,
-            },
-        }
-    )
-    # Create an image reader and test basic properties
-    r1_reader = DLWaveformReader(input_url_signal=[r1_gamma_file], config=config)
-    assert r1_reader.get_n_events() == 1  # nosec
-    assert r1_reader.tel_type == "LST_LST_LSTCam"  # nosec
-    # Test the generation of a mono batch
-    mono_batch = r1_reader.generate_mono_batch([0])
-    assert mono_batch["tel_id"] == 4  # nosec
-    assert mono_batch["features"].shape == (1, 110, 110, 20)  # nosec
 
 
 def test_dl1_hillas_parameter_extraction(dl1_image_reader):
