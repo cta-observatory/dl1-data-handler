@@ -1,4 +1,4 @@
-"""Tests for image_mapper module."""
+"""Tests for core.mapper module."""
 import os
 from pathlib import Path
 
@@ -6,7 +6,7 @@ import pytest
 import numpy as np
 from ctapipe.instrument import CameraGeometry
 
-from dl1_data_handler.image_mapper import (
+from dl1_data_handler.core import (
     BilinearMapper,
     BicubicMapper,
     HexagdlyMapper,
@@ -525,7 +525,7 @@ class TestHexagdlyMapperSpecific:
         image, mapping a large dataset would pay the search cost on every
         single event instead of once per camera type.
         """
-        from dl1_data_handler import image_mapper as image_mapper_module
+        from dl1_data_handler.core.mapper import hexagdly as image_mapper_module
 
         call_count = {"n": 0}
         original_mismatch = image_mapper_module._HexGridTransform._mismatch
