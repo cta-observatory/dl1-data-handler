@@ -3,13 +3,14 @@ This module defines the ``ImageMapper`` subclass ``AxialMapper`` that hold the b
 """
 
 import numpy as np
+from ctapipe.core.traits import Bool
+from ctapipe.instrument.camera import PixelShape
 from scipy import spatial
 
-from ctapipe.instrument.camera import PixelShape
-from ctapipe.core.traits import Bool
 from dl1_data_handler.core import ImageMapper
 
 __all__ = ["AxialMapper"]
+
 
 class AxialMapper(ImageMapper):
     """
@@ -87,10 +88,12 @@ class AxialMapper(ImageMapper):
         )
 
         dist_first = np.around(
-            abs(first_ticks[0] - first_ticks[1]), decimals=self.constants.decimal_precision
+            abs(first_ticks[0] - first_ticks[1]),
+            decimals=self.constants.decimal_precision,
         )
         dist_second = np.around(
-            abs(second_ticks[0] - second_ticks[1]), decimals=self.constants.decimal_precision
+            abs(second_ticks[0] - second_ticks[1]),
+            decimals=self.constants.decimal_precision,
         )
 
         # manipulate y ticks with extra ticks
@@ -98,7 +101,8 @@ class AxialMapper(ImageMapper):
         for i in np.arange(num_extra_ticks):
             second_ticks.append(
                 np.around(
-                    second_ticks[-1] + dist_second, decimals=self.constants.decimal_precision
+                    second_ticks[-1] + dist_second,
+                    decimals=self.constants.decimal_precision,
                 )
             )
         first_ticks = reversed(first_ticks)

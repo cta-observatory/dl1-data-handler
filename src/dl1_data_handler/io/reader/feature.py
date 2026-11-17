@@ -7,21 +7,23 @@ __all__ = [
     "get_feature_vectors",
 ]
 
-import numpy as np
 import threading
+
+import numpy as np
 from astropy.table import (
     Table,
 )
-
 from ctapipe.core.traits import (
     Bool,
-    List,
     CaselessStrEnum,
+    List,
     Unicode,
 )
+
 from dl1_data_handler.io import DLDataReader
 
 lock = threading.Lock()
+
 
 def get_feature_vectors(dl1_event, prefix, feature_vector_types) -> list:
     """

@@ -3,13 +3,14 @@ This module defines the ``ImageMapper`` subclass ``BicubicMapper`` that hold the
 """
 
 import numpy as np
+from ctapipe.core.traits import Int
+from ctapipe.instrument.camera import PixelShape
 from scipy import spatial
 
-from ctapipe.instrument.camera import PixelShape
-from ctapipe.core.traits import Int
 from dl1_data_handler.core import ImageMapper
 
 __all__ = ["BicubicMapper"]
+
 
 class BicubicMapper(ImageMapper):
     """
@@ -180,16 +181,16 @@ class BicubicMapper(ImageMapper):
         for i in range(4):
             for j in range(self.internal_shape):
                 for k in range(self.internal_shape):
-                    for l in range(weights.shape[3]):
+                    for corner in range(weights.shape[3]):
                         index = (
-                            corner_indexes[i][k][j][l]
+                            corner_indexes[i][k][j][corner]
                             if weights.shape[3] == 3
-                            else corner_indexes[k][j][i][l]
+                            else corner_indexes[k][j][i][corner]
                         )
                         mapping_matrix[index][k][j] = (
-                            weights[i][k][j][l] / 4
+                            weights[i][k][j][corner] / 4
                             if weights.shape[3] == 3
-                            else weights[k][j][i][l] / 4
+                            else weights[k][j][i][corner] / 4
                         )
         return super()._get_sparse_mapping_matrix(mapping_matrix)
 

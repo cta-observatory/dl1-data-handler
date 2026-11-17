@@ -4,10 +4,10 @@ Credits to ctapipe for the original code.
 """
 
 import pytest
-from filelock import FileLock
-
 from ctapipe.core import run_tool
 from ctapipe.utils import get_dataset_path
+from filelock import FileLock
+
 
 @pytest.fixture(scope="session")
 def prod5_gamma_simtel_path(tmp_path_factory):
@@ -16,15 +16,18 @@ def prod5_gamma_simtel_path(tmp_path_factory):
     with FileLock(str(lock_path)):
         return get_dataset_path("gamma_prod5.simtel.zst")
 
+
 @pytest.fixture(scope="session")
 def dl1_tmp_path(tmp_path_factory):
     """Temporary directory for global dl1 test data"""
     return tmp_path_factory.mktemp("dl1_")
 
+
 @pytest.fixture(scope="session")
 def r1_tmp_path(tmp_path_factory):
     """Temporary directory for global r1 test data"""
     return tmp_path_factory.mktemp("r1_")
+
 
 @pytest.fixture(scope="session")
 def dl1_gamma_file(dl1_tmp_path, prod5_gamma_simtel_path):
@@ -59,7 +62,7 @@ def r1_gamma_file(r1_tmp_path, prod5_gamma_simtel_path):
     argv = [
         f"--input={prod5_gamma_simtel_path}",
         f"--output={output}",
-        f"--DataWriter.write_r1_waveforms=True",
+        "--DataWriter.write_r1_waveforms=True",
         "--DataWriter.Contact.name=αℓℓ the äüöß",
         "--ProductMetadata.instance=site_id=CTAO-South",
     ]

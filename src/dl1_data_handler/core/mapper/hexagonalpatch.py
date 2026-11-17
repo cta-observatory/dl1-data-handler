@@ -2,15 +2,17 @@
 This module defines the ``ImageMapper`` subclass ``HexagonalPatchMapper`` that hold the basic functionality for the trigger patches of hexagonal pixel data from the AdvCam.
 """
 
-import numpy as np
-import tables
 from importlib.resources import files
 
-from ctapipe.instrument.camera import PixelShape
+import numpy as np
+import tables
 from ctapipe.core.traits import CaselessStrEnum
+from ctapipe.instrument.camera import PixelShape
+
 from dl1_data_handler.core import ImageMapper
 
 __all__ = ["HexagonalPatchMapper"]
+
 
 class HexagonalPatchMapper(ImageMapper):
     """
@@ -63,8 +65,12 @@ class HexagonalPatchMapper(ImageMapper):
                 # Complete camera: pixels, flowers (1141) and FEBs (163)
                 self.cam_neighbor_array = f.root.neighbors.camera_neighbors[:]
                 self.fl_neighbor_array_l1 = f.root.neighbors.flower_neighbors_l1[:]
-                self.supfl_neighbor_array_l1 = f.root.neighbors.superflower_neighbors_l1[:]
-                self.fl_neighbor_array_tdscan = f.root.neighbors.flower_neighbors_tdscan[:]
+                self.supfl_neighbor_array_l1 = (
+                    f.root.neighbors.superflower_neighbors_l1[:]
+                )
+                self.fl_neighbor_array_tdscan = (
+                    f.root.neighbors.flower_neighbors_tdscan[:]
+                )
                 self.feb_indices = f.root.modules.indices[:]
                 self.feb_neighbors = f.root.neighbors.feb_neighbors[:]
                 # Sectors: boolean pixel masks, pixel order of each sector and pixel neighbors
@@ -79,8 +85,12 @@ class HexagonalPatchMapper(ImageMapper):
             # pixels of each flower (7) and of each FEB (49) together, so the first pixel
             # of each group gives the flower or FEB index.
             n_sectors = self.sector_mappings.shape[0]
-            self.sector_flower_order = self.sector_mappings.reshape(n_sectors, -1, 7)[:, :, 0] // 7
-            self.sector_feb_order = self.sector_mappings.reshape(n_sectors, -1, 49)[:, :, 0] // 49
+            self.sector_flower_order = (
+                self.sector_mappings.reshape(n_sectors, -1, 7)[:, :, 0] // 7
+            )
+            self.sector_feb_order = (
+                self.sector_mappings.reshape(n_sectors, -1, 49)[:, :, 0] // 49
+            )
 
             # Neighbor arrays in the local order of a sector (valid for the three sectors).
             self.sect0_flower_neighbors = _get_sector_neighbors(
@@ -123,6 +133,7 @@ class HexagonalPatchMapper(ImageMapper):
             "feb": self.sector_feb_order,
         }[level][sector_index]
         return raw_vector[order]
+
 
 def _get_sector_neighbors(global_neighbors, order):
     """

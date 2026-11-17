@@ -8,44 +8,44 @@ __all__ = [
     "DLDataReader",
 ]
 
-from abc import abstractmethod
 import atexit
+import threading
+from abc import abstractmethod
 from collections import OrderedDict
 from enum import Enum
+
 import numpy as np
 import tables
-import threading
-
 from astropy import units as u
 from astropy.coordinates import AltAz, SkyCoord
 from astropy.table import (
     Table,
-    unique,
     join,
+    unique,
     vstack,
 )
 from astropy.time import Time
-
 from ctapipe.coordinates import CameraFrame, NominalFrame
 from ctapipe.core import Component, QualityQuery
 from ctapipe.core.traits import (
     Bool,
-    Dict,
+    CaselessStrEnum,
     CInt,
+    Dict,
     Int,
     IntTelescopeParameter,
-    Set,
     List,
-    CaselessStrEnum,
+    Set,
+    TelescopeParameter,
     Unicode,
     UseEnum,
-    TelescopeParameter,
 )
-from traitlets import TraitError
 from ctapipe.instrument import SubarrayDescription
 from ctapipe.instrument.optics import FocalLengthKind
 from ctapipe.io import read_table
 from ctapipe.io.metadata import read_ctao_metadata
+from traitlets import TraitError
+
 from dl1_data_handler.core import ImageMapper
 
 # Reference (dummy) time to insert in the SkyCoord object as the default time
@@ -57,6 +57,7 @@ lock = threading.Lock()
 class ProcessType(Enum):
     Observation = "Observation"
     Simulation = "ObservationSim"
+
 
 class TableQualityQuery(QualityQuery):
     """Quality criteria for table-wise dl1b parameters."""
@@ -249,6 +250,7 @@ class DLDataReader(Component):
     # Column of the example identifiers with the class (1 signal, 0 background)
     # used to count the examples for the class weights.
     class_column = "true_shower_primary_class"
+
     def __init__(
         self,
         input_url_signal,
@@ -266,7 +268,7 @@ class DLDataReader(Component):
         atexit.register(self.__destructor)
         # Initialize the Table data quality query
         self.quality_query = TableQualityQuery(parent=self)
-        
+
         # Construct dict of filename:file_handle pairs of an ordered file list
         self.input_url_signal = input_url_signal
         self.input_url_background = input_url_background
@@ -313,7 +315,9 @@ class DLDataReader(Component):
             self.subarray_trigger_table_path = "dl0/event/subarray/trigger"
 
         # Set up the subarray
-        self.subarray = SubarrayDescription.from_hdf(self.first_file, focal_length_choice=self.focal_length_choice)
+        self.subarray = SubarrayDescription.from_hdf(
+            self.first_file, focal_length_choice=self.focal_length_choice
+        )
         selected_tel_ids = None
         if self.allowed_tels is not None:
             selected_tel_ids = np.array(list(self.allowed_tels), dtype=np.int16)
@@ -361,7 +365,9 @@ class DLDataReader(Component):
         # Check that all files have compatible SubarrayDescriptions
         if self.subarray_check != "disabled":
             for filename in list(self.files):
-                subarray = SubarrayDescription.from_hdf(filename, focal_length_choice=self.focal_length_choice)
+                subarray = SubarrayDescription.from_hdf(
+                    filename, focal_length_choice=self.focal_length_choice
+                )
                 # Filter subarray by selected telescopes
                 if selected_tel_ids is not None:
                     subarray = subarray.select_subarray(self.tel_ids)
@@ -369,7 +375,9 @@ class DLDataReader(Component):
                 subarrays_match = (
                     subarray.__eq__(self.subarray)
                     if self.subarray_check == "equality"
-                    else SubarrayDescription.check_matching_subarrays([self.subarray, subarray])
+                    else SubarrayDescription.check_matching_subarrays(
+                        [self.subarray, subarray]
+                    )
                 )
                 if not subarrays_match:
                     message = f"Subarray description of file '{filename}' does not match the reference subarray description."
@@ -480,7 +488,7 @@ class DLDataReader(Component):
                     "true_core_x",
                     "true_core_y",
                     "true_h_first_int",
-                    "true_x_max"
+                    "true_x_max",
                 ]
             )
         elif self.process_type == ProcessType.Observation:
@@ -551,13 +559,16 @@ class DLDataReader(Component):
                 node_path = f"/dl1/event/telescope/parameters/tel_{tel_id:03d}"
                 if node_path not in f:
                     # Files can contain only a subset of the selected telescopes (see the subarray check).
-                    self.log.warning(f"Telescope {tel_id:03d} not found in '{filename}'. Skipping it.")
+                    self.log.warning(
+                        f"Telescope {tel_id:03d} not found in '{filename}'. Skipping it."
+                    )
                     continue
                 tel_table = read_table(f, node_path)
                 if self.force_dl1_lookup:
                     # Read the DL1 image table
                     dl1_tel_table = read_table(
-                        f, f"/dl1/event/telescope/images/tel_{tel_id:03d}",
+                        f,
+                        f"/dl1/event/telescope/images/tel_{tel_id:03d}",
                     )
                     # Keep only the columns needed for the join
                     dl1_tel_table.keep_columns(["obs_id", "event_id", "tel_id"])
@@ -566,7 +577,9 @@ class DLDataReader(Component):
                         np.arange(len(dl1_tel_table)), name="table_index", index=0
                     )
                     # Unique the table to remove unwanted duplication
-                    dl1_tel_table = unique(dl1_tel_table, keys=["obs_id", "event_id", "tel_id"])
+                    dl1_tel_table = unique(
+                        dl1_tel_table, keys=["obs_id", "event_id", "tel_id"]
+                    )
                     # Join the DL1 image table with the DL1 parameter table
                     tel_table = join(
                         left=tel_table,
@@ -597,14 +610,14 @@ class DLDataReader(Component):
             events = vstack(tel_tables)
 
             # Initialize a boolean mask to True for all events
-            # Todo: Does not have to be class attribute. This needed at the momment
+            # Todo: Does not have to be class attribute. This needed at the moment
             # for real data which is processed per file.
             self.passes_quality_checks = np.ones(len(events), dtype=bool)
             # Quality selection based on the dl1b parameter and MC shower simulation tables
             if self.quality_query:
                 self.passes_quality_checks = self.quality_query.get_table_mask(events)
 
-            # Apply the mask to filter events that are not fufilling the quality criteria
+            # Apply the mask to filter events that are not fulfilling the quality criteria
             events = events[self.passes_quality_checks]
 
             # Construct the example identifiers
@@ -638,12 +651,16 @@ class DLDataReader(Component):
             # Appending the events to the list of example identifiers
             example_identifiers.append(events)
 
-        # Constrcut the example identifiers for all files
+        # Construct the example identifiers for all files
         self.example_identifiers = vstack(example_identifiers)
         # Subclasses can label or select the examples (e.g. DLTriggerReader).
-        self.example_identifiers = self._process_example_identifiers(self.example_identifiers)
+        self.example_identifiers = self._process_example_identifiers(
+            self.example_identifiers
+        )
 
-        self.example_identifiers.sort(["file_index", "obs_id", "event_id", "tel_id", "tel_type_id"])
+        self.example_identifiers.sort(
+            ["file_index", "obs_id", "event_id", "tel_id", "tel_type_id"]
+        )
         # Construct simulation information for all files
         if self.process_type == ProcessType.Simulation:
             self.simulation_info = vstack(simulation_info)
@@ -701,7 +718,8 @@ class DLDataReader(Component):
                     if self.force_dl1_lookup:
                         # Read the DL1 image table
                         dl1_tel_table = read_table(
-                            f, f"/dl1/event/telescope/images/tel_{tel_id:03d}",
+                            f,
+                            f"/dl1/event/telescope/images/tel_{tel_id:03d}",
                         )
                         # Keep only the columns needed for the join
                         dl1_tel_table.keep_columns(["obs_id", "event_id", "tel_id"])
@@ -710,7 +728,9 @@ class DLDataReader(Component):
                             np.arange(len(dl1_tel_table)), name="table_index", index=0
                         )
                         # Unique the table to remove unwanted duplication
-                        dl1_tel_table = unique(dl1_tel_table, keys=["obs_id", "event_id", "tel_id"])
+                        dl1_tel_table = unique(
+                            dl1_tel_table, keys=["obs_id", "event_id", "tel_id"]
+                        )
                         # Join the DL1 image table with the DL1 parameter table
                         tel_table = join(
                             left=tel_table,
@@ -794,7 +814,7 @@ class DLDataReader(Component):
             # Appending the events to the list of example identifiers
             example_identifiers.append(events)
 
-        # Constrcut the example identifiers for all files
+        # Construct the example identifiers for all files
         self.example_identifiers = vstack(example_identifiers)
         self.example_identifiers.sort(["obs_id", "event_id", "tel_id", "tel_type_id"])
         self.example_identifiers_grouped = self.example_identifiers.group_by(
@@ -804,7 +824,9 @@ class DLDataReader(Component):
         self.unique_example_identifiers = unique(
             self.example_identifiers, keys=["obs_id", "event_id"]
         )
-        self.unique_example_identifiers.remove_columns(["table_index", "tel_type_id", "tel_id", "hillas_intensity"])
+        self.unique_example_identifiers.remove_columns(
+            ["table_index", "tel_type_id", "tel_id", "hillas_intensity"]
+        )
         # Construct simulation information for all files
         if self.process_type == ProcessType.Simulation:
             self.simulation_info = vstack(simulation_info)
@@ -912,7 +934,7 @@ class DLDataReader(Component):
             A Table with the impact radius added as a new column.
         """
         # Calculate the impact radius
-        impact_radius = np.sqrt(table["true_core_x"]**2 + table["true_core_y"]**2)
+        impact_radius = np.sqrt(table["true_core_x"] ** 2 + table["true_core_y"] ** 2)
         # Add the impact radius to the table
         table.add_column(impact_radius, name="impact_radius")
         return table
@@ -1042,7 +1064,7 @@ class DLDataReader(Component):
         """
         if not parameter_list:
             parameter_list = self.dl1b_parameter_colnames
-            
+
         param_dict = {param: [] for param in parameter_list}
         initialized = False
         available_params = set()
@@ -1074,7 +1096,7 @@ class DLDataReader(Component):
 
         if parameter_list != list(param_dict.keys()):
             self.log.warning("The parameter list does not match with the output.")
- 
+
         return param_dict
 
     def generate_mono_batch(self, batch_indices) -> Table:
@@ -1139,12 +1161,12 @@ class DLDataReader(Component):
             Dictionary containing the feature for the batch. The keys are the parameter names
             and the values are the corresponding data arrays.
         Table
-            Table containing the labels and additional infor for the batch examples.
+            Table containing the labels and additional information for the batch examples.
         """
         # Check that the batch generation call is consistent with the mode
         if self.mode != "stereo":
             raise ValueError("Stereo batch generation is not supported in mono mode.")
-        # Retrieve the batch from the example identifiers via groupd by
+        # Retrieve the batch from the example identifiers via group by
         # Workaround for the missing multicolumn indexing in astropy:
         # Need this PR https://github.com/astropy/astropy/pull/15826
         # waiting astropy v7.1.0
@@ -1216,7 +1238,7 @@ class DLDataReader(Component):
         Subclasses that do not need it return the example identifiers unchanged.
         """
         pass
-    
+
     @abstractmethod
     def _append_features(self, batch) -> Table:
         pass

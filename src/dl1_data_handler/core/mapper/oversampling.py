@@ -3,9 +3,11 @@ This module defines the ``ImageMapper`` subclass ``OversamplingMapper`` that hol
 """
 
 from ctapipe.instrument.camera import PixelShape
+
 from dl1_data_handler.core import ImageMapper
 
 __all__ = ["OversamplingMapper"]
+
 
 class OversamplingMapper(ImageMapper):
     """
@@ -17,7 +19,7 @@ class OversamplingMapper(ImageMapper):
     One hexganoal pixel is split into four square pixels, which are then weighted
     by one quarter of the intensity of the hexagonal pixel. The resulting
     image is stretched in one direction. It is particularly useful for applications
-    where interpolation effects want to be surpressed.
+    where interpolation effects want to be suppressed.
     """
 
     def __init__(

@@ -3,13 +3,14 @@ This module defines the ``ImageMapper`` subclass ``BilinearMapper`` that hold th
 """
 
 import numpy as np
+from ctapipe.core.traits import Int
+from ctapipe.instrument.camera import PixelShape
 from scipy import spatial
 
-from ctapipe.instrument.camera import PixelShape
-from ctapipe.core.traits import Int
 from dl1_data_handler.core import ImageMapper
 
 __all__ = ["BilinearMapper"]
+
 
 class BilinearMapper(ImageMapper):
     """

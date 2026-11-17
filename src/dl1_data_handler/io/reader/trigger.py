@@ -9,30 +9,30 @@ __all__ = [
     "get_window_start",
 ]
 
-import numpy as np
 import os
-import tables
 import threading
 
+import numpy as np
+import tables
 from astropy.table import (
     Table,
     join,
     vstack,
 )
-from astropy.time import Time
-
 from ctapipe.core.traits import (
     Bool,
+    CaselessStrEnum,
     Dict,
     Int,
     List,
-    CaselessStrEnum,
 )
 from ctapipe.io import read_table
 from ctapipe.io.datalevels import DataLevel
+
 from dl1_data_handler.io import DLWaveformReader, get_unmapped_waveform
 
 lock = threading.Lock()
+
 
 def apply_digital_sum(waveform, mapper, l1_settings):
     """
@@ -63,7 +63,8 @@ def apply_digital_sum(waveform, mapper, l1_settings):
     else:
         # Superflowers on the camera border have less than 7 flowers (padded with -1).
         flower_sums = (
-            waveform[mapper.supfl_neighbor_array_l1] * mapper.supfl_neighbor_l1_mask[..., None]
+            waveform[mapper.supfl_neighbor_array_l1]
+            * mapper.supfl_neighbor_l1_mask[..., None]
         ).sum(axis=1)
     bin_flowers = (flower_sums >= l1_settings["threshold"]).astype(int)
     return bin_flowers, flower_sums
@@ -94,7 +95,9 @@ def quantised_per_flower(flower_sums, bin_flowers, l1_settings, quant_step):
         Number of triggered flowers and quantised amplitude, with shape (163, time, 2).
     """
     # Sum all the flowers of a FEB
-    flower_sums_red = np.maximum(flower_sums.astype(np.int32) - l1_settings["threshold"], 0)
+    flower_sums_red = np.maximum(
+        flower_sums.astype(np.int32) - l1_settings["threshold"], 0
+    )
     feb_sums = flower_sums_red.reshape(163, 7, flower_sums.shape[-1])
     feb_summed = feb_sums.sum(axis=1)
     # Quantize the amplitudes
@@ -124,7 +127,13 @@ class DLTriggerReader(DLWaveformReader):
     """
 
     output_type = CaselessStrEnum(
-        ["waveform", "masked_waveform", "stacked_waveform", "flower_mask", "flower_quantised"],
+        [
+            "waveform",
+            "masked_waveform",
+            "stacked_waveform",
+            "flower_mask",
+            "flower_quantised",
+        ],
         default_value="waveform",
         help=(
             "Set the content of each example. Shapes are given for the complete camera (sector in brackets). "
@@ -252,7 +261,9 @@ class DLTriggerReader(DLWaveformReader):
         # With a trigger window the complete readout is loaded and cropped afterwards.
         if self.trigger_window is not None:
             if self.trigger_window >= self.readout_length:
-                raise ValueError(f"'trigger_window' must be smaller than the readout length ({self.readout_length}).")
+                raise ValueError(
+                    f"'trigger_window' must be smaller than the readout length ({self.readout_length})."
+                )
             self.sequence_length = self.readout_length
             self.waveform_settings["seq_length"] = self.readout_length
             time = self.trigger_window
@@ -262,14 +273,20 @@ class DLTriggerReader(DLWaveformReader):
         # Input shape and neighbor array (for indexed convolutions) of each output
         sector = self.region == "sector"
         if self.output_type == "flower_quantised":
-            self.neighbor_array = mapper.sect0_feb_neighbors if sector else mapper.feb_neighbors
+            self.neighbor_array = (
+                mapper.sect0_feb_neighbors if sector else mapper.feb_neighbors
+            )
             n_febs = len(self.neighbor_array)
             if self.flatten_flower_quantised:
                 self.input_shape = (n_febs, time * 2)
             else:
                 self.input_shape = (n_febs, time, 2)
         elif self.output_type == "flower_mask":
-            self.neighbor_array = mapper.sect0_flower_neighbors if sector else mapper.fl_neighbor_array_tdscan
+            self.neighbor_array = (
+                mapper.sect0_flower_neighbors
+                if sector
+                else mapper.fl_neighbor_array_tdscan
+            )
             self.input_shape = (len(self.neighbor_array), time)
         else:
             if sector:
@@ -298,20 +315,32 @@ class DLTriggerReader(DLWaveformReader):
         has_sectors = getattr(mapper, "sector_mappings", None) is not None
         if self.mode != "mono":
             raise ValueError("DLTriggerReader only supports the mono mode.")
-        if (self.output_type != "waveform" or self.region == "sector") and not has_sectors:
+        if (
+            self.output_type != "waveform" or self.region == "sector"
+        ) and not has_sectors:
             raise ValueError(
                 f"Output type '{self.output_type}' with region '{self.region}' is only available for "
                 f"the AdvCamSiPM with the HexagonalPatchMapper (camera: '{self.cam_name}')."
             )
-        if self.output_type != "waveform" and self.l1_settings["eps"] not in ["flower", "superflower"]:
-            raise ValueError(f"l1_settings eps must be 'flower' or 'superflower', got '{self.l1_settings['eps']}'.")
+        if self.output_type != "waveform" and self.l1_settings["eps"] not in [
+            "flower",
+            "superflower",
+        ]:
+            raise ValueError(
+                f"l1_settings eps must be 'flower' or 'superflower', got '{self.l1_settings['eps']}'."
+            )
         if self.cpe_threshold < 1:
-            raise ValueError("'cpe_threshold' must be >= 1 (examples without Cherenkov p.e. are the NSB class).")
+            raise ValueError(
+                "'cpe_threshold' must be >= 1 (examples without Cherenkov p.e. are the NSB class)."
+            )
         if bool(self.input_trigger_files) != (self.trigger_window is not None):
-            raise ValueError("'input_trigger_files' and 'trigger_window' must be set together.")
+            raise ValueError(
+                "'input_trigger_files' and 'trigger_window' must be set together."
+            )
         if self.mask_from_file and (
             not self.input_trigger_files
-            or self.output_type not in ["masked_waveform", "stacked_waveform", "flower_mask"]
+            or self.output_type
+            not in ["masked_waveform", "stacked_waveform", "flower_mask"]
         ):
             raise ValueError(
                 "'mask_from_file' requires 'input_trigger_files' and output type 'masked_waveform', "
@@ -319,9 +348,14 @@ class DLTriggerReader(DLWaveformReader):
             )
         if self.add_dummy_channel and (
             self.output_type == "stacked_waveform"
-            or (self.output_type == "flower_quantised" and not self.flatten_flower_quantised)
+            or (
+                self.output_type == "flower_quantised"
+                and not self.flatten_flower_quantised
+            )
         ):
-            raise ValueError(f"'add_dummy_channel' is not valid for output type '{self.output_type}'.")
+            raise ValueError(
+                f"'add_dummy_channel' is not valid for output type '{self.output_type}'."
+            )
 
     def _process_example_identifiers(self, example_identifiers):
         """
@@ -351,8 +385,12 @@ class DLTriggerReader(DLWaveformReader):
 
         # 3. Trigger window
         if self.input_trigger_files:
-            trigger_per_sample = np.stack(example_identifiers["trigger_per_sample"]).astype(bool)
-            window_start = get_window_start(trigger_per_sample, is_shower, is_nsb, self.trigger_window)
+            trigger_per_sample = np.stack(
+                example_identifiers["trigger_per_sample"]
+            ).astype(bool)
+            window_start = get_window_start(
+                trigger_per_sample, is_shower, is_nsb, self.trigger_window
+            )
             example_identifiers.add_column(window_start, name="window_start")
             keep = window_start >= 0
         else:
@@ -372,13 +410,17 @@ class DLTriggerReader(DLWaveformReader):
                 sector_triggered = self._get_triggered_sectors(example_identifiers)
             else:
                 sector_triggered = np.ones((n_events, n_sectors), dtype=bool)
-            keep_sector = sector_triggered & ((sector_cpe >= self.cpe_threshold) | (sector_cpe == 0))
+            keep_sector = sector_triggered & (
+                (sector_cpe >= self.cpe_threshold) | (sector_cpe == 0)
+            )
             event_idx, sector_idx = np.nonzero(keep_sector)
             cpe = sector_cpe[event_idx, sector_idx]
             example_identifiers = example_identifiers[event_idx]
             example_identifiers.add_column(sector_idx, name="sector_index")
             example_identifiers.add_column(cpe, name="cherenkov_pe")
-        example_identifiers.add_column((cpe >= self.cpe_threshold).astype(np.int64), name=self.class_column)
+        example_identifiers.add_column(
+            (cpe >= self.cpe_threshold).astype(np.int64), name=self.class_column
+        )
 
         # The packed masks are only kept if they are needed to build the features.
         if "trigger_mask" in example_identifiers.colnames and not self.mask_from_file:
@@ -413,7 +455,9 @@ class DLTriggerReader(DLWaveformReader):
                 input_name = attrs["input_file"] if "input_file" in attrs else None
                 if need_mask:
                     if "trigger_mask_shape" not in attrs:
-                        raise ValueError(f"Trigger file '{trigger_file}' has no 'trigger_mask' column.")
+                        raise ValueError(
+                            f"Trigger file '{trigger_file}' has no 'trigger_mask' column."
+                        )
                     self._trigger_mask_shape = tuple(attrs["trigger_mask_shape"])
                     self._trigger_mask_bits = int(attrs["trigger_mask_bits"])
                     self._trigger_mask_bitorder = str(attrs["trigger_mask_bitorder"])
@@ -426,10 +470,17 @@ class DLTriggerReader(DLWaveformReader):
                 "Trigger files without 'input_file' attribute: pairing trigger files and input files by sorted name."
             )
             trigger_file_of = dict(
-                zip([os.path.basename(f) for f in input_files], sorted(self.input_trigger_files))
+                zip(
+                    [os.path.basename(f) for f in input_files],
+                    sorted(self.input_trigger_files),
+                )
             )
-        if need_mask and self._trigger_mask_shape[0] != len(self.image_mappers[self.cam_name].fl_neighbor_array_l1):
-            raise ValueError(f"The trigger masks must be per flower, got shape {self._trigger_mask_shape}.")
+        if need_mask and self._trigger_mask_shape[0] != len(
+            self.image_mappers[self.cam_name].fl_neighbor_array_l1
+        ):
+            raise ValueError(
+                f"The trigger masks must be per flower, got shape {self._trigger_mask_shape}."
+            )
 
         keys = ["obs_id", "event_id", "tel_id", "table_index"]
         trigger_columns = (
@@ -445,9 +496,13 @@ class DLTriggerReader(DLWaveformReader):
                 raise ValueError(f"No trigger file found for input file '{filename}'.")
             trigger_table = read_table(trigger_file, "/table")
             if need_sectors and "trigger_per_sector" not in trigger_table.colnames:
-                raise ValueError(f"Trigger file '{trigger_file}' has no 'trigger_per_sector' column (needed for region 'sector').")
+                raise ValueError(
+                    f"Trigger file '{trigger_file}' has no 'trigger_per_sector' column (needed for region 'sector')."
+                )
             trigger_table.keep_columns(trigger_columns)
-            file_examples = example_identifiers[example_identifiers["file_index"] == file_idx]
+            file_examples = example_identifiers[
+                example_identifiers["file_index"] == file_idx
+            ]
             merged = join(file_examples, trigger_table, keys=keys, join_type="inner")
             if len(merged) != len(file_examples):
                 raise ValueError(
@@ -468,7 +523,9 @@ class DLTriggerReader(DLWaveformReader):
         if field == "true_image_sum":
             cpe = np.zeros(n_examples, dtype=np.int64)
         else:
-            sectors = mapper.sectors_bool.T.astype(np.int64)  # shape: (n_pixels, n_sectors)
+            sectors = mapper.sectors_bool.T.astype(
+                np.int64
+            )  # shape: (n_pixels, n_sectors)
             cpe = np.zeros((n_examples, sectors.shape[1]), dtype=np.int64)
 
         file_index = np.asarray(example_identifiers["file_index"])
@@ -481,11 +538,13 @@ class DLTriggerReader(DLWaveformReader):
                 # Read the rows sorted by table index (faster), and store them back in place
                 rows = rows[np.argsort(table_index[rows])]
                 with lock:
-                    node = self.files[filenames[file_idx]].root.simulation.event.telescope.images._f_get_child(
+                    node = self.files[
+                        filenames[file_idx]
+                    ].root.simulation.event.telescope.images._f_get_child(
                         f"tel_{tel_id:03d}"
                     )
                     for start in range(0, len(rows), chunk_size):
-                        chunk = rows[start:start + chunk_size]
+                        chunk = rows[start : start + chunk_size]
                         values = node.read_coordinates(table_index[chunk], field=field)
                         if field == "true_image_sum":
                             cpe[chunk] = values
@@ -495,7 +554,9 @@ class DLTriggerReader(DLWaveformReader):
 
     def _unpack_masks(self, packed):
         # Unpack the trigger masks written with np.packbits, shape (..., n_flowers, time)
-        bits = np.unpackbits(packed, axis=-1, bitorder=self._trigger_mask_bitorder)[..., : self._trigger_mask_bits]
+        bits = np.unpackbits(packed, axis=-1, bitorder=self._trigger_mask_bitorder)[
+            ..., : self._trigger_mask_bits
+        ]
         return bits.reshape(packed.shape[:-1] + self._trigger_mask_shape)
 
     def _get_triggered_sectors(self, example_identifiers):
@@ -504,10 +565,14 @@ class DLTriggerReader(DLWaveformReader):
         ``trigger_per_sector`` column of the trigger files. Returns a boolean array with
         shape (n_events, n_sectors).
         """
-        trigger_per_sector = np.asarray(example_identifiers["trigger_per_sector"]).astype(bool)  # (n, n_sectors, time)
+        trigger_per_sector = np.asarray(
+            example_identifiers["trigger_per_sector"]
+        ).astype(bool)  # (n, n_sectors, time)
         window_start = np.asarray(example_identifiers["window_start"])[:, None]
         time = np.arange(trigger_per_sector.shape[-1])[None, :]
-        in_window = (time >= window_start) & (time < window_start + self.trigger_window)  # (n, time)
+        in_window = (time >= window_start) & (
+            time < window_start + self.trigger_window
+        )  # (n, time)
         return (trigger_per_sector & in_window[:, None, :]).any(axis=-1)
 
     def _balance(self, example_identifiers):
@@ -517,7 +582,9 @@ class DLTriggerReader(DLWaveformReader):
         idx_0, idx_1 = np.nonzero(labels == 0)[0], np.nonzero(labels == 1)[0]
         n_min = min(len(idx_0), len(idx_1))
         if n_min == 0:
-            raise ValueError(f"Cannot balance the classes: {len(idx_0)} NSB and {len(idx_1)} shower examples.")
+            raise ValueError(
+                f"Cannot balance the classes: {len(idx_0)} NSB and {len(idx_1)} shower examples."
+            )
         rng = np.random.default_rng(self.random_seed)
         idx_0 = rng.choice(idx_0, n_min, replace=False)
         idx_1 = rng.choice(idx_1, n_min, replace=False)
@@ -544,7 +611,9 @@ class DLTriggerReader(DLWaveformReader):
             mask = file_mask if file_mask is not None else l1_mask
 
         if self.output_type == "flower_quantised":
-            features = quantised_per_flower(flower_sums, l1_mask, self.l1_settings, self.quantisation_step)
+            features = quantised_per_flower(
+                flower_sums, l1_mask, self.l1_settings, self.quantisation_step
+            )
             if sector is not None:
                 features = mapper.get_sector(features, sector, "feb")
             if self.flatten_flower_quantised:
@@ -557,7 +626,9 @@ class DLTriggerReader(DLWaveformReader):
             if self.subtract_baseline:
                 waveform = waveform - self.subtract_baseline
             if self.output_type != "waveform":
-                pixel_mask = np.repeat(mask, 7, axis=0).astype(np.int64)  # shape: (n_pixels, time)
+                pixel_mask = np.repeat(mask, 7, axis=0).astype(
+                    np.int64
+                )  # shape: (n_pixels, time)
             if sector is not None:
                 waveform = mapper.get_sector(waveform, sector, "pixel")
                 if self.output_type != "waveform":
@@ -605,8 +676,12 @@ class DLTriggerReader(DLWaveformReader):
             batch.iterrows("file_index", "table_index", "tel_id")
         ):
             with lock:
-                child = self.files[filenames[file_idx]].root.r0.event.telescope._f_get_child(f"tel_{tel_id:03d}")
-                waveform = get_unmapped_waveform(child[table_idx], self.waveform_settings, mapper.geometry)
+                child = self.files[
+                    filenames[file_idx]
+                ].root.r0.event.telescope._f_get_child(f"tel_{tel_id:03d}")
+                waveform = get_unmapped_waveform(
+                    child[table_idx], self.waveform_settings, mapper.geometry
+                )
             waveform = waveform.astype(np.int64)
 
             file_mask = None
@@ -615,7 +690,9 @@ class DLTriggerReader(DLWaveformReader):
                 stop = start + self.trigger_window
                 waveform = waveform[:, start:stop]
                 if self.mask_from_file:
-                    file_mask = self._unpack_masks(np.asarray(batch["trigger_mask"][i]))[:, start:stop]
+                    file_mask = self._unpack_masks(
+                        np.asarray(batch["trigger_mask"][i])
+                    )[:, start:stop]
 
             sector = batch["sector_index"][i] if self.region == "sector" else None
             features.append(self._build_features(waveform, file_mask, sector))
@@ -650,11 +727,11 @@ def get_window_start(trigger_per_sample, is_shower, is_nsb, window):
     n_samples = trigger_per_sample.shape[1]
     center = n_samples // 2
     allowed = np.zeros_like(trigger_per_sample, dtype=bool)
-    allowed[is_shower, center - 5:center + 6] = True
+    allowed[is_shower, center - 5 : center + 6] = True
     allowed[is_nsb, :] = True
     # The first trigger must be in [1, n_samples - window + 1]
     allowed[:, 0] = False
-    allowed[:, n_samples - window + 2:] = False
+    allowed[:, n_samples - window + 2 :] = False
     valid = trigger_per_sample & allowed
     has_trigger = valid.any(axis=1)
     first_trigger = valid.argmax(axis=1)

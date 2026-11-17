@@ -3,15 +3,16 @@ This module defines the base ``ImageMapper`` classes that hold the basic functio
 """
 
 from abc import ABC, abstractmethod
+from collections import namedtuple
+
+import astropy.units as u
 import numpy as np
+from ctapipe.core import Component
 from scipy import spatial
 from scipy.sparse import csr_matrix
-from collections import namedtuple
-import astropy.units as u
-
-from ctapipe.core import Component
 
 __all__ = ["ImageMapper"]
+
 
 class ImageMapper(ABC, Component):
     """
@@ -57,7 +58,7 @@ class ImageMapper(ABC, Component):
 
     # Constants for the ImageMapper classes
     Constants = namedtuple("Constants", ["decimal_precision", "tick_interval_limit"])
-    constants = Constants(3, 0.002) 
+    constants = Constants(3, 0.002)
 
     @abstractmethod
     def __init__(
@@ -82,7 +83,8 @@ class ImageMapper(ABC, Component):
         # Filter out non-traitlet kwargs before passing to Component
         # This allows compatibility with ctapipe's reader which may pass extra kwargs
         component_kwargs = {
-            key: value for key, value in kwargs.items()
+            key: value
+            for key, value in kwargs.items()
             if self.class_own_traits().get(key) is not None
         }
 
@@ -113,7 +115,7 @@ class ImageMapper(ABC, Component):
         # Additional smooth the ticks for 'DigiCam', 'RealLSTCam', 'CHEC' and 'VERITAS' cameras
         if self.camera_type in ["DigiCam", "RealLSTCam"]:
             self.pix_y, self.y_ticks = self._smooth_ticks(self.pix_y, self.y_ticks)
-        if self.camera_type in ["CHEC",  "AdvCamSiPM"]:
+        if self.camera_type in ["CHEC", "AdvCamSiPM"]:
             self.pix_x, self.x_ticks = self._smooth_ticks(self.pix_x, self.x_ticks)
             self.pix_y, self.y_ticks = self._smooth_ticks(self.pix_y, self.y_ticks)
         if self.camera_type == "VERITAS":
@@ -124,7 +126,7 @@ class ImageMapper(ABC, Component):
         # The default padding is removed after the conversion is finished.
         self.internal_pad = 0
         # Retrieve default shape of the image from the oversampling method.
-        _, output_grid = self._get_grids_for_oversampling()    
+        _, output_grid = self._get_grids_for_oversampling()
         # This value can be overwritten by the subclass
         self.image_shape = int(len(output_grid) ** 0.5)
 
@@ -182,7 +184,7 @@ class ImageMapper(ABC, Component):
         # (B*C, P)
         x = raw_vectors.transpose(0, 2, 1).reshape(B * C, P)
         # sparse multiplication
-        y = x @ self.mapping_table      # (B*C, H*W)
+        y = x @ self.mapping_table  # (B*C, H*W)
         # (B, C, H, W)
         y = y.reshape(B, C, self.image_shape, self.image_shape)
         # (B, H, W, C) s
@@ -192,7 +194,7 @@ class ImageMapper(ABC, Component):
     def _get_virtual_pixels(self, x_ticks, y_ticks, pix_x, pix_y):
         """Get the virtual pixels outside of the camera."""
         gridpoints = np.array(np.meshgrid(x_ticks, y_ticks)).T.reshape(-1, 2)
-        gridpoints = [tuple(l) for l in gridpoints.tolist()]
+        gridpoints = [tuple(point) for point in gridpoints.tolist()]
         virtual_pixels = set(gridpoints) - set(zip(pix_x, pix_y))
         virtual_pixels = np.array(list(virtual_pixels))
         return virtual_pixels
@@ -202,10 +204,12 @@ class ImageMapper(ABC, Component):
     ):
         """Create virtual hexagonal pixels outside of the camera."""
         dist_first = np.around(
-            abs(first_ticks[0] - first_ticks[1]), decimals=self.constants.decimal_precision
+            abs(first_ticks[0] - first_ticks[1]),
+            decimals=self.constants.decimal_precision,
         )
         dist_second = np.around(
-            abs(second_ticks[0] - second_ticks[1]), decimals=self.constants.decimal_precision
+            abs(second_ticks[0] - second_ticks[1]),
+            decimals=self.constants.decimal_precision,
         )
 
         tick_diff = len(first_ticks) * 2 - len(second_ticks)
@@ -249,7 +253,8 @@ class ImageMapper(ABC, Component):
             second_ticks.insert(
                 0,
                 np.around(
-                    second_ticks[0] - dist_second, decimals=self.constants.decimal_precision
+                    second_ticks[0] - dist_second,
+                    decimals=self.constants.decimal_precision,
                 ),
             )
 
@@ -345,7 +350,6 @@ class ImageMapper(ABC, Component):
         weights = np.stack((w1, w2, w3), axis=-1)
         return weights.astype(np.float32)
 
-
     def _get_grids_for_oversampling(
         self,
     ):
@@ -396,11 +400,16 @@ class ImageMapper(ABC, Component):
             )
         # Adjust for odd tick_diff
         # TODO: Check why MAGICCam, VERITAS, and UNKNOWN-7987PX (AdvCam) do not need this adjustment
-        if tick_diff % 2 != 0 and self.camera_type not in ["MAGICCam", "VERITAS", "AdvCamSiPM"]:
+        if tick_diff % 2 != 0 and self.camera_type not in [
+            "MAGICCam",
+            "VERITAS",
+            "AdvCamSiPM",
+        ]:
             grid_second.insert(
                 0,
                 np.around(
-                    grid_second[0] - dist_second, decimals=self.constants.decimal_precision
+                    grid_second[0] - dist_second,
+                    decimals=self.constants.decimal_precision,
                 ),
             )
 

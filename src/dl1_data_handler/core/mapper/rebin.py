@@ -2,15 +2,17 @@
 This module defines the ``ImageMapper`` subclass ``RebinMapper`` that hold the basic functionality for mapping raw 1D vectors into 2D mapped images using the rebinning method.
 """
 
-import numpy as np
-from scipy import spatial
 from collections import Counter
 
+import numpy as np
+from ctapipe.core.traits import Float, Int
 from ctapipe.instrument.camera import PixelShape
-from ctapipe.core.traits import Int, Float
+from scipy import spatial
+
 from dl1_data_handler.core import ImageMapper
 
 __all__ = ["RebinMapper"]
+
 
 class RebinMapper(ImageMapper):
     """
