@@ -29,7 +29,7 @@ from ctapipe.core.traits import (
 from ctapipe.io import read_table
 from ctapipe.io.datalevels import DataLevel
 
-from dl1_data_handler.io import DLDataReader
+from dl1_data_handler.io.reader.base import DLDataReader
 
 lock = threading.Lock()
 

@@ -29,7 +29,7 @@ from ctapipe.core.traits import (
 from ctapipe.io import read_table
 from ctapipe.io.datalevels import DataLevel
 
-from dl1_data_handler.io import DLWaveformReader, get_unmapped_waveform
+from dl1_data_handler.io.reader.waveform import DLWaveformReader, get_unmapped_waveform
 
 lock = threading.Lock()
 
