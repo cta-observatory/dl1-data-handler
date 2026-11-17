@@ -2,11 +2,13 @@
 This module defines the ``ImageMapper`` subclass ``NearestNeighborMapper`` that hold the basic functionality for mapping raw 1D vectors into 2D mapped images using the nearest neighbor assignment technique.
 """
 
-from ctapipe.instrument.camera import PixelShape
 from ctapipe.core.traits import Int
+from ctapipe.instrument.camera import PixelShape
+
 from dl1_data_handler.core import ImageMapper
 
 __all__ = ["NearestNeighborMapper"]
+
 
 class NearestNeighborMapper(ImageMapper):
     """

@@ -3,11 +3,12 @@ This module defines the ``ImageMapper`` classes that hold the basic functionalit
 """
 
 import numpy as np
-
 from ctapipe.instrument.camera import PixelShape
+
 from dl1_data_handler.core import ImageMapper
 
 __all__ = ["ShiftingMapper"]
+
 
 class ShiftingMapper(ImageMapper):
     """
@@ -80,13 +81,15 @@ class ShiftingMapper(ImageMapper):
         for _ in np.arange(tick_diff_each_side):
             second_ticks.append(
                 np.around(
-                    second_ticks[-1] + dist_second, decimals=self.constants.decimal_precision
+                    second_ticks[-1] + dist_second,
+                    decimals=self.constants.decimal_precision,
                 )
             )
             second_ticks.insert(
                 0,
                 np.around(
-                    second_ticks[0] - dist_second, decimals=self.constants.decimal_precision
+                    second_ticks[0] - dist_second,
+                    decimals=self.constants.decimal_precision,
                 ),
             )
         # If tick_diff is odd, add one more tick to the beginning
@@ -94,7 +97,8 @@ class ShiftingMapper(ImageMapper):
             second_ticks.insert(
                 0,
                 np.around(
-                    second_ticks[0] - dist_second, decimals=self.constants.decimal_precision
+                    second_ticks[0] - dist_second,
+                    decimals=self.constants.decimal_precision,
                 ),
             )
         # Create the input and output grid

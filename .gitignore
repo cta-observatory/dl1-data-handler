@@ -1,6 +1,6 @@
 #Ignore files
 #############
-dl1_data_handler/_version.py
+src/dl1_data_handler/_version.py
 *.o
 *.png
 *.h5

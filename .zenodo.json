@@ -1,5 +1,5 @@
 {
-    "license": "MIT", 
+    "license": "MIT",
     "contributors": [
         {
             "affiliation": "Instituto de F\u00edsica de Part\u00edculas y del Cosmos, Departamento de EMFTEL, Universidad Complutense de Madrid, Madrid, Spain ",
@@ -8,51 +8,51 @@
             "orcid": "0009-0007-1566-9507"
         },
         {
-            "orcid": "0000-0002-5686-2078", 
-            "affiliation": "Laboratoire d'Annecy de Physique des Particules, CNRS, Universit\u00e9 Savoie Mont-Blanc, Annecy, France", 
-            "type": "Researcher", 
+            "orcid": "0000-0002-5686-2078",
+            "affiliation": "Laboratoire d'Annecy de Physique des Particules, CNRS, Universit\u00e9 Savoie Mont-Blanc, Annecy, France",
+            "type": "Researcher",
             "name": "Thomas Vuillaume"
-        }, 
+        },
         {
-            "orcid": "0000-0001-7282-2394", 
-            "affiliation": "Instituto de F\u00edsica de Part\u00edculas y del Cosmos and Departamento de EMFTEL, Universidad Complutense de Madrid, Madrid, Spain", 
-            "type": "Researcher", 
+            "orcid": "0000-0001-7282-2394",
+            "affiliation": "Instituto de F\u00edsica de Part\u00edculas y del Cosmos and Departamento de EMFTEL, Universidad Complutense de Madrid, Madrid, Spain",
+            "type": "Researcher",
             "name": "Jos\u00e9 Luis Contreras"
         }
-    ], 
-    "language": "eng", 
-    "title": "DL1-Data-Handler: DL1 HDF5 writer, reader, and processor for IACT data", 
-    "upload_type": "software", 
+    ],
+    "language": "eng",
+    "title": "DL1-Data-Handler: DL1 HDF5 writer, reader, and processor for IACT data",
+    "upload_type": "software",
     "keywords": [
-        "Imaging atmospheric Cherenkov telescopes", 
-        "Data format", 
-        "HDF5", 
+        "Imaging atmospheric Cherenkov telescopes",
+        "Data format",
+        "HDF5",
         "PyTables"
-    ], 
+    ],
      "creators": [
         {
             "orcid": "0000-0003-1821-7964",
-            "affiliation": "Universit\u00e9 de Gen\u00e8ve, D\u00e9partement de physique nucl\u00e9aire et corpusculaire, Gen\u00e8ve, Suisse", 
+            "affiliation": "Universit\u00e9 de Gen\u00e8ve, D\u00e9partement de physique nucl\u00e9aire et corpusculaire, Gen\u00e8ve, Suisse",
             "name": "Tjark Miener"
-        }, 
+        },
         {
-            "orcid": "0000-0003-3343-0755", 
-            "affiliation": "Instituto de F\u00edsica de Part\u00edculas y del Cosmos and Departamento de EMFTEL, Universidad Complutense de Madrid, Madrid, Spain", 
+            "orcid": "0000-0003-3343-0755",
+            "affiliation": "Instituto de F\u00edsica de Part\u00edculas y del Cosmos and Departamento de EMFTEL, Universidad Complutense de Madrid, Madrid, Spain",
             "name": "Daniel Nieto"
-        }, 
+        },
         {
-            "affiliation": "University of California Los Angeles, Division of Astronomy and Astrophysics, Los Angeles, CA, USA", 
+            "affiliation": "University of California Los Angeles, Division of Astronomy and Astrophysics, Los Angeles, CA, USA",
             "name": "Bryan Kim"
-        }, 
+        },
         {
-            "affiliation": "Columbia University, Department of Physics, New York, NY, USA", 
+            "affiliation": "Columbia University, Department of Physics, New York, NY, USA",
             "name": "Ari Brill"
-        }, 
+        },
         {
-            "affiliation": "Columbia University, Department of Physics, New York, NY, USA", 
+            "affiliation": "Columbia University, Department of Physics, New York, NY, USA",
             "name": "Qi Feng"
         }
-    ], 
-    "access_right": "open", 
+    ],
+    "access_right": "open",
     "description": "<p>A package of utilities for reading and applying image processing to&nbsp;calibrated data from imaging atmospheric Cherenkov telescopes in a standardized format.</p>"
 }

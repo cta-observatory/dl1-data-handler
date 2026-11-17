@@ -7,17 +7,19 @@ __all__ = [
     "get_unmapped_image",
 ]
 
-import numpy as np
 import threading
-from astropy.table import Table
 
+import numpy as np
+from astropy.table import Table
 from ctapipe.core.traits import (
-    List,
     CaselessStrEnum,
+    List,
 )
+
 from dl1_data_handler.io import DLDataReader
 
 lock = threading.Lock()
+
 
 def get_unmapped_image(dl1_event, channels, transforms) -> np.ndarray:
     """
@@ -78,7 +80,7 @@ def get_unmapped_image(dl1_event, channels, transforms) -> np.ndarray:
                 )
             else:
                 image[:, i] = dl1_event["peak_time"]
-        # Apply the transform to recover orginal floating point values if the file were compressed
+        # Apply the transform to recover original floating point values if the file were compressed
         if "image" in channel:
             if transforms["image_scale"] > 0.0:
                 image[:, i] /= transforms["image_scale"]
@@ -172,8 +174,11 @@ class DLImageReader(DLDataReader):
                     len(self.channels),
                 )
             else:
-                self.input_shape = (self.image_mappers[self.cam_name].geometry.n_pixels, len(self.channels))
-                
+                self.input_shape = (
+                    self.image_mappers[self.cam_name].geometry.n_pixels,
+                    len(self.channels),
+                )
+
         elif self.mode == "stereo":
             self.input_shape = {}
             for tel_type in self.selected_telescopes:
@@ -260,7 +265,10 @@ class DLImageReader(DLDataReader):
             camera_type = self._get_camera_type(
                 list(self.selected_telescopes.keys())[tel_type_id]
             )
-            if self.image_mappers[camera_type].cam_neighbor_array is None and self.image_mappers[camera_type].index_matrix is None:
+            if (
+                self.image_mappers[camera_type].cam_neighbor_array is None
+                and self.image_mappers[camera_type].index_matrix is None
+            ):
                 images.append(self.image_mappers[camera_type].map_image(unmapped_image))
             else:
                 images.append(unmapped_image)

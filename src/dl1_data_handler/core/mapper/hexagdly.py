@@ -3,12 +3,13 @@ This module defines the ``ImageMapper`` subclass ``HexagdlyMapper`` that hold th
 """
 
 import numpy as np
+from ctapipe.instrument.camera import PixelShape
 from scipy.sparse import csr_matrix
 
-from ctapipe.instrument.camera import PixelShape
 from dl1_data_handler.core import ImageMapper
 
 __all__ = ["HexagdlyMapper"]
+
 
 class _HexGridTransform:
     """Map a 1-D hexagonal camera image to the 2-D grid ``keras_hexagdly``
@@ -132,7 +133,11 @@ class _HexGridTransform:
         out = []
         for dr, dc in [(-1, 0), (1, 0), *diag]:
             nr, nc = row + dr, col + dc
-            if 0 <= nr < grid.shape[0] and 0 <= nc < grid.shape[1] and grid[nr, nc] >= 0:
+            if (
+                0 <= nr < grid.shape[0]
+                and 0 <= nc < grid.shape[1]
+                and grid[nr, nc] >= 0
+            ):
                 out.append(int(grid[nr, nc]))
         return sorted(out)
 
@@ -240,10 +245,9 @@ class HexagdlyMapper(ImageMapper):
         # One-hot mapping table: each pixel maps to exactly one grid cell,
         # weight 1.0. This lets the inherited `ImageMapper.map_image` be
         # reused unmodified.
-        flat_index = (
-            grid.row_idx.astype(np.int64) * self.image_shape
-            + grid.col_idx.astype(np.int64)
-        )
+        flat_index = grid.row_idx.astype(
+            np.int64
+        ) * self.image_shape + grid.col_idx.astype(np.int64)
         self.mapping_table = csr_matrix(
             (
                 np.ones(self.n_pixels, dtype=np.float32),

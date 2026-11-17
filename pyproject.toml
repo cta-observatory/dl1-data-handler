@@ -117,3 +117,4 @@ known-first-party = ["dl1_data_handler"]
 [tool.codespell]
 ignore-words = ".codespell-ignores"
 skip = "*.drawio,*.svg,*.egg-info/*"
+ignore-regex = '"image/png":\s*"[^"]*"'
