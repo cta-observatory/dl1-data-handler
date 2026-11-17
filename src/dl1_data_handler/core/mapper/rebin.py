@@ -9,7 +9,7 @@ from ctapipe.core.traits import Float, Int
 from ctapipe.instrument.camera import PixelShape
 from scipy import spatial
 
-from dl1_data_handler.core import ImageMapper
+from dl1_data_handler.core.mapper.image import ImageMapper
 
 __all__ = ["RebinMapper"]
 

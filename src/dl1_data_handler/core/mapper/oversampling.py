@@ -4,7 +4,7 @@ This module defines the ``ImageMapper`` subclass ``OversamplingMapper`` that hol
 
 from ctapipe.instrument.camera import PixelShape
 
-from dl1_data_handler.core import ImageMapper
+from dl1_data_handler.core.mapper.image import ImageMapper
 
 __all__ = ["OversamplingMapper"]
 

@@ -16,7 +16,7 @@ from ctapipe.core.traits import (
     List,
 )
 
-from dl1_data_handler.io import DLDataReader
+from dl1_data_handler.io.reader.base import DLDataReader
 
 lock = threading.Lock()
 

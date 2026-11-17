@@ -6,7 +6,7 @@ import numpy as np
 from ctapipe.instrument.camera import PixelShape
 from scipy.sparse import csr_matrix
 
-from dl1_data_handler.core import ImageMapper
+from dl1_data_handler.core.mapper.image import ImageMapper
 
 __all__ = ["HexagdlyMapper"]
 
