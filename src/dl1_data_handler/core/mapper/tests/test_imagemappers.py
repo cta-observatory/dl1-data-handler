@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from astropy.coordinates import SkyCoord
 from ctapipe.instrument import CameraGeometry
 
 from dl1_data_handler.core import (
@@ -480,15 +481,32 @@ class TestHexagdlyMapperSpecific:
         # A mirror image is rotated the opposite way, so pix_rotation has to be
         # mirrored along with the pixels for the geometry to stay consistent --
         # ImageMapper aligns the lattice from pix_rotation before mapping.
-        mirrored = CameraGeometry(
-            name="LSTCam_mirrored_for_test",
-            pix_id=lstcam_geometry.pix_id,
-            pix_x=-lstcam_geometry.pix_x,
-            pix_y=lstcam_geometry.pix_y,
-            pix_area=lstcam_geometry.pix_area,
-            pix_type=lstcam_geometry.pix_type,
-            pix_rotation=-lstcam_geometry.pix_rotation,
-        )
+        # TODO: Remove the legacy constructor when bumping the minimum ctapipe version.
+        try:
+            mirrored = CameraGeometry(
+                name="LSTCam_mirrored_for_test",
+                pix_id=lstcam_geometry.pix_id,
+                pix_x=-lstcam_geometry.pix_x,
+                pix_y=lstcam_geometry.pix_y,
+                pix_area=lstcam_geometry.pix_area,
+                pix_type=lstcam_geometry.pix_type,
+                pix_rotation=-lstcam_geometry.pix_rotation,
+            )
+        except TypeError as error:
+            if "unexpected keyword argument 'pix_x'" not in str(error):
+                raise
+            mirrored = CameraGeometry(
+                name="LSTCam_mirrored_for_test",
+                pix_id=lstcam_geometry.pix_id,
+                pix_coord=SkyCoord(
+                    x=-lstcam_geometry.pix_x,
+                    y=lstcam_geometry.pix_y,
+                    frame=lstcam_geometry.frame,
+                ),
+                pix_area=lstcam_geometry.pix_area,
+                pix_type=lstcam_geometry.pix_type,
+                pix_rotation=-lstcam_geometry.pix_rotation,
+            )
         # Mirroring must not change the neighbour topology itself -- only the
         # handedness -- otherwise this wouldn't isolate the chirality issue.
         assert all(
