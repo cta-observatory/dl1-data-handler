@@ -107,3 +107,36 @@ def test_empty_input_url_signal():
         TraitError, match="The 'input_url_signal' list cannot be empty."
     ):
         DLImageReader(input_url_signal=[])
+
+
+def test_stereo_signal_background_sharing_event_ids(dl1_gamma_file, tmp_path):
+    """Signal and background events sharing (obs_id, event_id) stay separate in stereo mode."""
+    import shutil
+
+    background_file = tmp_path / "background.dl1.h5"
+    shutil.copy(dl1_gamma_file, background_file)
+    config = Config(
+        {
+            "DLImageReader": {
+                "mode": "stereo",
+                "min_telescopes": 1,
+                "allowed_tels": [4],
+            }
+        }
+    )
+    signal_only = DLImageReader(input_url_signal=[dl1_gamma_file], config=config)
+    reader = DLImageReader(
+        input_url_signal=[dl1_gamma_file],
+        input_url_background=[background_file],
+        config=config,
+    )
+    # Every event of the copied file must be counted as its own example
+    n_events = signal_only.get_n_events()
+    assert reader.get_n_events() == 2 * n_events  # nosec
+    assert reader.n_signal_events == n_events  # nosec
+    assert reader.n_bkg_events == n_events  # nosec
+    # Each stereo example must contain exactly one event (one file, one class)
+    for idx in range(reader.get_n_events()):
+        batch = reader.generate_stereo_batch([idx])
+        assert len(np.unique(batch["file_index"])) == 1  # nosec
+        assert len(np.unique(batch["true_shower_primary_class"])) == 1  # nosec
