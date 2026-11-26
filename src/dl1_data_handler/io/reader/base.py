@@ -816,13 +816,18 @@ class DLDataReader(Component):
 
         # Construct the example identifiers for all files
         self.example_identifiers = vstack(example_identifiers)
-        self.example_identifiers.sort(["obs_id", "event_id", "tel_id", "tel_type_id"])
+        # Events are identified by (obs_id, event_id, file_index). The pair
+        # (obs_id, event_id) alone is not unique across files, e.g. signal and
+        # background productions can share run numbers and event IDs.
+        self.example_identifiers.sort(
+            ["obs_id", "event_id", "file_index", "tel_id", "tel_type_id"]
+        )
         self.example_identifiers_grouped = self.example_identifiers.group_by(
-            ["obs_id", "event_id"]
+            ["obs_id", "event_id", "file_index"]
         )
         # Unique example identifiers by events
         self.unique_example_identifiers = unique(
-            self.example_identifiers, keys=["obs_id", "event_id"]
+            self.example_identifiers, keys=["obs_id", "event_id", "file_index"]
         )
         self.unique_example_identifiers.remove_columns(
             ["table_index", "tel_type_id", "tel_id", "hillas_intensity"]
@@ -1181,10 +1186,10 @@ class DLDataReader(Component):
         # Add blank inputs for missing telescopes in the batch
         if self.process_type == ProcessType.Simulation:
             batch_grouped = batch.group_by(
-                ["obs_id", "event_id", "true_shower_primary_class"]
+                ["obs_id", "event_id", "file_index", "true_shower_primary_class"]
             )
         elif self.process_type == ProcessType.Observation:
-            batch_grouped = batch.group_by(["obs_id", "event_id"])
+            batch_grouped = batch.group_by(["obs_id", "event_id", "file_index"])
         for group_element in batch_grouped.groups:
             for tel_type_id, tel_type in enumerate(self.selected_telescopes):
                 if "features" in group_element.colnames:
@@ -1217,7 +1222,7 @@ class DLDataReader(Component):
                             )
                         batch.add_row(blank_input_row)
         # Sort the batch with the new rows of blank inputs
-        batch.sort(["obs_id", "event_id", "tel_type_id", "tel_id"])
+        batch.sort(["obs_id", "event_id", "file_index", "tel_type_id", "tel_id"])
         return batch
 
     def __destructor(self):
